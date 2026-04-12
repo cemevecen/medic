@@ -834,8 +834,8 @@ st.markdown("""
 # ─────────────────────────────────────────────
 # ANA SEKMELER
 # ─────────────────────────────────────────────
-tab_analyze, tab_fda, tab_corpus, tab_about = st.tabs(
-    ["🔬 İlaç Analizi", "🔍 FDA Arşivi", " Prospektüs Yönetimi", " Hakkında"]
+tab_analyze, tab_fda, tab_pharmacy, tab_corpus, tab_about = st.tabs(
+    ["🔬 İlaç Analizi", "🔍 FDA Arşivi", "💊 Eczane Fiyatları", " Prospektüs Yönetimi", " Hakkında"]
 )
 
 # ═════════════════════════════════════════════
@@ -1300,7 +1300,192 @@ with tab_analyze:
         st.rerun()
 
 # ═════════════════════════════════════════════
-# SEKME 3 — PROSPEKTÜS YÖNETİMİ (CORPUS)
+# SEKME 3 — ECZANE FİYAT KARŞILAŞTIRMASI
+# ═════════════════════════════════════════════
+with tab_pharmacy:
+    st.markdown(
+        '<p class="pg-section"><span class="pg-section-icon">💊</span>Eczane Fiyat Karşılaştırması</p>',
+        unsafe_allow_html=True,
+    )
+    st.caption("Türk eczanelerinde ilaç fiyatlarını karşılaştırın. En ucuz eczaneyi bulun ve mesafe gösterin.")
+
+    col_drug, col_search = st.columns([3, 1], gap="small")
+
+    with col_drug:
+        pharmacy_drug_search = st.text_input(
+            "İlaç adını girin",
+            placeholder="örn: Aspirin 500mg, Parol, Augmentin…",
+            key="pharmacy_drug_search",
+            help="Ticari ad veya genel adı yazın"
+        )
+
+    with col_search:
+        pharmacy_search_btn = st.button("🔍 Fiyat Ara", use_container_width=True, key="pharmacy_search_btn")
+
+    # Konum seçeneği
+    st.markdown("---")
+    location_option = st.radio(
+        "Konum seçeneği",
+        ["📍 Konumum kullanma (tüm eczaneler)", "🗺️ Yakındaki eczaneleri göster"],
+        horizontal=True,
+        label_visibility="collapsed",
+    )
+
+    user_lat = None
+    user_lon = None
+
+    if "Yakındaki" in location_option:
+        col_lat, col_lon, col_distance = st.columns(3, gap="small")
+
+        with col_lat:
+            user_lat = st.number_input(
+                "Enlem (Latitude)",
+                value=41.0082,
+                format="%.4f",
+                help="İstanbul Taksim: 41.0082"
+            )
+
+        with col_lon:
+            user_lon = st.number_input(
+                "Boylam (Longitude)",
+                value=28.9784,
+                format="%.4f",
+                help="İstanbul Taksim: 28.9784"
+            )
+
+        with col_distance:
+            max_distance = st.number_input(
+                "Maksimum mesafe (km)",
+                value=10,
+                min_value=1,
+                max_value=50,
+                step=1
+            )
+
+    # Arama yap
+    if pharmacy_search_btn or pharmacy_drug_search:
+        if pharmacy_drug_search.strip():
+            with st.spinner(f"'{pharmacy_drug_search}' fiyatları aranıyor…"):
+                try:
+                    from pharmacy_prices import get_pharmacy_prices, price_comparison_summary
+
+                    # Fiyat bilgisi çek
+                    if "Yakındaki" in location_option and user_lat and user_lon:
+                        pharmacy_results = get_pharmacy_prices(
+                            drug_name=pharmacy_drug_search,
+                            user_latitude=user_lat,
+                            user_longitude=user_lon,
+                            max_distance_km=max_distance,
+                            limit=10
+                        )
+                    else:
+                        pharmacy_results = get_pharmacy_prices(
+                            drug_name=pharmacy_drug_search,
+                            limit=10
+                        )
+
+                    if pharmacy_results["success"]:
+                        # Özet göster
+                        st.success("✓ Fiyat bilgileri bulundu!")
+                        st.markdown(price_comparison_summary(pharmacy_drug_search, pharmacy_results))
+
+                        st.markdown("---")
+                        st.markdown("### 🏪 Eczane Detayları")
+
+                        # Tablo göster
+                        col_sira, col_isim, col_sehir, col_fiyat, col_stok, col_mesafe = st.columns([0.5, 2, 1.5, 1, 1, 1.2], gap="small")
+
+                        with col_sira:
+                            st.markdown("**#**")
+                        with col_isim:
+                            st.markdown("**Eczane Adı**")
+                        with col_sehir:
+                            st.markdown("**Şehir/İlçe**")
+                        with col_fiyat:
+                            st.markdown("**Fiyat**")
+                        with col_stok:
+                            st.markdown("**Stok**")
+                        with col_mesafe:
+                            st.markdown("**Mesafe**")
+
+                        st.divider()
+
+                        for idx, result in enumerate(pharmacy_results["results"], 1):
+                            col_sira, col_isim, col_sehir, col_fiyat, col_stok, col_mesafe = st.columns([0.5, 2, 1.5, 1, 1, 1.2], gap="small")
+
+                            with col_sira:
+                                st.caption(f"**{idx}**")
+
+                            with col_isim:
+                                eczane_info = f"**{result['name']}**"
+                                if result.get("open_24h"):
+                                    eczane_info += " 🌙"
+                                if result.get("is_nearby"):
+                                    eczane_info += " 📍"
+                                st.caption(eczane_info)
+
+                            with col_sehir:
+                                st.caption(f"{result['district']}")
+
+                            with col_fiyat:
+                                price_badge = f"**{result['price']} TL**"
+                                if idx == 1:
+                                    price_badge += " 🏆"
+                                st.caption(price_badge)
+
+                            with col_stok:
+                                if result["in_stock"]:
+                                    st.caption("✅ Var")
+                                else:
+                                    st.caption("⏳ Sipariş")
+
+                            with col_mesafe:
+                                if result.get("distance_km"):
+                                    st.caption(f"{result['distance_km']} km")
+                                else:
+                                    st.caption("—")
+
+                        # Detaylı bilgiler
+                        st.markdown("---")
+                        st.markdown("### 📞 İletişim Bilgileri")
+
+                        for result in pharmacy_results["results"][:3]:  # İlk 3'ü göster
+                            with st.expander(f"ℹ️ {result['name']} — {result['city']}"):
+                                col_info1, col_info2 = st.columns(2)
+
+                                with col_info1:
+                                    st.markdown(f"**Şehir:** {result['city']}")
+                                    st.markdown(f"**İlçe:** {result['district']}")
+                                    st.markdown(f"**Telefon:** {result['phone']}")
+
+                                with col_info2:
+                                    st.markdown(f"**Açılış Saati:** {result['working_hours']}")
+                                    st.markdown(f"**Fiyat:** {result['price']} TL")
+                                    st.markdown(f"**Teslimat:** {result['estimated_delivery']}")
+
+                    else:
+                        st.warning(f"⚠️ {pharmacy_results.get('error', 'Veri bulunamadı')}")
+                        st.info("**İpucu:** Ticari isim (örn: Aspirin) veya etken madde adı (örn: Asetaminofen) yazabilirsiniz.")
+
+                except ImportError as e:
+                    st.error(f"❌ pharmacy_prices modülü bulunamadı: {str(e)}")
+                except Exception as e:
+                    st.error(f"❌ Hata: {str(e)}")
+        else:
+            st.info("Araştırma yapmak için ilaç adını girin")
+
+    st.markdown("---")
+    st.markdown("""
+    <div class="pg-about-card">
+      <strong>ℹ️ Bilgi</strong><br><br>
+      Bu sistem Türk eczanelerinden ilaç fiyatlarını karşılaştırır.
+      Konumunuzu belirtirseniz yakın eczaneleri gösterir.
+      Fiyatlar örnek veriler içermektedir. Gerçek fiyatlar eczana göre değişebilir.
+    </div>
+    """, unsafe_allow_html=True)
+
+# ═════════════════════════════════════════════
+# SEKME 4 — PROSPEKTÜS YÖNETİMİ (CORPUS)
 # ═════════════════════════════════════════════
 with tab_corpus:
     st.markdown("""
@@ -1415,7 +1600,7 @@ with tab_fda:
             st.info("Araştırma yapmak için ilaç adını girin")
 
 # ═════════════════════════════════════════════
-# SEKME 4 — HAKKINDA
+# SEKME 5 — HAKKINDA
 # ═════════════════════════════════════════════
 with tab_about:
     try:
