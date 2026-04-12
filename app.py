@@ -406,33 +406,61 @@ with tab_analyze:
             '<p class="pg-section"><span class="pg-section-icon">📥</span>Giriş yöntemi</p>',
             unsafe_allow_html=True,
         )
-        method = st.radio("yöntem", ["🖼️ İlaç Görseli Yükle", "✏️ İlaç Adı Yaz"],
-                          horizontal=True, label_visibility="collapsed")
+        method = st.radio(
+            "yöntem",
+            ["🖼️ Görsel Yükle", "📄 PDF Prospektüs", "✏️ İlaç Adı Yaz"],
+            horizontal=True,
+            label_visibility="collapsed",
+        )
         image_obj       = None
         drug_name_input = None
+        pdf_bytes_input = None
+        pdf_name_input  = "prospektus.pdf"
 
         if "Görsel" in method:
-            up = st.file_uploader("İlaç kutusunun fotoğrafını yükleyin",
-                                  type=["jpg","jpeg","png","webp","bmp"],
-                                  help="İlaç adı ve dozajın net okunabildiği bir fotoğraf.")
+            up = st.file_uploader(
+                "İlaç kutusunun fotoğrafını yükleyin",
+                type=["jpg", "jpeg", "png", "webp", "bmp"],
+                help="İlaç adı ve dozajın net okunabildiği bir fotoğraf.",
+            )
             if up:
                 image_obj = load_image_from_upload(up)
                 st.image(image_obj, caption="Yüklenen görsel", use_container_width=True)
                 image_obj = preprocess_image(image_obj)
                 st.info("💡 Kutunun ön yüzünü tam karşıdan çekin.\n"
                         "İlaç adı ve mg değeri görünür olmalı.")
+
+        elif "PDF" in method:
+            up_pdf = st.file_uploader(
+                "İlaç prospektüsünü PDF olarak yükleyin",
+                type=["pdf"],
+                help="TİTCK / FDA / EMA onaylı prospektüs PDF'i — metin tabanlı olmalı.",
+            )
+            if up_pdf:
+                pdf_bytes_input = up_pdf.read()
+                pdf_name_input  = up_pdf.name
+                st.success(f"📄 **{up_pdf.name}** yüklendi ({len(pdf_bytes_input)//1024} KB)")
+                st.info(
+                    "💡 Gemini bu PDF'i okuyarak ilaç bilgilerini (etken madde, dozaj, "
+                    "endikasyon, yan etkiler) otomatik çıkaracak."
+                )
+
         else:
-            drug_name_input = st.text_input("İlaç adını girin",
-                                            placeholder="örn: Augmentin 1000 mg, Parol 500 mg…")
+            drug_name_input = st.text_input(
+                "İlaç adını girin",
+                placeholder="örn: Augmentin 1000 mg, Parol 500 mg…",
+            )
 
         st.markdown("---")
         if not gemini_key: st.warning("⚠️ GEMINI_API_KEY eksik — Streamlit Secrets'a ekleyin.")
         if not groq_key:   st.warning("⚠️ GROQ_API_KEY eksik — Streamlit Secrets'a ekleyin.")
 
-        can_run = bool(
-            (image_obj is not None or (drug_name_input and drug_name_input.strip()))
-            and gemini_key and groq_key
+        has_input = (
+            image_obj is not None
+            or (drug_name_input and drug_name_input.strip())
+            or pdf_bytes_input is not None
         )
+        can_run = bool(has_input and gemini_key and groq_key)
         run_btn = st.button("🚀 Analizi Başlat", type="primary",
                             disabled=not can_run, use_container_width=True)
 
@@ -472,6 +500,8 @@ with tab_analyze:
                 result = st.session_state.orchestrator.run(
                     image=image_obj,
                     drug_name_text=drug_name_input,
+                    pdf_bytes=pdf_bytes_input,
+                    pdf_filename=pdf_name_input,
                     progress_callback=_prog,
                 )
                 st.session_state.analysis_result = result
@@ -553,6 +583,13 @@ with tab_analyze:
                     if val: st.markdown(f"**{label}:** {val}")
                 osk = v.get("okunabilirlik_skoru")
                 if osk: st.markdown(f"**Okunabilirlik:** {osk}/10")
+                # PDF'e özgü alanlar
+                if v.get("endikasyonlar"):
+                    st.markdown(f"**Endikasyonlar:** {v['endikasyonlar']}")
+                if v.get("prospektus_ozeti"):
+                    st.info(f"📄 **Prospektüs Özeti:** {v['prospektus_ozeti']}")
+                if v.get("pdf_metin_uzunlugu"):
+                    st.caption(f"PDF metin uzunluğu: {v['pdf_metin_uzunlugu']:,} karakter")
                 if "hata" in v: st.warning(v["hata"])
                 st.markdown("---")
                 st.markdown("**RAG eşleşmeleri**")

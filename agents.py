@@ -314,6 +314,74 @@ class VisionScannerAgent:
             "kaynak": "Metin Girişi",
         }
 
+    def scan_pdf(self, pdf_bytes: bytes, filename: str = "prospektus.pdf") -> Dict[str, Any]:
+        """
+        PDF prospektüsünden metin çıkarır ve Gemini ile ilaç bilgilerini ayıklar.
+        Kullanıcı doğrudan prospektüs PDF'i yüklediğinde çağrılır.
+        """
+        # 1) PDF metnini çıkar
+        try:
+            from pypdf import PdfReader
+            reader = PdfReader(BytesIO(pdf_bytes))
+            pages_text = []
+            for i, page in enumerate(reader.pages[:10]):   # ilk 10 sayfa yeterli
+                t = page.extract_text() or ""
+                if t.strip():
+                    pages_text.append(f"[Sayfa {i+1}]\n{t.strip()}")
+            pdf_text = "\n\n".join(pages_text)
+        except Exception as e:
+            return {"hata": f"PDF okunamadı: {e}", "kaynak": f"PDF ({filename})"}
+
+        if not pdf_text.strip():
+            return {
+                "hata": "PDF'den metin çıkarılamadı (taranmış/görüntü tabanlı PDF olabilir).",
+                "kaynak": f"PDF ({filename})",
+            }
+
+        # 2) Gemini ile ilaç bilgilerini ayıkla
+        pdf_prompt = f"""
+Aşağıdaki ilaç prospektüsü metninden ilaç bilgilerini çıkar ve JSON formatında döndür:
+
+{{
+  "ticari_ad": "İlacın ticari adı",
+  "etken_madde": "Etken madde(ler)",
+  "dozaj": "Dozaj bilgisi (mg/ml/mcg)",
+  "form": "Tablet / Kapsül / Şurup / vb.",
+  "barkod": null,
+  "uretici": "Üretici firma adı",
+  "okunabilirlik_skoru": 9,
+  "notlar": "PDF prospektüsünden çıkarıldı",
+  "endikasyonlar": "Kısa kullanım amacı (1-2 cümle)",
+  "prospektus_ozeti": "Prospektüsten elde edilen kritik bilgilerin özeti (3-5 cümle)"
+}}
+
+PROSPEKTÜS METNİ:
+{pdf_text[:6000]}
+"""
+        models = _gemini_model_chain()
+        last_err = None
+        for name in models:
+            try:
+                model = genai.GenerativeModel(name)
+                response = model.generate_content(
+                    pdf_prompt,
+                    generation_config=genai.GenerationConfig(temperature=0.1),
+                )
+                result = self._parse_json_response(response.text, source=f"PDF ({filename})")
+                result["pdf_metin_uzunlugu"] = len(pdf_text)
+                return result
+            except Exception as e:
+                last_err = e
+                if _gemini_model_missing_error(e) and name != models[-1]:
+                    continue
+                break
+
+        return {
+            "hata": f"PDF analiz hatası: {last_err}",
+            "kaynak": f"PDF ({filename})",
+            "okunabilirlik_skoru": 5,
+        }
+
     @staticmethod
     def _parse_json_response(raw: str, source: str) -> Dict[str, Any]:
         """Model çıktısından JSON bloğu ayıklar — 3 aşamalı robust parser."""
@@ -775,6 +843,8 @@ class PharmaGuardOrchestrator:
         self,
         image: Optional[Image.Image] = None,
         drug_name_text: Optional[str] = None,
+        pdf_bytes: Optional[bytes] = None,
+        pdf_filename: str = "prospektus.pdf",
         progress_callback=None,
     ) -> Dict[str, Any]:
         """
@@ -783,6 +853,8 @@ class PharmaGuardOrchestrator:
         Args:
             image: PIL Image nesnesi (ilaç kutu görseli)
             drug_name_text: Metin olarak ilaç adı (görsel yoksa)
+            pdf_bytes: Prospektüs PDF'inin ham bytes'ı (doğrudan PDF analizi)
+            pdf_filename: PDF dosya adı (gösterim için)
             progress_callback: Streamlit progress bar için callable(step: int, message: str)
 
         Returns:
@@ -805,18 +877,24 @@ class PharmaGuardOrchestrator:
 
         results = {}
 
-        # ADIM 1: Görüntü/Metin Analizi
-        _progress(1, "👁️ Vision Scanner: Görsel analiz ediliyor...")
-        if image is not None:
+        # ADIM 1: Görüntü / Metin / PDF Analizi
+        if pdf_bytes is not None:
+            _progress(1, f"📄 PDF Scanner: '{pdf_filename}' prospektüsü analiz ediliyor...")
+            vision_data = self.vision_agent.scan_pdf(pdf_bytes, pdf_filename)
+        elif image is not None:
+            _progress(1, "👁️ Vision Scanner: Görsel analiz ediliyor...")
             vision_data = self.vision_agent.scan(image)
         else:
+            _progress(1, "✏️ Metin girişi işleniyor...")
             vision_data = self.vision_agent.scan_text_input(drug_name_text or "")
         results["vision"] = vision_data
 
-        # Okunabilirlik kontrolü
+        # Okunabilirlik / PDF hata kontrolü
         score = vision_data.get("okunabilirlik_skoru", 10)
         if isinstance(score, (int, float)) and score < 5:
             _progress(1, "⚠️ Fotoğraf kalitesi yetersiz! Lütfen daha aydınlık bir ortamda çekin.")
+        if "hata" in vision_data and pdf_bytes is not None:
+            _progress(1, f"⚠️ PDF hatası: {vision_data['hata']}")
 
         # ADIM 2: RAG Araması
         _progress(2, "📚 RAG Specialist: Prospektüs veritabanı taranıyor...")
