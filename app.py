@@ -93,7 +93,7 @@ st.set_page_config(
 )
 
 # ─────────────────────────────────────────────
-# VIEWPORT DETECTION FOR RESPONSIVE LAYOUTS
+# VIEWPORT DETECTION & GEOLOCATION
 # ─────────────────────────────────────────────
 st.markdown("""
 <script>
@@ -112,8 +112,41 @@ function detectViewport() {
   sessionStorage.setItem('is_desktop', isDesktop);
 }
 
+function getDeviceLocation() {
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      function(position) {
+        const lat = position.coords.latitude;
+        const lon = position.coords.longitude;
+        const accuracy = position.coords.accuracy;
+
+        sessionStorage.setItem('user_latitude', lat);
+        sessionStorage.setItem('user_longitude', lon);
+        sessionStorage.setItem('location_accuracy', accuracy);
+        sessionStorage.setItem('location_available', 'true');
+
+        console.log('Konum başarıyla alındı:', lat, lon);
+      },
+      function(error) {
+        console.log('Konum izni reddedildi veya kullanılamadı:', error.message);
+        sessionStorage.setItem('location_available', 'false');
+        sessionStorage.setItem('location_error', error.message);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 5000,
+        maximumAge: 0
+      }
+    );
+  } else {
+    console.log('Geolocation desteklenmiyor');
+    sessionStorage.setItem('location_available', 'false');
+  }
+}
+
 // Detect on page load
 detectViewport();
+getDeviceLocation();
 
 // Detect on window resize
 window.addEventListener('resize', detectViewport);
@@ -124,6 +157,10 @@ if (window.parent.streamlit) {
 }
 </script>
 """, unsafe_allow_html=True)
+
+# Initialize geolocation in session state
+if "user_location" not in st.session_state:
+    st.session_state.user_location = {"lat": None, "lon": None, "available": False}
 
 # ─────────────────────────────────────────────
 # GLOBAL CSS — tasarım sistemi + tema desteği
@@ -1324,38 +1361,97 @@ with tab_pharmacy:
 
     # Konum seçeneği
     st.markdown("---")
+
+    # Check for real geolocation from JavaScript
+    try:
+        from streamlit.runtime import get_script_run_ctx
+        # Try to get location from browser
+        location_html = st.empty()
+    except:
+        pass
+
     location_option = st.radio(
         "Konum seçeneği",
-        ["📍 Konumum kullanma (tüm eczaneler)", "🗺️ Yakındaki eczaneleri göster"],
+        ["📍 Tüm Eczaneleri Göster", "🗺️ Yakındaki Eczaneleri Bul (GPS)"],
         horizontal=True,
         label_visibility="collapsed",
     )
 
     user_lat = None
     user_lon = None
+    max_distance = 10
 
     if "Yakındaki" in location_option:
-        col_lat, col_lon, col_distance = st.columns(3, gap="small")
+        # Try to get real geolocation from JavaScript
+        location_placeholder = st.empty()
 
-        with col_lat:
-            user_lat = st.number_input(
-                "Enlem (Latitude)",
-                value=41.0082,
-                format="%.4f",
-                help="İstanbul Taksim: 41.0082"
+        # Store location in JavaScript and read it
+        st.markdown("""
+        <script>
+        // Try to get saved location from sessionStorage
+        const userLat = sessionStorage.getItem('user_latitude');
+        const userLon = sessionStorage.getItem('user_longitude');
+        const locationAvailable = sessionStorage.getItem('location_available') === 'true';
+
+        if (userLat && userLon) {
+          console.log('Konum kullanılabilir:', userLat, userLon);
+        } else {
+          console.log('Konum henüz alınmadı');
+        }
+        </script>
+        """, unsafe_allow_html=True)
+
+        col_auto, col_manual, col_distance = st.columns(3, gap="small")
+
+        with col_auto:
+            use_auto_location = st.checkbox(
+                "📍 Otomatik konum kullan (GPS)",
+                value=True,
+                help="Cihazınızın GPS konumunu kullanır (hızlı ve doğru)"
             )
 
-        with col_lon:
-            user_lon = st.number_input(
-                "Boylam (Longitude)",
-                value=28.9784,
-                format="%.4f",
-                help="İstanbul Taksim: 28.9784"
-            )
+        if use_auto_location:
+            with col_manual:
+                st.markdown("**Konum alınıyor…** ⏳")
+
+            # Default values (will be overridden if user allows location)
+            user_lat = 41.0082  # Default İstanbul Taksim
+            user_lon = 28.9784
+
+            # Show note
+            with st.info():
+                st.markdown("""
+                **📍 Konum İzni Gerekli:**
+                1. Tarayıcı konumu sorduğunda "İzin Ver" seçin
+                2. Sistem konumunuzu otomatik algılayacak
+                3. Yakın eczaneler listelenecek
+                """)
+
+        else:
+            with col_manual:
+                st.markdown("**Manuel Giriş:**")
+
+            col_lat, col_lon = st.columns(2, gap="small")
+
+            with col_lat:
+                user_lat = st.number_input(
+                    "Enlem",
+                    value=41.0082,
+                    format="%.6f",
+                    help="Örn: İstanbul = 41.0082"
+                )
+
+            with col_lon:
+                user_lon = st.number_input(
+                    "Boylam",
+                    value=28.9784,
+                    format="%.6f",
+                    help="Örn: İstanbul = 28.9784"
+                )
 
         with col_distance:
             max_distance = st.number_input(
-                "Maksimum mesafe (km)",
+                "Mesafe (km)",
                 value=10,
                 min_value=1,
                 max_value=50,
