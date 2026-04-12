@@ -554,8 +554,8 @@ st.markdown("""
 # ─────────────────────────────────────────────
 # ANA SEKMELER
 # ─────────────────────────────────────────────
-tab_analyze, tab_corpus, tab_fda, tab_about = st.tabs(
-    ["🔬 İlaç Analizi", " Prospektüs Yönetimi", " FDA Arşivi", " Hakkında"]
+tab_analyze, tab_fda, tab_corpus, tab_about = st.tabs(
+    ["🔬 İlaç Analizi", "🔍 FDA Arşivi", " Prospektüs Yönetimi", " Hakkında"]
 )
 
 # ═════════════════════════════════════════════
@@ -1012,7 +1012,7 @@ with tab_analyze:
             """, unsafe_allow_html=True)
 
 # ═════════════════════════════════════════════
-# SEKME 2 — CORPUS
+# SEKME 3 — PROSPEKTÜS YÖNETİMİ (CORPUS)
 # ═════════════════════════════════════════════
 with tab_corpus:
     st.markdown("""
@@ -1058,7 +1058,7 @@ with tab_corpus:
                 "[EMA](https://www.ema.europa.eu)")
 
 # ═════════════════════════════════════════════
-# SEKME 3 — FDA ARŞİVİ (Gerçek İlaç Verisi)
+# SEKME 2 — FDA ARŞİVİ (Gerçek İlaç Verisi)
 # ═════════════════════════════════════════════
 with tab_fda:
     st.markdown(
