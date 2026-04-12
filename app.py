@@ -38,298 +38,296 @@ st.set_page_config(
 # ─────────────────────────────────────────────
 st.markdown("""
 <style>
-/* ── Design Tokens ─────────────────────────── */
-:root {
-  --pg-canvas:       #f0f4f8;
-  --pg-surface:      #ffffff;
-  --pg-line:         #e2e8f0;
-  --pg-accent:       #0f766e;
-  --pg-accent-soft:  rgba(15,118,110,0.10);
-  --pg-glow:         rgba(15,118,110,0.18);
-  --pg-ink:          #0f172a;
-  --pg-muted:        #64748b;
-  --pg-sidebar:      #0f172a;
-  --pg-sidebar-muted:#94a3b8;
+/* ── Design Tokens (Light) ──────────────────── */
+:root,
+[data-theme="light"],
+[data-color-scheme="light"] {
+  --pg-canvas:        #f0f4f8;
+  --pg-surface:       #ffffff;
+  --pg-line:          #e2e8f0;
+  --pg-accent:        #0f766e;
+  --pg-accent-soft:   rgba(15,118,110,0.10);
+  --pg-glow:          rgba(15,118,110,0.18);
+  --pg-ink:           #0f172a;
+  --pg-muted:         #64748b;
+  --pg-sidebar:       #0f172a;
+  --pg-sidebar-muted: #94a3b8;
+}
+
+/* ── Design Tokens (Dark) ───────────────────── */
+[data-theme="dark"],
+[data-color-scheme="dark"] {
+  --pg-canvas:        #0b0f14;
+  --pg-surface:       #111827;
+  --pg-line:          #1f2937;
+  --pg-accent:        #14b8a6;
+  --pg-accent-soft:   rgba(45,212,191,0.15);
+  --pg-glow:          rgba(20,184,166,0.25);
+  --pg-ink:           #f1f5f9;
+  --pg-muted:         #94a3b8;
+  --pg-sidebar:       #080c12;
+  --pg-sidebar-muted: #64748b;
 }
 
 /* ── Zemin ──────────────────────────────────── */
 .stApp {
   background: var(--pg-canvas) !important;
   background-image:
-    radial-gradient(ellipse 120% 80% at 100% -20%, rgba(15,118,110,.08), transparent),
-    radial-gradient(ellipse 80%  50% at   0% 100%, rgba(234,88,12,.05), transparent) !important;
+    radial-gradient(ellipse 120% 80% at 100% -20%, rgba(15,118,110,.07), transparent),
+    radial-gradient(ellipse 80%  50% at   0% 100%, rgba(234,88,12,.04),  transparent) !important;
 }
 [data-testid="stHeader"] { background: transparent !important; }
-.block-container {
-  padding-top: 1.25rem !important;
-  padding-bottom: 3rem  !important;
-  max-width: 1400px     !important;
-}
+.block-container { padding-top:1.25rem !important; padding-bottom:3rem !important; max-width:1400px !important; }
 
-/* ── Sidebar ────────────────────────────────── */
+/* ── Sidebar — her zaman koyu ────────────────── */
 [data-testid="stSidebar"] {
-  background: linear-gradient(180deg, var(--pg-sidebar) 0%, #1e293b 100%) !important;
+  background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%) !important;
   border-right: 1px solid rgba(255,255,255,.06) !important;
 }
-[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
-[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] li,
-[data-testid="stSidebar"] .stCaption { color: var(--pg-sidebar-muted) !important; }
+[data-testid="stSidebar"] * { color: #cbd5e1 !important; }
 [data-testid="stSidebar"] h1,
 [data-testid="stSidebar"] h2,
 [data-testid="stSidebar"] h3,
-[data-testid="stSidebar"] strong   { color: #f1f5f9 !important; }
-[data-testid="stSidebar"] hr       { border-color: rgba(255,255,255,.08) !important; }
+[data-testid="stSidebar"] strong,
+[data-testid="stSidebar"] b         { color: #f1f5f9 !important; }
+[data-testid="stSidebar"] hr        { border-color: rgba(255,255,255,.08) !important; }
 [data-testid="stSidebar"] .stExpander {
   background: rgba(255,255,255,.04) !important;
   border-radius: 12px !important;
-  border: 1px solid rgba(255,255,255,.08) !important;
+  border: 1px solid rgba(255,255,255,.1) !important;
 }
 
-/* ── Sekmeler ───────────────────────────────── */
+/* ── Sekmeler — hap/pill stili ───────────────── */
 .stTabs [data-baseweb="tab-list"] {
-  gap: .35rem;
-  background: var(--pg-surface);
-  padding: .35rem;
-  border-radius: 14px;
-  border: 1px solid var(--pg-line);
-  box-shadow: 0 1px 3px rgba(12,18,34,.06);
+  gap: .3rem !important;
+  background: var(--pg-surface) !important;
+  padding: .3rem !important;
+  border-radius: 14px !important;
+  border: 1px solid var(--pg-line) !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06) !important;
 }
-.stTabs [data-baseweb="tab"] {
+/* aktif olmayan sekme */
+button[data-baseweb="tab"] {
   border-radius: 10px !important;
-  padding: .65rem 1.1rem !important;
+  padding: .6rem 1.1rem !important;
   font-weight: 600 !important;
-  font-size: .95rem !important;
+  font-size: .92rem !important;
+  color: var(--pg-muted) !important;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
 }
-.stTabs [aria-selected="true"] {
+/* aktif sekme */
+button[data-baseweb="tab"][aria-selected="true"] {
   background: var(--pg-accent) !important;
-  color: #fff !important;
+  color: #ffffff !important;
+  border-radius: 10px !important;
 }
-div[data-testid="stVerticalBlock"] > div > .stTabs [data-baseweb="tab-list"] {
-  background: #f8fafc;
+/* tab alt çizgisini gizle */
+.stTabs [data-baseweb="tab-highlight"],
+.stTabs [data-baseweb="tab-border"] { display: none !important; }
+
+/* ── İç sekmeler ────────────────────────────── */
+div[data-testid="stVerticalBlock"] .stTabs [data-baseweb="tab-list"] {
+  background: var(--pg-canvas) !important;
 }
 
 /* ── Butonlar ───────────────────────────────── */
 .stButton > button {
-  border-radius: 12px !important;
-  font-weight: 600 !important;
-  padding: .55rem 1.25rem !important;
-  border: none !important;
-  transition: transform .15s ease, box-shadow .15s ease !important;
+  border-radius: 12px !important; font-weight: 600 !important;
+  padding: .55rem 1.25rem !important; border: 1px solid transparent !important;
+  transition: transform .15s, box-shadow .15s !important;
 }
 .stButton > button[kind="primary"] {
-  background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%) !important;
+  background: linear-gradient(135deg, #0f766e, #0d9488) !important;
+  color: #ffffff !important;
   box-shadow: 0 4px 14px var(--pg-glow) !important;
 }
 .stButton > button[kind="primary"]:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(15,118,110,.25) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 20px rgba(15,118,110,.3) !important;
+}
+.stButton > button[kind="secondary"] {
+  background: var(--pg-surface) !important;
+  color: var(--pg-ink) !important;
+  border-color: var(--pg-line) !important;
 }
 .stButton > button:disabled { opacity: .45 !important; }
 
+/* ── Download button ────────────────────────── */
+.stDownloadButton > button {
+  border-radius: 12px !important; font-weight: 600 !important;
+  background: linear-gradient(135deg, #0f766e, #0d9488) !important;
+  color: #ffffff !important; border: none !important;
+}
+
 /* ── Girişler ───────────────────────────────── */
-.stTextInput input { border-radius: 12px !important; border-color: var(--pg-line) !important; }
+.stTextInput input {
+  border-radius: 12px !important;
+  border-color: var(--pg-line) !important;
+  background: var(--pg-surface) !important;
+  color: var(--pg-ink) !important;
+}
+.stTextInput label { color: var(--pg-ink) !important; }
+.stRadio label     { color: var(--pg-ink) !important; }
 .stFileUploader section {
   border-radius: 14px !important;
-  border: 2px dashed #cbd5e1 !important;
-  background: #fafbfc !important;
+  border: 2px dashed var(--pg-line) !important;
+  background: var(--pg-surface) !important;
 }
-.stAlert { border-radius: 12px !important; }
+/* Dosya yükleme butonu */
+.stFileUploader section button {
+  background: var(--pg-surface) !important;
+  color: var(--pg-accent) !important;
+  border: 1px solid var(--pg-accent) !important;
+  border-radius: 10px !important;
+}
+.stAlert   { border-radius: 12px !important; }
 .stProgress > div > div {
   background: linear-gradient(90deg, #0f766e, #14b8a6) !important;
   border-radius: 999px !important;
 }
-[data-testid="stStatus"] { border-radius: 14px !important; border: 1px solid var(--pg-line) !important; }
+[data-testid="stStatus"] {
+  border-radius: 14px !important;
+  border: 1px solid var(--pg-line) !important;
+  background: var(--pg-surface) !important;
+}
 
-/* ── Hero ───────────────────────────────────── */
+/* ── Hero banner ────────────────────────────── */
 .pg-hero {
-  position: relative; overflow: hidden;
-  border-radius: 20px; padding: 2rem 2.25rem; margin-bottom: 1.75rem;
+  position: relative; overflow: hidden; border-radius: 20px;
+  padding: 2rem 2.25rem; margin-bottom: 1.75rem;
   background: linear-gradient(135deg, #0f172a 0%, #134e4a 55%, #0f766e 100%);
-  color: #f8fafc;
   box-shadow: 0 20px 50px -12px rgba(15,23,42,.35);
 }
 .pg-hero::after {
-  content: ""; position: absolute; inset: 0;
+  content: ""; position: absolute; inset: 0; pointer-events: none;
   background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
-  pointer-events: none;
 }
 .pg-hero-inner { position: relative; z-index: 1; }
-.pg-hero h1 { margin: 0; font-size: clamp(1.65rem,3vw,2.15rem); font-weight: 700; letter-spacing: -.03em; color: #fff !important; }
-.pg-hero p  { margin: .65rem 0 0; font-size: 1.02rem; color: rgba(226,232,240,.88) !important; max-width: 52rem; line-height: 1.5; }
-.pg-hero-tags { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1.1rem; }
+.pg-hero h1 { margin:0; font-size:clamp(1.65rem,3vw,2.1rem); font-weight:700; letter-spacing:-.03em; color:#fff !important; }
+.pg-hero p  { margin:.6rem 0 0; font-size:1rem; color:rgba(226,232,240,.88) !important; line-height:1.5; }
+.pg-hero-tags { display:flex; flex-wrap:wrap; gap:.5rem; margin-top:1rem; }
 .pg-hero-tags span {
-  font-size: .78rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em;
-  padding: .35rem .75rem; border-radius: 999px;
-  background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18);
-  color: #e2e8f0 !important;
+  font-size:.75rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
+  padding:.3rem .7rem; border-radius:999px;
+  background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.2); color:#e2e8f0 !important;
 }
 
 /* ── Bölüm başlıkları ───────────────────────── */
 .pg-section {
-  font-size: 1rem; font-weight: 700; color: var(--pg-ink);
-  margin: 0 0 1rem; display: flex; align-items: center; gap: .5rem; letter-spacing: -.02em;
+  font-size:1rem; font-weight:700; color:var(--pg-ink);
+  margin:0 0 1rem; display:flex; align-items:center; gap:.5rem;
 }
 .pg-section-icon {
-  width: 2rem; height: 2rem; border-radius: 10px;
-  background: var(--pg-accent-soft);
-  display: inline-flex; align-items: center; justify-content: center; font-size: 1rem;
+  width:2rem; height:2rem; border-radius:10px;
+  background:var(--pg-accent-soft);
+  display:inline-flex; align-items:center; justify-content:center; font-size:1rem;
 }
 
 /* ── Metrik kartları ────────────────────────── */
 .metric-card {
-  background: var(--pg-surface); border: 1px solid var(--pg-line);
-  border-radius: 14px; padding: 1.1rem 1rem; text-align: center;
-  box-shadow: 0 2px 8px rgba(12,18,34,.04);
+  background:var(--pg-surface); border:1px solid var(--pg-line);
+  border-radius:14px; padding:1.1rem 1rem; text-align:center;
+  box-shadow:0 2px 8px rgba(0,0,0,.04);
 }
-.metric-card h3 { margin: 0; font-size: 1.55rem; font-weight: 700; color: var(--pg-ink); }
-.metric-card p  { margin: .35rem 0 0; font-size: .8rem; color: var(--pg-muted); font-weight: 500; }
+.metric-card h3 { margin:0; font-size:1.5rem; font-weight:700; color:var(--pg-ink); }
+.metric-card p  { margin:.3rem 0 0; font-size:.8rem; color:var(--pg-muted); }
 
 /* ── Alarm bantları ─────────────────────────── */
 .alarm-red {
-  background: linear-gradient(90deg,#fef2f2,#fff7f7);
-  border: 1px solid #fecaca; border-left: 4px solid #dc2626;
-  padding: 14px 18px; border-radius: 12px; color: #7f1d1d;
+  background:linear-gradient(90deg,#fef2f2,#fff7f7);
+  border:1px solid #fecaca; border-left:4px solid #dc2626;
+  padding:14px 18px; border-radius:12px;
 }
+.alarm-red, .alarm-red b, .alarm-red strong { color:#7f1d1d !important; }
+
 .alarm-yellow {
-  background: linear-gradient(90deg,#fffbeb,#fffef5);
-  border: 1px solid #fde68a; border-left: 4px solid #d97706;
-  padding: 14px 18px; border-radius: 12px; color: #78350f;
+  background:linear-gradient(90deg,#fffbeb,#fffef5);
+  border:1px solid #fde68a; border-left:4px solid #d97706;
+  padding:14px 18px; border-radius:12px;
 }
+.alarm-yellow, .alarm-yellow b, .alarm-yellow strong { color:#78350f !important; }
+
 .alarm-green {
-  background: linear-gradient(90deg,#ecfdf5,#f0fdf9);
-  border: 1px solid #a7f3d0; border-left: 4px solid #059669;
-  padding: 14px 18px; border-radius: 12px; color: #064e3b;
+  background:linear-gradient(90deg,#ecfdf5,#f0fdf9);
+  border:1px solid #a7f3d0; border-left:4px solid #059669;
+  padding:14px 18px; border-radius:12px;
 }
+.alarm-green, .alarm-green b, .alarm-green strong { color:#064e3b !important; }
+
 .alarm-unknown {
-  background: #f8fafc; border: 1px solid var(--pg-line); border-left: 4px solid #64748b;
-  padding: 14px 18px; border-radius: 12px; color: #475569 !important;
+  background:var(--pg-surface); border:1px solid var(--pg-line);
+  border-left:4px solid #64748b; padding:14px 18px; border-radius:12px;
 }
-.alarm-red    b, .alarm-red    strong { color: #7f1d1d !important; }
-.alarm-yellow b, .alarm-yellow strong { color: #78350f !important; }
-.alarm-green  b, .alarm-green  strong { color: #064e3b !important; }
-.alarm-unknown b,.alarm-unknown strong { color: #0f172a !important; }
+.alarm-unknown, .alarm-unknown b, .alarm-unknown strong { color:var(--pg-ink) !important; }
+
+/* ── Koyu temada alarm bantları ─────────────── */
+[data-theme="dark"] .alarm-red, [data-color-scheme="dark"] .alarm-red {
+  background:rgba(127,29,29,.4) !important; border-color:rgba(248,113,113,.5) !important;
+  border-left-color:#f87171 !important;
+}
+[data-theme="dark"] .alarm-red, [data-theme="dark"] .alarm-red b, [data-theme="dark"] .alarm-red strong,
+[data-color-scheme="dark"] .alarm-red, [data-color-scheme="dark"] .alarm-red b, [data-color-scheme="dark"] .alarm-red strong { color:#fecaca !important; }
+[data-theme="dark"] .alarm-yellow, [data-color-scheme="dark"] .alarm-yellow {
+  background:rgba(120,53,15,.4) !important; border-color:rgba(251,191,36,.45) !important;
+  border-left-color:#fbbf24 !important;
+}
+[data-theme="dark"] .alarm-yellow, [data-theme="dark"] .alarm-yellow b, [data-theme="dark"] .alarm-yellow strong,
+[data-color-scheme="dark"] .alarm-yellow, [data-color-scheme="dark"] .alarm-yellow b, [data-color-scheme="dark"] .alarm-yellow strong { color:#fef3c7 !important; }
+[data-theme="dark"] .alarm-green, [data-color-scheme="dark"] .alarm-green {
+  background:rgba(6,78,59,.4) !important; border-color:rgba(52,211,153,.45) !important;
+  border-left-color:#34d399 !important;
+}
+[data-theme="dark"] .alarm-green, [data-theme="dark"] .alarm-green b, [data-theme="dark"] .alarm-green strong,
+[data-color-scheme="dark"] .alarm-green, [data-color-scheme="dark"] .alarm-green b, [data-color-scheme="dark"] .alarm-green strong { color:#d1fae5 !important; }
 
 /* ── Boş durum ──────────────────────────────── */
 .pg-empty {
-  text-align: center; padding: 3.5rem 1.5rem;
-  background: var(--pg-surface); border: 1px dashed #cbd5e1;
-  border-radius: 16px; color: var(--pg-muted);
+  text-align:center; padding:3.5rem 1.5rem;
+  background:var(--pg-surface); border:1.5px dashed var(--pg-line);
+  border-radius:16px; color:var(--pg-muted);
 }
-.pg-empty .pg-empty-icon { font-size: 2.75rem; line-height: 1; margin-bottom: 1rem; }
-.pg-empty p { margin: 0; font-size: 1.05rem; line-height: 1.6; }
+.pg-empty .pg-empty-icon { font-size:2.75rem; line-height:1; margin-bottom:1rem; }
+.pg-empty p { margin:0; font-size:1rem; line-height:1.6; color:var(--pg-muted) !important; }
 
-/* ── Status pill (sidebar) ──────────────────── */
+/* ── Status pill (sidebar — her zaman açık bg) */
 .pg-status-pill {
-  display: inline-flex; align-items: center; gap: .4rem;
-  font-size: .85rem; padding: .45rem .75rem; border-radius: 10px; margin-bottom: .35rem;
-  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); color: #e2e8f0 !important;
+  display:inline-flex; align-items:center; gap:.4rem;
+  font-size:.84rem; padding:.4rem .75rem; border-radius:10px; margin-bottom:.3rem;
+  background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.12);
+  color:#e2e8f0 !important;
 }
-.pg-status-pill.ok  { border-color: rgba(45,212,191,.35); background: rgba(45,212,191,.1); }
-.pg-status-pill.bad { border-color: rgba(248,113,113,.35); background: rgba(248,113,113,.08); }
+.pg-status-pill.ok  { border-color:rgba(45,212,191,.4) !important; background:rgba(45,212,191,.12) !important; }
+.pg-status-pill.bad { border-color:rgba(248,113,113,.4) !important; background:rgba(248,113,113,.1) !important; }
 
-/* ── Analiz adım satırı ─────────────────────── */
+/* ── Adım satırı ────────────────────────────── */
 .pg-step-line {
-  font-size: .9rem; color: #475569;
-  padding: .25rem 0 .35rem; border-bottom: 1px solid #e2e8f0;
+  font-size:.9rem; color:var(--pg-muted);
+  padding:.25rem 0 .35rem; border-bottom:1px solid var(--pg-line);
 }
-.pg-step-num { display: inline-block; min-width: 2.75rem; font-weight: 700; color: #0f766e; }
+.pg-step-num { display:inline-block; min-width:2.75rem; font-weight:700; color:var(--pg-accent); }
 
 /* ── Hakkında kartı ─────────────────────────── */
 .pg-about-card {
-  background: var(--pg-surface); border: 1px solid var(--pg-line);
-  border-radius: 16px; padding: 1.5rem 1.75rem;
-  box-shadow: 0 2px 12px rgba(12,18,34,.05);
+  background:var(--pg-surface); border:1px solid var(--pg-line);
+  border-radius:16px; padding:1.5rem 1.75rem;
+  box-shadow:0 2px 12px rgba(0,0,0,.05);
+  color:var(--pg-ink);
 }
-.pg-about-card table { width: 100%; border-collapse: collapse; margin-top: .75rem; }
+.pg-about-card table { width:100%; border-collapse:collapse; margin-top:.75rem; }
 .pg-about-card th, .pg-about-card td {
-  border-bottom: 1px solid var(--pg-line); padding: .65rem .5rem; text-align: left; font-size: .92rem;
+  border-bottom:1px solid var(--pg-line); padding:.65rem .5rem; text-align:left; font-size:.9rem;
+  color:var(--pg-ink) !important;
 }
-.pg-about-card th { color: var(--pg-muted); font-weight: 600; font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; }
+.pg-about-card th { color:var(--pg-muted) !important; font-weight:700; font-size:.75rem; text-transform:uppercase; letter-spacing:.04em; }
 
 code, .stMarkdown code {
-  font-size: .85em; background: #f1f5f9 !important;
-  padding: .15rem .4rem; border-radius: 6px;
-}
-
-/* ══════════ KOYU TEMA ══════════════════════════ */
-[data-theme="dark"] .stApp, [data-color-scheme="dark"] .stApp {
-  background: #0b0f14 !important;
-  background-image:
-    radial-gradient(ellipse 100% 80% at 100%  0%, rgba(20,184,166,.12), transparent),
-    radial-gradient(ellipse 80%  60% at   0% 100%, rgba(251,146,60,.08), transparent) !important;
-}
-[data-theme="dark"] .metric-card, [data-color-scheme="dark"] .metric-card {
-  background: #111827 !important; border-color: #1f2937 !important; box-shadow: none !important;
-}
-[data-theme="dark"] .metric-card h3, [data-color-scheme="dark"] .metric-card h3 { color: #f1f5f9 !important; }
-[data-theme="dark"] .metric-card p,  [data-color-scheme="dark"] .metric-card p  { color: #94a3b8 !important; }
-[data-theme="dark"] .pg-step-line,   [data-color-scheme="dark"] .pg-step-line   { color: #cbd5e1; border-bottom-color: #1f2937; }
-[data-theme="dark"] .pg-step-num,    [data-color-scheme="dark"] .pg-step-num    { color: #2dd4bf; }
-[data-theme="dark"] .pg-empty,       [data-color-scheme="dark"] .pg-empty       {
-  background: #111827 !important; border-color: #334155 !important; color: #94a3b8 !important;
-}
-[data-theme="dark"] .stTabs [data-baseweb="tab-list"],
-[data-color-scheme="dark"] .stTabs [data-baseweb="tab-list"] {
-  background: #111827 !important; border-color: #1f2937 !important;
-}
-[data-theme="dark"] .stTabs [data-baseweb="tab"][aria-selected="false"],
-[data-color-scheme="dark"] .stTabs [data-baseweb="tab"][aria-selected="false"] { color: #94a3b8 !important; }
-[data-theme="dark"] div[data-testid="stVerticalBlock"] > div > .stTabs [data-baseweb="tab-list"],
-[data-color-scheme="dark"] div[data-testid="stVerticalBlock"] > div > .stTabs [data-baseweb="tab-list"] {
-  background: #0f172a !important; border-color: #334155 !important;
-}
-[data-theme="dark"] .stFileUploader section, [data-color-scheme="dark"] .stFileUploader section {
-  background: #0f172a !important; border-color: #334155 !important;
-}
-[data-theme="dark"] .stButton > button[kind="primary"],
-[data-color-scheme="dark"] .stButton > button[kind="primary"] {
-  background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%) !important; color: #f8fafc !important;
-}
-[data-theme="dark"] .stButton > button[kind="secondary"],
-[data-color-scheme="dark"] .stButton > button[kind="secondary"] {
-  background: #1e293b !important; color: #e2e8f0 !important; border: 1px solid #475569 !important;
-}
-[data-theme="dark"] code, [data-theme="dark"] .stMarkdown code,
-[data-color-scheme="dark"] code, [data-color-scheme="dark"] .stMarkdown code {
-  background: #1e293b !important; color: #e2e8f0 !important;
-}
-[data-theme="dark"] [data-testid="stStatus"],
-[data-color-scheme="dark"] [data-testid="stStatus"] { background: #111827 !important; border-color: #334155 !important; }
-[data-theme="dark"] .stRadio label,     [data-color-scheme="dark"] .stRadio label     { color: #e2e8f0 !important; }
-[data-theme="dark"] .stTextInput label, [data-color-scheme="dark"] .stTextInput label { color: #cbd5e1 !important; }
-[data-theme="dark"] .stTextInput input, [data-color-scheme="dark"] .stTextInput input {
-  background: #0f172a !important; color: #f1f5f9 !important; border-color: #334155 !important;
-}
-[data-theme="dark"] .alarm-red, [data-color-scheme="dark"] .alarm-red {
-  background: rgba(127,29,29,.45) !important; border: 1px solid rgba(248,113,113,.5) !important;
-  border-left: 4px solid #f87171 !important; color: #fecaca !important;
-}
-[data-theme="dark"] .alarm-red b, [data-color-scheme="dark"] .alarm-red b,
-[data-theme="dark"] .alarm-red strong, [data-color-scheme="dark"] .alarm-red strong { color: #fff7ed !important; }
-[data-theme="dark"] .alarm-yellow, [data-color-scheme="dark"] .alarm-yellow {
-  background: rgba(120,53,15,.45) !important; border: 1px solid rgba(251,191,36,.45) !important;
-  border-left: 4px solid #fbbf24 !important; color: #fef3c7 !important;
-}
-[data-theme="dark"] .alarm-yellow b, [data-color-scheme="dark"] .alarm-yellow b,
-[data-theme="dark"] .alarm-yellow strong, [data-color-scheme="dark"] .alarm-yellow strong { color: #fffbeb !important; }
-[data-theme="dark"] .alarm-green, [data-color-scheme="dark"] .alarm-green {
-  background: rgba(6,78,59,.45) !important; border: 1px solid rgba(52,211,153,.45) !important;
-  border-left: 4px solid #34d399 !important; color: #d1fae5 !important;
-}
-[data-theme="dark"] .alarm-green b, [data-color-scheme="dark"] .alarm-green b,
-[data-theme="dark"] .alarm-green strong, [data-color-scheme="dark"] .alarm-green strong { color: #ecfdf5 !important; }
-[data-theme="dark"] .alarm-unknown, [data-color-scheme="dark"] .alarm-unknown {
-  background: #1e293b !important; border: 1px solid #475569 !important;
-  border-left: 4px solid #94a3b8 !important; color: #e2e8f0 !important;
-}
-[data-theme="dark"] .pg-section,      [data-color-scheme="dark"] .pg-section      { color: #f1f5f9 !important; }
-[data-theme="dark"] .pg-section-icon, [data-color-scheme="dark"] .pg-section-icon { background: rgba(45,212,191,.18) !important; }
-[data-theme="dark"] .pg-about-card,   [data-color-scheme="dark"] .pg-about-card   {
-  background: #111827 !important; border-color: #334155 !important; color: #cbd5e1 !important;
-}
-[data-theme="dark"] .pg-about-card th, [data-color-scheme="dark"] .pg-about-card th { color: #94a3b8 !important; }
-[data-theme="dark"] .pg-about-card td, [data-color-scheme="dark"] .pg-about-card td {
-  border-bottom-color: #334155 !important; color: #e2e8f0 !important;
+  font-size:.84em;
+  background:var(--pg-line) !important;
+  color:var(--pg-ink) !important;
+  padding:.15rem .4rem; border-radius:6px;
 }
 </style>
 """, unsafe_allow_html=True)
