@@ -1105,12 +1105,13 @@ class RAGSpecialistAgent:
         if not self.corpus_loaded or self.vectorstore is None:
             # Corpus boş — vision bilgisinden mock sonuçlar oluştur
             if vision_data:
-                drug_name = vision_data.get("ticari_ad", "").strip()
-                etken = vision_data.get("etken_madde", "").strip()
+                drug_name = str(vision_data.get("ticari_ad") or "").strip()
+                etken = str(vision_data.get("etken_madde") or "").strip()
                 if drug_name or etken:
                     # Fact-Check'in karşılaştıracak bir kaynak olsun
+                    head = " / ".join(p for p in (drug_name, etken) if p)
                     return [{
-                        "metin": f"{drug_name} ({etken}): Genel ilaç bilgisine dayalı bilgiler.",
+                        "metin": f"{head}: Genel ilaç bilgisine dayalı bilgiler.",
                         "kaynak": "Genel Bilgi",
                         "sayfa": "—",
                         "benzerlik": 0.7,
