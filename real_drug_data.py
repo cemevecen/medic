@@ -18,6 +18,74 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 
+def _is_garbage_text(text: str, min_length: int = 20) -> bool:
+    """
+    Metni analiz et ve çöp veri olup olmadığını belirle.
+    - Çok fazla tekrar eden sözcük
+    - Anormal uzunluk
+    - Makul içerik yok
+    """
+    if not text or len(text) < min_length:
+        return False
+
+    # Sözcükleri böl
+    words = text.lower().split()
+    if not words:
+        return False
+
+    # Tekrarlanan sözcüklerin yüzdesini kontrol et
+    word_counts = {}
+    for word in words:
+        # Virgül ve nokta olmadan say
+        clean_word = word.strip('.,!?;:')
+        if clean_word and len(clean_word) > 2:
+            word_counts[clean_word] = word_counts.get(clean_word, 0) + 1
+
+    if not word_counts:
+        return False
+
+    # Eğer bir sözcük %30'dan fazla tekrarlanıyorsa, muhtemelen çöptür
+    max_repeat_ratio = max(word_counts.values()) / len(words) if words else 0
+    if max_repeat_ratio > 0.3:
+        logger.warning(f"Tekrar eden metin tespit edildi: {text[:50]}...")
+        return True
+
+    return False
+
+
+def _safe_extract_text(text_or_list, max_length: int = 300) -> str:
+    """
+    OpenFDA'dan metin çıkart, çöp veriler hariç, makul uzunlukta
+    """
+    if not text_or_list:
+        return ""
+
+    # Liste ise ilk elemanı al
+    text = text_or_list[0] if isinstance(text_or_list, list) else text_or_list
+
+    if not isinstance(text, str):
+        return ""
+
+    text = text.strip()
+
+    # Çöp veri kontrolü
+    if _is_garbage_text(text):
+        return ""
+
+    # İlk cümleyi al
+    sentences = re.split(r'[.!?]\s+', text)
+    if sentences:
+        result = sentences[0].strip()
+        if result and not _is_garbage_text(result, min_length=10):
+            return result[:max_length]
+
+    # Eğer cümle bulunamazsa, ilk max_length karakteri döndür
+    if not _is_garbage_text(text, min_length=10):
+        return text[:max_length]
+
+    return ""
+
+
 def _clean_drug_name(name: str) -> str:
     """İlaç adını normalize et (dosajları ayır vb)"""
     # "augmentin 1000mg" -> "augmentin"
@@ -213,34 +281,37 @@ def fetch_drug_from_openfda(drug_name: str) -> Optional[Dict[str, Any]]:
         # OpenFDA'da "active_ingredient" çoğu zaman liste şeklinde:
         # ["ingredient1 strength1", "ingredient2 strength2"] veya
         # [{"name": "...", "strength": "..."}, ...]
+        # Çöp veri ve tekrarlayan metinler temizle
         active_ingredient = ""
         if "active_ingredient" in drug:
             ingredients = []
             for ing in drug.get("active_ingredient", []):
+                ing_text = ""
                 if isinstance(ing, str):
                     # "Amoxicillin trihydrate 500 mg" formatı
-                    ingredients.append(ing)
+                    ing_text = ing.strip()
                 elif isinstance(ing, dict):
                     # {"name": "...", "strength": "..."} formatı
                     if "name" in ing:
                         name = ing["name"]
                         strength = ing.get("strength", "")
-                        ingredients.append(f"{name}{' ' + strength if strength else ''}")
-            active_ingredient = " + ".join(ingredients)
+                        ing_text = f"{name}{' ' + strength if strength else ''}".strip()
+
+                # Çöp veri kontrolü - eğer çöpse eklemeden geç
+                if ing_text and not _is_garbage_text(ing_text, min_length=5):
+                    ingredients.append(ing_text[:150])
+
+            if ingredients:
+                active_ingredient = " + ".join(ingredients[:3])  # Max 3 etken madde
 
         # ============ DOZAJ ============
         # Dosage_and_administration genellikle uzun metin; ilk cümleyi al
+        # Çöp veri ve tekrarlayan metinler temizle
         dosage = "Bilgi mevcut değil"
         if "dosage_and_administration" in drug:
-            dos_list = drug.get("dosage_and_administration", [])
-            if dos_list:
-                full_text = dos_list[0]
-                # İlk cümleyi bul (nokta, ünlem veya soru işareti kadar)
-                sentences = re.split(r'[.!?]', full_text)
-                if sentences:
-                    dosage = sentences[0].strip()[:150]  # İlk 150 char
-                    if not dosage:
-                        dosage = full_text[:150]
+            dos_text = _safe_extract_text(drug.get("dosage_and_administration"), max_length=200)
+            if dos_text:
+                dosage = dos_text
 
         # ============ FORM ============
         form = ", ".join(openfda_data.get("route", [])) if openfda_data.get("route") else "Bilgi mevcut değil"
