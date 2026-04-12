@@ -5,7 +5,7 @@ agents.py: Tüm ajan sınıfları ve ana orkestratör bu dosyada tanımlanmışt
 
 # Versiyon numarası — app.py session_state cache invalidation için kullanılır.
 # Fact-Checker / parser / orchestrator davranışı değiştiğinde artırın.
-PHARMA_GUARD_VERSION = "1.5"
+PHARMA_GUARD_VERSION = "1.6"
 
 import os
 import json
@@ -670,37 +670,38 @@ class SafetyAuditorAgent:
 
 class CorporateAnalystAgent:
     """
-    Gemini kullanarak ilaç üreticisi firma bilgilerini raporlayan ajan.
+    Groq Llama-3 kullanarak ilaç üreticisi firma bilgilerini raporlayan ajan.
+    (Önceki: Gemini — quota tasarrufu için Groq'a taşındı)
     """
 
     def __init__(self):
-        _init_gemini()
+        self.groq_client = _init_groq()
 
     def analyze(self, drug_name: str, manufacturer: Optional[str]) -> Dict[str, Any]:
-        """Firma analizi yapar."""
+        """Firma analizi yapar (Groq + Llama-3 ile)."""
         prompt = CORPORATE_PROMPT_TEMPLATE.format(
             drug_name=drug_name or "Bilinmiyor",
             manufacturer=manufacturer or "Bilinmiyor",
         )
-        models = _gemini_model_chain()
+        models = _groq_safety_model_chain()
         last_err: Optional[Exception] = None
-        for name in models:
+
+        for model_id in models:
             try:
-                model = genai.GenerativeModel(
-                    name,
-                    system_instruction=MASTER_PROMPT,
+                response = self.groq_client.chat.completions.create(
+                    model=model_id,
+                    messages=[
+                        {"role": "system", "content": "Sen bir ilaç firma uzmanısın. SADECE JSON döndür."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    max_tokens=1024,
+                    temperature=0.2,
+                    response_format={"type": "json_object"},
                 )
-                response = model.generate_content(
-                    prompt,
-                    generation_config=genai.GenerationConfig(
-                        temperature=0.2,
-                        response_mime_type="application/json",
-                    ),
-                )
-                raw = response.text
+                raw = response.choices[0].message.content or ""
                 parsed = self._parse_json_response(raw)
 
-                # Kritik alanlar eksik veya güven çok düşükse retry
+                # Kritik alanlar eksikse retry
                 firma_adi = parsed.get("firma_adi", "")
                 guven = parsed.get("guven_puani", 0)
                 if (
@@ -708,43 +709,44 @@ class CorporateAnalystAgent:
                     or firma_adi in ("Bilinmiyor", "Tespit Edilemedi", "")
                     or guven < 4
                 ):
-                    retry = self._retry_simplified(drug_name, manufacturer, name)
+                    retry = self._retry_simplified(drug_name, manufacturer, model_id)
                     if retry:
                         parsed = retry
 
+                if model_id != models[0]:
+                    parsed["groq_model_notu"] = f"Model: {model_id}"
                 return parsed
+
             except Exception as e:
                 last_err = e
-                if _gemini_model_missing_error(e) and name != models[-1]:
-                    print(f"[CorporateAnalyst] {name} kullanılamadı, sıradaki… ({e})")
+                if _groq_is_rate_limit(e) and model_id != models[-1]:
+                    print(f"[CorporateAnalyst] {model_id} limit/429, sıradaki… ({e})")
                     continue
                 break
+
         return {
-            "hata": str(last_err) if last_err else "Corporate Analyst başarısız.",
+            "hata": f"Corporate Analyst (Groq) başarısız: {last_err}" if last_err else "Corporate Analyst başarısız.",
             "guven_puani": 1,
         }
 
     def _retry_simplified(
-        self, drug_name: str, manufacturer: Optional[str], model_name: str
+        self, drug_name: str, manufacturer: Optional[str], model_id: str
     ) -> Optional[Dict[str, Any]]:
-        """Firma adı bulunamadıysa daha odaklı prompt ile tekrar dener."""
+        """Firma adı boşsa kısa prompt ile tekrar dener."""
         simple = (
-            f"Sadece JSON döndür. '{drug_name}' ilacının Türkiye veya dünya pazarındaki "
-            f"üreticisi hakkında bilgi ver. Bilinen üretici: {manufacturer or 'bilinmiyor'}.\n"
-            '{"firma_adi":"...","ulke":"...","sertifikalar":["GMP"],'
-            '"titck_durumu":"TİTCK onaylı veya Belirsiz","genel_degerlendirme":"...","guven_puani":5}'
+            f"Sadece JSON döndür. '{drug_name}' ilacının üreticisi nedir? "
+            f"Bilinen: {manufacturer or 'bilinmiyor'}. "
+            '{"firma_adi":"adı","ulke":"ülke","titck_durumu":"TİTCK onaylı veya Belirsiz","guven_puani":5}'
         )
         try:
-            model = genai.GenerativeModel(model_name)
-            response = model.generate_content(
-                simple,
-                generation_config=genai.GenerationConfig(
-                    temperature=0.1,
-                    response_mime_type="application/json",
-                ),
+            r = self.groq_client.chat.completions.create(
+                model=model_id,
+                messages=[{"role": "user", "content": simple}],
+                max_tokens=512,
+                temperature=0.1,
+                response_format={"type": "json_object"},
             )
-            result = self._parse_json_response(response.text)
-            # Retry sonucunu kabul et
+            result = self._parse_json_response(r.choices[0].message.content or "")
             if result.get("firma_adi") and result["firma_adi"] not in ("Bilinmiyor", ""):
                 return result
         except Exception as e:
