@@ -114,16 +114,17 @@ class NobetciEczaneAPI:
 
         url = f"{self.COLLECTAPI_BASE}/dutyPharmacy"
 
-        params = {"city": il}
+        # CollectAPI parametreleri: il, ilce
+        params = {"il": il}
         if ilce:
-            params["district"] = ilce
+            params["ilce"] = ilce
 
         headers = {
-            "Content-Type": "application/json",
+            "content-type": "application/json",
         }
 
         if self.api_key:
-            headers["Authorization"] = f"apikey {self.api_key}"
+            headers["authorization"] = f"apikey {self.api_key}"
 
         try:
             response = self.session.get(url, params=params, headers=headers, timeout=10)
@@ -132,10 +133,22 @@ class NobetciEczaneAPI:
                 data = response.json()
 
                 if data.get("success"):
+                    # CollectAPI yanıtını standardize et
+                    pharmacies = []
+                    for item in data.get("result", []):
+                        pharmacies.append({
+                            "name": item.get("name", ""),
+                            "address": item.get("address", ""),
+                            "phone": item.get("phone", ""),
+                            "city": il,
+                            "district": item.get("dist", ""),
+                            "loc": item.get("loc", "")
+                        })
+
                     return {
                         "success": True,
-                        "total": len(data.get("result", [])),
-                        "data": data.get("result", []),
+                        "total": len(pharmacies),
+                        "data": pharmacies,
                         "source": "CollectAPI"
                     }
                 else:
