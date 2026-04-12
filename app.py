@@ -459,31 +459,32 @@ with st.sidebar:
         )
     st.markdown("---")
 
-    # TEST VERİ YÜKLEME (geliştirme amaçlı)
-    with st.expander(" Test veri seti", expanded=False):
-        st.caption("Dolu ilaç bilgileriyle test etmek için test ilaçlarından seçin.")
-        try:
-            from test_data import TEST_DRUGS
-            test_drug_names = {
-                "Augmentin 1000 mg": "augmentin_1000mg",
-                "Parol 500 mg": "parol_500mg",
-                "Aspirin 500 mg": "aspirin_500mg",
-                "Ventolin İnhaler": "ventolin_inhaler",
-                "Omeprazol 20 mg": "omeprazol_20mg",
-                "Metformin 500 mg": "metformin_500mg",
-                "Amoxil 500 mg": "amoxil_500mg",
-                "Fluconazole 150 mg": "fluconazole_150mg",
-            }
-            selected = st.selectbox("Test ilaç seç", list(test_drug_names.keys()))
-            if st.button("Test verisini yükle", use_container_width=True, key="load_test_btn"):
-                drug_key = test_drug_names[selected]
-                test_drug = TEST_DRUGS.get(drug_key, {})
-                if test_drug:
-                    st.session_state["test_drug_data"] = test_drug
-                    st.success(f" {selected} test verisi yüklendi!")
-                    st.json(test_drug, expanded=False)
-        except ImportError:
-            st.warning(" test_data modülü bulunamadı")
+    # GERÇEKLİ İLAÇ VERİSİ YÜKLEME (Wikidata + OpenFDA)
+    with st.expander(" Gerçek veri çek", expanded=False):
+        st.caption("Wikidata ve OpenFDA'dan gerçek ilaç bilgilerini çeker.")
+        drug_search = st.text_input(
+            "İlaç adını girin",
+            placeholder="örn: Augmentin, Parol, Aspirin…",
+            key="drug_search_input"
+        )
+        if st.button(" Gerçek veriyi çek", use_container_width=True, key="fetch_real_data_btn"):
+            if drug_search.strip():
+                with st.spinner(f"'{drug_search}' için gerçek veri aranıyor…"):
+                    try:
+                        from real_drug_data import fetch_drug_info
+                        real_drug = fetch_drug_info(drug_search)
+                        if real_drug:
+                            st.session_state["test_drug_data"] = real_drug
+                            st.success(f" Gerçek veri bulundu!")
+                            st.json(real_drug, expanded=False)
+                        else:
+                            st.warning(f" '{drug_search}' için veri bulunamadı. Başka adla dene.")
+                    except ImportError:
+                        st.error("real_drug_data modülü bulunamadı")
+                    except Exception as e:
+                        st.error(f"Hata: {str(e)}")
+            else:
+                st.warning("İlaç adını gir")
 
     st.markdown("---")
     st.markdown(f" **RAG:** {len(pdf_list)} prospektüs")
