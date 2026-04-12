@@ -1664,23 +1664,35 @@ with tab_about:
     # ─────────────────────────────────────────────
     # NÖBETÇİ ECZANE API
     # ─────────────────────────────────────────────
-    with st.expander("🏪 Nöbetçi Eczane API (CollectAPI)", expanded=False):
-        st.caption(
-            "Türkiye'deki nöbetçi eczaneleri bulmak için.\n\n"
-            "**Kaynak:** https://collectapi.com/tr/api/health/nobetci-eczane-api"
-        )
+    st.subheader("🏪 Nöbetçi Eczane API (CollectAPI)")
 
-        collectapi_key = st.text_input(
-            "CollectAPI Key",
-            type="password",
-            key="collectapi_key",
-            placeholder="apikey abc123...",
-            help="API key'inizi https://collectapi.com 'den alın"
-        )
+    collectapi_key_input = st.text_input(
+        "API Key",
+        type="password",
+        key="collectapi_key_input",
+        placeholder="Sadece kod kısmını yapıştır (örn: abc123xyz...)"
+    )
 
-        if collectapi_key:
-            st.session_state["collectapi_api_key"] = collectapi_key
-            st.success("✓ CollectAPI key kaydedildi")
+    if collectapi_key_input:
+        # "api key xxxx" formatından sadece kodu çıkar
+        key_clean = collectapi_key_input.strip()
+        if key_clean.lower().startswith("api key"):
+            key_clean = key_clean[7:].strip()
+
+        st.session_state["collectapi_api_key"] = key_clean
+
+        # API test et
+        from nobetci_eczane import init_nobetci_api
+        init_nobetci_api(api_key=key_clean, source="collectapi")
+
+        # Ankara/demo test
+        from nobetci_eczane import get_nobetci_eczaneler
+        test_result = get_nobetci_eczaneler("Ankara")
+
+        if test_result.get("success"):
+            st.success(f"✓ API çalışıyor! {test_result.get('total')} eczane bulundu (Kaynak: {test_result.get('source')})")
+        else:
+            st.warning(f"⚠️ API test başarısız: {test_result.get('error', 'Bilinmeyen hata')}")
 
     # ─────────────────────────────────────────────
     # ITS (İLAÇ TAKIP SİSTEMİ) API
