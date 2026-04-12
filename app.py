@@ -5,6 +5,7 @@ app.py: Modern tasarım, çoklu ajan orkestrasyon, PDF rapor.
 
 import os
 import json
+import html
 from pathlib import Path
 
 import streamlit as st
@@ -12,6 +13,8 @@ from PIL import Image
 from dotenv import load_dotenv
 
 load_dotenv()
+
+from typing import Optional
 
 from utils import (
     preprocess_image,
@@ -22,6 +25,48 @@ from utils import (
     ALARM_EMOJI,
     ALARM_MESSAGE,
 )
+
+
+def _vision_ui_legacy_spam(vision: Optional[dict]) -> bool:
+    try:
+        from agents import vision_output_has_legacy_user_facing_copy
+
+        return vision_output_has_legacy_user_facing_copy(vision)
+    except Exception:
+        return False
+
+
+def _sanitize_gorsel_user_message(msg: Optional[str]) -> str:
+    """Eski dağıtım / oturumdan kalan LLaVA–Groq şablon uyarılarını tek tipe çevirir."""
+    if not msg:
+        return ""
+    low = str(msg).lower()
+    if any(
+        b in low
+        for b in (
+            "llava",
+            "groq fallback",
+            "görsel işlenemiyor",
+            "gorsel islenemiyor",
+            "metin girişi tercih",
+            "metin girisi tercih",
+        )
+    ):
+        return (
+            "Bu uyarı **eski bir sürüm** çıktısından geliyor olabilir. Güncel akış: "
+            "**Groq görüntü (Llama 4)** → **Gemini görüntü yedeği** → **OCR**. "
+            "Kenar çubuğundan **Önbelleği Temizle** deyip **Analizi Başlat** ile yenileyin."
+        )
+    return str(msg)
+
+
+def _gorsel_analiz_for_display_json(ga: dict) -> dict:
+    """JSON panelinde eski oturum mesajlarını kullanıcıya uygun metne çevirir."""
+    d = dict(ga)
+    if "message" in d:
+        d["message"] = _sanitize_gorsel_user_message(str(d.get("message") or ""))
+    return d
+
 
 # ─────────────────────────────────────────────
 # SAYFA YAPISI
@@ -346,17 +391,58 @@ code, .stMarkdown code {
 # ─────────────────────────────────────────────
 gemini_key = os.getenv("GEMINI_API_KEY", "")
 groq_key   = os.getenv("GROQ_API_KEY", "")
+openai_env = bool(os.getenv("OPENAI_API_KEY", "").strip())
 pdf_list   = list_corpus_pdfs()
+
+
+def _session_openai_compat_kwargs():
+    """Kenar çubuğundan OpenAI-uyumlu ikinci API; boşsa yalnızca .env OPENAI_* kullanılır."""
+    ak = (st.session_state.get("pg_alt_api_key") or "").strip()
+    if not ak:
+        return None
+    out = {"api_key": ak}
+    bu = (st.session_state.get("pg_alt_base_url") or "").strip()
+    if bu:
+        out["base_url"] = bu
+    mo = (st.session_state.get("pg_alt_model") or "").strip()
+    if mo:
+        out["model"] = mo
+    return out
 
 with st.sidebar:
     st.markdown("### Kontrol paneli")
     g_cls  = "ok"  if gemini_key else "bad"
     gr_cls = "ok"  if groq_key   else "bad"
+    oa_sess = bool((st.session_state.get("pg_alt_api_key") or "").strip())
+    oa_cls = "ok" if (openai_env or oa_sess) else "bad"
+    oa_lbl = "aktif (.env veya kenar çubuğu)" if (openai_env or oa_sess) else "opsiyonel"
     st.markdown(
         f'<div class="pg-status-pill {g_cls}">{"●" if gemini_key else "○"} Gemini API — {"aktif" if gemini_key else "eksik"}</div><br>'
-        f'<div class="pg-status-pill {gr_cls}">{"●" if groq_key else "○"} Groq — {"aktif" if groq_key else "eksik"}</div>',
+        f'<div class="pg-status-pill {gr_cls}">{"●" if groq_key else "○"} Groq — {"aktif" if groq_key else "eksik"}</div><br>'
+        f'<div class="pg-status-pill {oa_cls}">{"●" if (openai_env or oa_sess) else "○"} İkinci LLM (OpenAI-uyumlu) — {oa_lbl}</div>',
         unsafe_allow_html=True,
     )
+    with st.expander("İsteğe bağlı: İkinci LLM API (OpenAI uyumlu)", expanded=False):
+        st.caption(
+            "PDF prospektüsünde sıra: Groq → bu API → Gemini. OpenAI, OpenRouter, Together vb. "
+            "Anahtarı burada girebilir veya `.env` içinde `OPENAI_API_KEY` tanımlayabilirsiniz."
+        )
+        st.text_input(
+            "API anahtarı",
+            type="password",
+            key="pg_alt_api_key",
+            placeholder="sk-… veya OpenRouter anahtarı",
+        )
+        st.text_input(
+            "Base URL (boş = OpenAI varsayılan)",
+            key="pg_alt_base_url",
+            placeholder="https://api.openai.com/v1 veya https://openrouter.ai/api/v1",
+        )
+        st.text_input(
+            "Model adı (boş = gpt-4o-mini)",
+            key="pg_alt_model",
+            placeholder="gpt-4o-mini, openai/gpt-4o-mini, …",
+        )
     st.markdown("---")
     st.markdown(f" **RAG:** {len(pdf_list)} prospektüs")
     if pdf_list:
@@ -445,8 +531,8 @@ with tab_analyze:
                 pdf_name_input  = up_pdf.name
                 st.success(f" **{up_pdf.name}** yüklendi ({len(pdf_bytes_input)//1024} KB)")
                 st.info(
-                    " Gemini bu PDF'i okuyarak ilaç bilgilerini (etken madde, dozaj, "
-                    "endikasyon, yan etkiler) otomatik çıkaracak."
+                    " PDF metni önce **Groq** ile yapılandırılır; gerekirse **Gemini** yedeği denenir. "
+                    "Etken madde, dozaj ve özet otomatik çıkarılır."
                 )
 
         else:
@@ -507,6 +593,7 @@ with tab_analyze:
                     pdf_bytes=pdf_bytes_input,
                     pdf_filename=pdf_name_input,
                     progress_callback=_prog,
+                    openai_compat=_session_openai_compat_kwargs(),
                 )
                 st.session_state.analysis_result = result
 
@@ -527,7 +614,21 @@ with tab_analyze:
             stat_ph.empty()
 
         if "analysis_result" in st.session_state:
-            res   = st.session_state.analysis_result
+            try:
+                from agents import vision_output_has_legacy_user_facing_copy
+            except Exception:
+                vision_output_has_legacy_user_facing_copy = lambda _v: False
+            if vision_output_has_legacy_user_facing_copy(
+                st.session_state["analysis_result"].get("vision")
+            ):
+                st.session_state.pop("analysis_result", None)
+                st.session_state.pop("report_pdf", None)
+                st.warning(
+                    "Önbellekteki sonuç **eski uygulama sürümündendi** ve kaldırıldı. "
+                    "**Analizi Başlat** ile yeniden çalıştırın."
+                )
+                st.rerun()
+            res = st.session_state.analysis_result
             alarm = res.get("alarm", "BİLİNMİYOR")
             emoji = ALARM_EMOJI.get(alarm, "⚪")
             msg   = ALARM_MESSAGE.get(alarm, "")
@@ -538,26 +639,72 @@ with tab_analyze:
             st.markdown("")
 
             m1, m2, m3 = st.columns(3)
-            conf = res.get("avg_confidence", 0)
-            cc   = "#059669" if conf >= 8 else "#d97706" if conf >= 5 else "#dc2626"
+            conf = float(res.get("avg_confidence") or 0)
+            cc = "#059669" if conf >= 8 else "#d97706" if conf >= 5 else "#dc2626"
+            conf_band = "Yüksek" if conf >= 8 else "Orta" if conf >= 5 else "Düşük"
             with m1:
                 st.markdown(
                     f'<div class="metric-card"><h3 style="color:{cc}">'
                     f'{conf:.1f}<span style="font-size:.9rem;font-weight:400">/10</span></h3>'
-                    f'<p>Güven Puanı</p></div>', unsafe_allow_html=True)
+                    f'<p>Güven Puanı</p>'
+                    f'<p style="margin:.35rem 0 0;font-size:0.82rem;color:#64748b;line-height:1.35">'
+                    f"{html.escape(conf_band)} güven bandı — rapor ve ajan çıktılarının birleşik özeti."
+                    f"</p></div>",
+                    unsafe_allow_html=True,
+                )
             with m2:
-                rc = len(res.get("rag_results", []))
-                st.markdown(f'<div class="metric-card"><h3>{rc}</h3><p>RAG Sonucu</p></div>',
-                            unsafe_allow_html=True)
-            with m3:
-                fc         = res.get("fact_check", {})
-                fc_ok      = not fc.get("uyusmazlik", False)
-                corpus_bos = fc.get("corpus_bos", False)
-                fc_icon    = "" if corpus_bos else ("" if fc_ok else "")
-                fc_label   = "Genel Bilgi" if corpus_bos else "Fact-Check"
+                rag = res.get("rag_results") or []
+                rc = len(rag)
+                if rag:
+                    k0 = str(rag[0].get("kaynak") or "—").strip() or "—"
+                    k0_short = html.escape(k0[:36]) + ("…" if len(k0) > 36 else "")
+                    r2 = "İlk eşleşen kaynak özeti"
+                    r3 = k0_short
+                else:
+                    r2 = "Kayıtlı prospektüs araması"
+                    r3 = "Henüz eşleşen parça yok — corpus veya sorgu genişletilebilir."
                 st.markdown(
-                    f'<div class="metric-card"><h3>{fc_icon}</h3>'
-                    f'<p>{fc_label}</p></div>', unsafe_allow_html=True)
+                    f'<div class="metric-card"><h3>{rc}</h3>'
+                    f'<p>RAG kayıt sayısı</p>'
+                    f'<p style="margin:.35rem 0 0;font-size:0.82rem;color:#64748b;line-height:1.35">'
+                    f"<strong>{html.escape(r2)}</strong><br>{r3}</p></div>",
+                    unsafe_allow_html=True,
+                )
+            with m3:
+                fc = res.get("fact_check") or {}
+                fc_ok = not fc.get("uyusmazlik", False)
+                corpus_bos = fc.get("corpus_bos", False)
+                fc_label = "Genel Bilgi" if corpus_bos else "Fact-Check"
+                if corpus_bos:
+                    main_txt = "Genel mod"
+                    fc_col = "#64748b"
+                    detail = (
+                        "Yerel prospektüs bulunamadı; görsel/metin ile üretilen özet kaynaklarla "
+                        "sınırlı doğrulama."
+                    )
+                elif not fc_ok:
+                    n_issues = len(fc.get("sorunlar") or [])
+                    main_txt = "Uyumsuzluk" if n_issues else "Dikkat"
+                    fc_col = "#dc2626"
+                    detail = (
+                        f"{n_issues} tutarsızlık tespit edildi."
+                        if n_issues
+                        else html.escape(str(fc.get("mesaj") or "Fact-check uyarısı.")[:120])
+                    )
+                else:
+                    main_txt = "Uyumlu"
+                    fc_col = "#059669"
+                    detail = html.escape(
+                        str(fc.get("mesaj") or "Görsel / RAG özetleri birbiriyle çelişmiyor.")[:140]
+                    )
+                st.markdown(
+                    f'<div class="metric-card"><h3 style="color:{fc_col};font-size:1.35rem;font-weight:700">'
+                    f"{html.escape(main_txt)}</h3>"
+                    f'<p style="margin:.15rem 0 0">{html.escape(fc_label)}</p>'
+                    f'<p style="margin:.35rem 0 0;font-size:0.82rem;color:#64748b;line-height:1.4">'
+                    f"{detail}</p></div>",
+                    unsafe_allow_html=True,
+                )
 
             if corpus_bos:
                 st.info("Prospektüs veritabanı boş ama Genel İlaç Bilgisi ile doğrulama yapıldı. "
@@ -591,6 +738,26 @@ with tab_analyze:
                     )
                 else:
                     st.caption("QR kod tespit edilemedi — analiz normal şekilde sürdü.")
+
+            ga = vsum.get("gorsel_analiz")
+            if isinstance(ga, dict) and ga.get("message"):
+                msg_show = _sanitize_gorsel_user_message(str(ga.get("message") or ""))
+                sts = ga.get("image_analysis_status")
+                if sts == "failed":
+                    st.warning(msg_show)
+                elif sts == "ocr_recovered":
+                    st.success(msg_show)
+                elif sts == "partial_success":
+                    st.info(msg_show)
+                elif ga.get("success"):
+                    st.caption(msg_show)
+                ext = ga.get("extracted_text") or ""
+                if ext and sts in ("ocr_recovered", "partial_success", "failed"):
+                    with st.expander("OCR / çıkarılan metin özeti", expanded=(sts == "failed")):
+                        st.text(ext[:4000])
+                if ga.get("error_code") and sts != "full_success":
+                    st.caption(f"Teknik kod: `{ga['error_code']}`")
+
             st.markdown("")
 
             rt1, rt2, rt3, rt4, rt5 = st.tabs(
@@ -609,11 +776,34 @@ with tab_analyze:
 
             with rt2:
                 v = res.get("vision", {})
-                for label, key in [("Ticari Ad","ticari_ad"),("Etken Madde","etken_madde"),
-                                   ("Dozaj","dozaj"),("Form","form"),("Barkod","barkod"),
-                                   ("Üretici","uretici"),("Notlar","notlar"),("Kaynak","kaynak")]:
+                pv = v.get("pharma_guard_scan_version")
+                if pv:
+                    st.caption(f"Görsel pipeline sürümü: `{pv}`")
+                legacy_ui = _vision_ui_legacy_spam(v)
+                if legacy_ui:
+                    st.warning(
+                        "Bu sekmedeki **Notlar / Kaynak** alanları eski sürüm metni içeriyordu; "
+                        "ham satırlar gizlendi. **Önbelleği Temizle** ve **Analizi Başlat** ile güncel sonucu alın."
+                    )
+                for label, key in [
+                    ("Ticari Ad", "ticari_ad"),
+                    ("Etken Madde", "etken_madde"),
+                    ("Dozaj", "dozaj"),
+                    ("Form", "form"),
+                    ("Barkod", "barkod"),
+                    ("Üretici", "uretici"),
+                    ("Notlar", "notlar"),
+                    ("Kaynak", "kaynak"),
+                ]:
+                    if key in ("notlar", "kaynak") and legacy_ui:
+                        continue
+                    if key in ("notlar", "kaynak") and _sanitize_gorsel_user_message(
+                        str(v.get(key) or "")
+                    ) != str(v.get(key) or ""):
+                        continue
                     val = v.get(key)
-                    if val: st.markdown(f"**{label}:** {val}")
+                    if val:
+                        st.markdown(f"**{label}:** {val}")
                 osk = v.get("okunabilirlik_skoru")
                 if osk: st.markdown(f"**Okunabilirlik:** {osk}/10")
                 # PDF'e özgü alanlar
@@ -623,7 +813,13 @@ with tab_analyze:
                     st.info(f" **Prospektüs Özeti:** {v['prospektus_ozeti']}")
                 if v.get("pdf_metin_uzunlugu"):
                     st.caption(f"PDF metin uzunluğu: {v['pdf_metin_uzunlugu']:,} karakter")
-                if "hata" in v: st.warning(v["hata"])
+                err_v = str(v.get("hata") or "").strip()
+                if err_v:
+                    st.warning(_sanitize_gorsel_user_message(err_v))
+                gax = v.get("gorsel_analiz")
+                if isinstance(gax, dict):
+                    st.markdown("**Görsel analiz durumu**")
+                    st.json(_gorsel_analiz_for_display_json(gax))
                 bdet = v.get("barkod_detay")
                 if isinstance(bdet, dict):
                     st.markdown("**Barkod taraması (makine)**")
@@ -637,8 +833,11 @@ with tab_analyze:
                 st.markdown("---")
                 st.markdown("**RAG eşleşmeleri**")
                 for i, r in enumerate(res.get("rag_results", []), 1):
-                    with st.expander(f"{i}. {r.get('kaynak','?')} · s.{r.get('sayfa','?')}"):
-                        st.caption(r.get("metin",""))
+                    k_src = str(r.get("kaynak") or "").strip() or "Kaynak belirtilmedi"
+                    s_src = str(r.get("sayfa") or "").strip() or "—"
+                    met_raw = str(r.get("metin") or "").strip() or "(Metin yok)"
+                    with st.expander(f"{i}. {k_src} · s.{s_src}"):
+                        st.caption(met_raw[:2000])
 
             with rt3:
                 s = res.get("safety", {})
@@ -679,12 +878,20 @@ with tab_analyze:
                     st.warning(str(sim["uyari"]))
                 if sim.get("fiyat_entegrasyonu_notu"):
                     st.info(str(sim["fiyat_entegrasyonu_notu"]))
-                st.caption(f"Yerel katalog: `{sim.get('yerel_katalog_yolu', '—')}`")
                 rows = sim.get("oneriler") or []
                 if not rows:
-                    st.caption(
-                        "Bu sorgu için yerel katalogda eşleşme veya model önerisi üretilmedi; "
-                        "eczacınıza danışın."
+                    if sim.get("bos_aciklama"):
+                        st.info(str(sim["bos_aciklama"]))
+                    else:
+                        st.info(
+                            "Bu sorgu için otomatik benzer / muadil önerisi üretilemedi. "
+                            "Muadil seçimi için eczacı veya hekime danışın."
+                        )
+                    st.markdown(
+                        "**Resmi doğrulama için:** "
+                        "[TİTCK](https://titck.gov.tr) · "
+                        "[İlaç bilgi kartı / kamuoyu duyuruları](https://titck.gov.tr/mmi_kamuoyu) · "
+                        "Reçeteli ürünlerde mutlaka sağlık mesleği mensubu onayı gerekir."
                     )
                 for i, row in enumerate(rows, 1):
                     if not isinstance(row, dict):
@@ -758,20 +965,43 @@ with tab_corpus:
 # SEKME 3 — HAKKINDA
 # ═════════════════════════════════════════════
 with tab_about:
-    st.markdown("""
+    try:
+        from agents import PHARMA_GUARD_VERSION as _pgv_about
+    except Exception:
+        _pgv_about = "?"
+    st.markdown(f"""
     <div class="pg-about-card">
       <strong style="font-size:1.1rem">Pharma-Guard AI</strong>
       <p style="margin:.5rem 0 1rem;color:#64748b">
-        Görüntü işleme ve NLP'yi birleştiren otonom Çoklu Ajan Sistemi (MAS).
+        Görüntü işleme ve NLP'yi birleştiren otonom Çoklu Ajan Sistemi (MAS). Uygulama sürümü: <strong>v{_pgv_about}</strong>
       </p>
       <table>
-        <tr><th>#</th><th>Ajan</th><th>Model</th><th>Görev</th></tr>
-        <tr><td>1</td><td> Vision Scanner</td><td>LLaVA (Groq) + Gemini Vision</td><td>Görselden OCR & JSON</td></tr>
-        <tr><td>2</td><td> RAG Specialist</td><td>ChromaDB + Sentence-T.</td><td>Prospektüs araması</td></tr>
-        <tr><td>3</td><td> Fact-Checker</td><td>Kural tabanlı</td><td>Veri uyuşmazlığı tespiti</td></tr>
-        <tr><td>4</td><td> Safety Auditor</td><td>Llama-3-70B (Groq)</td><td>Güvenlik & yan etki</td></tr>
-        <tr><td>5</td><td> Corporate Analyst</td><td>Gemini 2.0 Flash</td><td>Firma araştırması</td></tr>
-        <tr><td>6</td><td> Report Synthesizer</td><td>Gemini 2.0 Flash</td><td>Türkçe rapor sentezi</td></tr>
+        <tr><th>#</th><th>Ajan</th><th>Teknoloji</th><th>Görev</th></tr>
+        <tr><td>1</td><td>Vision Scanner</td><td>Groq görüntü (Llama&nbsp;4 Scout zinciri) → Gemini görüntü yedeği → Tesseract OCR → Groq metin</td><td>Kutu görseli / PDF metni → yapılandırılmış JSON</td></tr>
+        <tr><td>2</td><td>RAG Specialist</td><td>ChromaDB + LangChain + HuggingFace çok dilli embedding</td><td>Yerel prospektüs semantik arama</td></tr>
+        <tr><td>3</td><td>Fact-Checker</td><td>Kural tabanlı Python</td><td>Görsel–RAG tutarlılığı</td></tr>
+        <tr><td>4</td><td>Safety Auditor</td><td>Groq (Llama&nbsp;3.3 / 3.1 model zinciri, JSON modu)</td><td>Yan etki, etkileşim, alarm seviyesi</td></tr>
+        <tr><td>5</td><td>Corporate Analyst</td><td>Groq (aynı metin zinciri)</td><td>Firma / TİTCK özeti (Gemini kullanılmaz)</td></tr>
+        <tr><td>6</td><td>Report Synthesizer</td><td>Önce Groq; Groq düşerse Gemini model zinciri</td><td>Türkçe Markdown rapor</td></tr>
+      </table>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div class="pg-about-card" style="margin-top:.75rem">
+      <strong style="font-size:1.05rem">3. Teknoloji katmanları (motor odası)</strong>
+      <p style="margin:.4rem 0 .75rem;color:#64748b;font-size:0.92rem">
+        Eski taslaklardaki <strong>LLaVA</strong> veya yalnızca <strong>Gemini 2.0 orkestra</strong> ifadeleri güncel değildir:
+        Groq’ta LLaVA kapatılmıştır; görüntü için Llama&nbsp;4 + yedek Gemini kullanılır. PDF için önce Groq, isteğe bağlı OpenAI-uyumlu API, sonra Gemini.
+      </p>
+      <table>
+        <tr><th>Kategori</th><th>Teknoloji / kütüphane</th><th>Projedeki rolü</th></tr>
+        <tr><td>Orkestrasyon</td><td>Python + Streamlit + <code>PharmaGuardOrchestrator</code></td><td>Ajan sırası, paralel güvenlik/firma, oturum ve ilerleme çubuğu</td></tr>
+        <tr><td>Görüntü &amp; kutu</td><td>Groq vision (Llama&nbsp;4), Gemini vision, PIL, pyzbar, Tesseract</td><td>Kutu metni / barkod; Groq yetmezse Gemini görüntü</td></tr>
+        <tr><td>Hızlı metin &amp; JSON</td><td>Groq Chat Completions; isteğe bağlı OpenAI-uyumlu API</td><td>PDF alan çıkarımı, OCR yapılandırma, güvenlik, firma</td></tr>
+        <tr><td>RAG (hafıza)</td><td>ChromaDB, LangChain Community, <code>sentence-transformers</code> MiniLM</td><td>Yerel PDF indeksi ve sorgu</td></tr>
+        <tr><td>Rapor çıktısı</td><td>ReportLab (+ Türkçe font arama, <code>utils</code>)</td><td>İndirilebilir PDF</td></tr>
+        <tr><td>Yedek dil modelleri</td><td>Google Gemini (model zinciri, <code>gemini_models.py</code>)</td><td>Görüntü/PDF/rapor yedeği; kota sınırlarına dikkat</td></tr>
       </table>
     </div>
     """, unsafe_allow_html=True)
@@ -793,6 +1023,9 @@ with tab_about:
     """, unsafe_allow_html=True)
 
     st.markdown("")
-    st.markdown("**GitHub:** [cemevecen/medic](https://github.com/cemevecen/medic) &nbsp;|&nbsp; "
-                "**Lisans:** MIT &nbsp;|&nbsp; **Sürüm:** 1.0.0")
+    st.markdown(
+        "**GitHub:** [cemevecen/medic](https://github.com/cemevecen/medic) &nbsp;|&nbsp; "
+        "**Lisans:** MIT &nbsp;|&nbsp; **Uygulama sürümü:** v"
+        + str(_pgv_about)
+    )
     st.caption("⚕ Bu araç tıbbi tavsiye niteliği taşımaz. Tanı ve tedavi için hekime başvurun.")

@@ -40,5 +40,33 @@
     "dozaj": "500 mg",
     "form": "Tablet",
     "benzerlik_aciklamasi": "Aynı etken madde ve dozaj bandı."
+  },
+  {
+    "ticari_ad": "Augmentin 1000 mg Film Tablet",
+    "etken_madde": "Amoksisilin + Klavulanik asit",
+    "dozaj": "1000 mg",
+    "form": "Film Tablet",
+    "benzerlik_aciklamasi": "Aynı kombinasyon sınıfı; dozaj ve süre rejimi ürüne göre değişir — eczacı onayı gerekir."
+  },
+  {
+    "ticari_ad": "Nexium 40 mg Tablet",
+    "etken_madde": "Esomeprazol",
+    "dozaj": "40 mg",
+    "form": "Tablet",
+    "benzerlik_aciklamasi": "PPI sınıfı; benzer endikasyonlarda farklı ürünler olabilir."
+  },
+  {
+    "ticari_ad": "Losec 20 mg Kapsül",
+    "etken_madde": "Omeprazol",
+    "dozaj": "20 mg",
+    "form": "Kapsül",
+    "benzerlik_aciklamasi": "Aynı farmakolojik grup (PPI); etken farklı ama sınıf benzerliği."
+  },
+  {
+    "ticari_ad": "Brufen 400 mg Tablet",
+    "etken_madde": "İbuprofen",
+    "dozaj": "400 mg",
+    "form": "Tablet",
+    "benzerlik_aciklamasi": "NSAİİ grubu; dozaj ve formlar çeşitlidir."
   }
 ]

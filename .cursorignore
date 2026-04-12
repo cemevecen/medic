@@ -1,0 +1,7 @@
+# Gizlilik: Cursor indeks / baglamda okunmaz (API anahtarlari).
+.env
+.env.local
+.env.development
+.env.production
+.env.backup
+.streamlit/secrets.toml

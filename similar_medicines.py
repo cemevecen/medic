@@ -23,6 +23,34 @@ def _norm(s: Optional[str]) -> str:
     return t
 
 
+def _enrich_vision_for_similar(vision: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Üst düzey vision alanları boşsa gorsel_analiz / OCR özetinden kimlik doldurur;
+    benzer ilaç eşlemesi ve Groq genişletmesinin çalışması için.
+    """
+    v = dict(vision) if isinstance(vision, dict) else {}
+    ga = v.get("gorsel_analiz") if isinstance(v.get("gorsel_analiz"), dict) else {}
+
+    if not str(v.get("ticari_ad") or "").strip():
+        idm = str(ga.get("identified_medicine") or "").strip()
+        if idm:
+            v["ticari_ad"] = idm
+    if not str(v.get("dozaj") or "").strip():
+        dga = str(ga.get("dosage") or "").strip()
+        if dga:
+            v["dozaj"] = dga
+
+    if not str(v.get("ticari_ad") or "").strip():
+        ext = str(ga.get("extracted_text") or "").strip()
+        if ext:
+            for ln in ext.splitlines():
+                ln = ln.strip()
+                if 4 <= len(ln) <= 100 and re.search(r"[A-Za-zğüşıöçĞÜŞİÖÇâ]", ln):
+                    v["ticari_ad"] = ln
+                    break
+    return v
+
+
 def _dozaj_numbers(s: Optional[str]) -> List[str]:
     if not s:
         return []
@@ -78,8 +106,15 @@ def _score_row(vision: Dict[str, Any], row: Dict[str, Any]) -> float:
 
     vt = _norm(vision.get("ticari_ad"))
     rt = _norm(row.get("ticari_ad"))
-    if vt and rt and vt != rt and (vt in rt or rt in vt):
-        score += 5
+    if vt and rt and vt != rt:
+        if len(vt) >= 4 and (vt in rt or rt in vt):
+            score += 38
+        elif len(vt) >= 4 and len(rt) >= 4:
+            vw = set(re.findall(r"[a-zğüşıöçâ]{4,}", vt))
+            rw = set(re.findall(r"[a-zğüşıöçâ]{4,}", rt))
+            inter = vw & rw
+            if inter:
+                score += 16 + min(14, 6 * len(inter))
 
     return score
 
@@ -93,7 +128,7 @@ def match_catalog(vision: Dict[str, Any], limit: int = 8) -> List[Dict[str, Any]
         if not isinstance(row, dict):
             continue
         s = _score_row(vision, row)
-        if s < 30:
+        if s < 22:
             continue
         out = {
             "ticari_ad": row.get("ticari_ad"),
@@ -137,7 +172,7 @@ Kurallar:
 - benzerlik_aciklamasi: kısa tıbbi gerekçe (aynı etken, benzer form, dozaj yakınlığı vb.)
 - Türkiye'de bilinen ticari adları tercih et; emin değilsen alternatifler: [] döndür.
 - Fiyat, ucuzluk, geri ödeme, indirim veya eczane ismi YAZMA.
-- Uydurma riski yüksekse alternatifler: [] döndür.
+- Uydurma riski çok yüksekse alternatifler: [] döndür; eminsen en fazla 5 geçerli öneri ver.
 
 Çıktı şeması:
 {{"alternatifler": [{{"ticari_ad":"...","etken_madde":"...","dozaj":"...","form":"...","benzerlik_aciklamasi":"..."}}]}}
@@ -214,16 +249,37 @@ def build_similar_drugs_bundle(
     """
     Benzer ilaç bölümü için yapılandırılmış sonuç.
     """
-    catalog_hits = match_catalog(vision, limit=8)
+    vis = _enrich_vision_for_similar(vision)
+    catalog = load_alternatives_catalog()
+    catalog_hits = match_catalog(vis, limit=8)
     model_hits: List[Dict[str, Any]] = []
     if len(catalog_hits) < 3 and groq_client is not None:
-        model_hits = groq_expand_alternatives(groq_client, vision, groq_model_chain)
+        model_hits = groq_expand_alternatives(groq_client, vis, groq_model_chain)
 
     merged = _dedupe_rows(catalog_hits + model_hits)[:8]
 
+    bos = ""
+    if not merged:
+        if not (_norm(vis.get("ticari_ad")) or _norm(vis.get("etken_madde"))):
+            bos = (
+                "İlaç **ticari adı** veya **etken maddesi** çıkarılamadığı için benzer ürün araması "
+                "yapılamadı. Daha net bir kutu fotoğrafı veya **İlaç Adı ile** giriş deneyin."
+            )
+        elif not catalog:
+            bos = (
+                "Muadil öneri listesi henüz kullanılamıyor. "
+                "Eşdeğer ürün için eczacınıza veya hekiminize danışın."
+            )
+        else:
+            bos = (
+                "Bu ilaç için listede yeterince yakın bir eşleşme bulunamadı; "
+                "ek model önerisi de üretilemedi. Eşdeğer / muadil için resmi kaynaklar ve "
+                "sağlık mesleği mensubu onayı esastır."
+            )
+
     return {
         "oneriler": merged,
-        "yerel_katalog_yolu": str(_CATALOG_PATH),
+        "bos_aciklama": bos,
         "fiyat_entegrasyonu_notu": (
             "Güncel satış fiyatı, indirim veya geri ödeme bilgisi bu sürümde entegre değildir; "
             "resmi fiyat ve ödeme koşulları için eczane, SGK veya ilaç firması kaynakları kullanılmalıdır."

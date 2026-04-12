@@ -5,8 +5,9 @@ agents.py: Tüm ajan sınıfları ve ana orkestratör bu dosyada tanımlanmışt
 
 # Versiyon numarası — app.py session_state cache invalidation için kullanılır.
 # Fact-Checker / parser / orchestrator davranışı değiştiğinde artırın.
-PHARMA_GUARD_VERSION = "1.9.1"
+PHARMA_GUARD_VERSION = "1.15"
 
+import logging
 import os
 import json
 import base64
@@ -24,9 +25,31 @@ from PIL import Image
 
 load_dotenv()
 
+_log_vision = logging.getLogger("pharma_guard.vision")
+
+
+def vision_output_has_legacy_user_facing_copy(vision: Optional[Dict[str, Any]]) -> bool:
+    """
+    Eski sürümdeki / önbellekteki 'Groq Fallback' + 'Görsel işlenemiyor' metinlerini tespit eder.
+    Güncel pipeline bu ifadeleri üretmez; görülürse kullanıcıya yeniden analiz önerilir.
+    """
+    if not isinstance(vision, dict):
+        return False
+    k = str(vision.get("kaynak") or "").lower()
+    n = str(vision.get("notlar") or "").lower()
+    if "groq fallback" in k:
+        return True
+    if "görsel işlenemiyor" in n or "gorsel islenemiyor" in n:
+        return True
+    if "llava ve groq" in n or "metin girişi tercih edilir" in n:
+        return True
+    return False
+
+
 from gemini_models import (
     model_chain as _gemini_model_chain,
     model_missing_error as _gemini_model_missing_error,
+    gemini_quota_or_rate_limit,
 )
 
 
@@ -48,7 +71,7 @@ def _init_groq() -> Groq:
     api_key = os.getenv("GROQ_API_KEY", "")
     if not api_key:
         raise ValueError("GROQ_API_KEY bulunamadı. Lütfen .env dosyasını kontrol edin.")
-    return Groq(api_key=api_key)
+    return Groq(api_key=api_key, timeout=120.0)
 
 
 def _groq_safety_model_chain() -> List[str]:
@@ -130,6 +153,9 @@ KURALLAR:
 - Eğer herhangi bir alan net okunamıyorsa null yaz, tahmin YAPMA.
 - Okunabilirlik skoru 5'in altındaysa notlar alanına "FOTOĞRAF KALİTESİ YETERSİZ" yaz.
 - Türkçe veya Latince ilaç isimlerini olduğu gibi al, çevirme.
+- notlar içinde YASAK (eski hatalı şablon): "Groq Fallback", "LLaVA", "metin girişi tercih",
+  "Görsel işlenemiyor", "kullanıcıdan metin iste" vb. — yalnızca kutu okuma durumunu yaz.
+- JSON'a "kaynak" alanı ekleme (istemiyoruz).
 """
 
 SAFETY_PROMPT_TEMPLATE = """SADECE geçerli bir JSON nesnesi döndür. Açıklama, başlık veya markdown kullanma.
@@ -234,103 +260,550 @@ Her bölümün sonuna güven puanını ekle: `[Güven: X/10]`
 
 class VisionScannerAgent:
     """
-    LLaVA (Groq) kullanarak ilaç görselinden yapılandırılmış veri çıkaran ajan.
-    (Gemini Vision fallback kaldırıldı — quota tasarrufu)
+    Groq görüntü modelleri (Llama 4 Scout vb.) + OCR (Tesseract) + metin modeli
+    ile kutu görselinden veri çıkarır. Metin girişi yalnızca tüm kurtarma adımları
+    başarısız olduğunda önerilir; görüntüsüz “fallback” asla görsel analiz diye sunulmaz.
     """
 
-    def __init__(self):
-        self.groq_client = _init_groq()
+    def __init__(
+        self,
+        groq_client: Optional[Groq] = None,
+        openai_compat: Optional[Dict[str, Any]] = None,
+    ):
+        self.groq_client = groq_client or _init_groq()
+        self._openai_compat_overrides = (
+            {k: v for k, v in (openai_compat or {}).items() if str(v).strip()}
+            or None
+        )
 
-    def _encode_image(self, image: Image.Image) -> str:
-        """PIL Image'ı base64 stringe çevirir."""
-        buffer = BytesIO()
-        image.save(buffer, format="JPEG", quality=90)
-        return base64.b64encode(buffer.getvalue()).decode("utf-8")
+    def _openai_compat_config(self) -> Optional[Dict[str, str]]:
+        from openai_compat import resolve_openai_compat_config
 
-    def scan_with_groq_llava(self, image: Image.Image) -> Dict[str, Any]:
-        """Groq üzerindeki LLaVA modeli ile görsel tarama."""
-        b64 = self._encode_image(image)
+        return resolve_openai_compat_config(self._openai_compat_overrides)
+
+    @staticmethod
+    def _finalize_scan_vision_output(d: Dict[str, Any]) -> Dict[str, Any]:
+        """Sürüm etiketi + nadiren görülen eski/yanıltıcı model metinlerini düzeltir."""
+        out = dict(d)
+        out["pharma_guard_scan_version"] = PHARMA_GUARD_VERSION
+        kn = (out.get("kaynak") or "").strip().lower()
+        if kn == "groq fallback" or kn.endswith("groq fallback"):
+            out["kaynak"] = "Groq görüntü + OCR pipeline"
+        note = str(out.get("notlar") or "")
+        low = note.lower()
+        if (
+            "görsel işlenemiyor" in low
+            or "metin girişi tercih edilir" in low
+            or "llava ve groq" in low
+        ):
+            ga = out.get("gorsel_analiz")
+            if isinstance(ga, dict) and ga.get("message"):
+                out["notlar"] = str(ga["message"])
+            else:
+                out["notlar"] = (
+                    "Görselden yeterli bilgi çıkarılamadı. Daha net, aydınlık ve yakın çekilmiş "
+                    "bir fotoğraf deneyin (kutu ön yüzü, yazılar, mümkünse barkod alanı). "
+                    "Alternatif olarak ilaç adını metin olarak girebilirsiniz."
+                )
+        return out
+
+    @staticmethod
+    def _sanitize_model_output_templates(d: Dict[str, Any], canonical_kaynak: str) -> Dict[str, Any]:
+        """Eski/hatalı model veya eğitim şablonu metinlerini kaldırır; kaynağı tekilleştirir."""
+        out = dict(d)
+        out["kaynak"] = canonical_kaynak
+        low = str(out.get("notlar") or "").lower()
+        banned = (
+            "görsel işlenemiyor",
+            "gorsel islenemiyor",
+            "metin girişi",
+            "metin girisi",
+            "groq fallback",
+            "llava ve groq",
+            "llava",
+            "metin girişi kullan",
+            "metin girisi kullan",
+            "kullanıcıdan metin",
+            "metin girişi tercih",
+        )
+        if any(b in low for b in banned):
+            osk = out.get("okunabilirlik_skoru")
+            if isinstance(osk, (int, float)) and float(osk) < 5:
+                out["notlar"] = "FOTOĞRAF KALİTESİ YETERSİZ"
+            else:
+                out["notlar"] = "Kutu üzerindeki yazılara göre analiz tamamlandı."
+        return out
+
+    @staticmethod
+    def _vision_payload_useful(d: Dict[str, Any]) -> bool:
+        if not isinstance(d, dict) or d.get("hata"):
+            return False
+        t = (d.get("ticari_ad") or "").strip()
+        e = (d.get("etken_madde") or "").strip()
+        djz = (d.get("dozaj") or "").strip()
+        fm = (d.get("form") or "").strip()
+        if len(t) >= 2 or len(e) >= 3:
+            return True
+        if len(djz) >= 2 and len(fm) >= 2:
+            return True
+        return False
+
+    def _call_groq_vision_once(
+        self, rgb: Image.Image, model_id: str, attempt: int
+    ) -> Dict[str, Any]:
+        from image_pipeline import classify_groq_vision_error, encode_image_for_groq_vision
+
         try:
+            b64, nbytes = encode_image_for_groq_vision(rgb)
+            _log_vision.info(
+                "groq_vision_attempt model=%s attempt=%s jpeg_bytes=%s",
+                model_id,
+                attempt,
+                nbytes,
+            )
             response = self.groq_client.chat.completions.create(
-                model="llava-v1.5-7b-4096-preview",
+                model=model_id,
                 messages=[
                     {
                         "role": "user",
                         "content": [
+                            {"type": "text", "text": VISION_PROMPT},
                             {
                                 "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{b64}"
-                                },
-                            },
-                            {
-                                "type": "text",
-                                "text": VISION_PROMPT,
+                                "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
                             },
                         ],
                     }
                 ],
-                max_tokens=1024,
+                max_completion_tokens=1024,
                 temperature=0.1,
             )
-            raw = response.choices[0].message.content
-            return self._parse_json_response(raw, source="LLaVA (Groq)")
-        except Exception as e:
-            return {"hata": f"LLaVA hatası: {str(e)}", "kaynak": "LLaVA (Groq)"}
+            raw = (response.choices[0].message.content or "").strip()
+            if not raw:
+                return {
+                    "hata": "Groq görüntü modeli boş yanıt döndürdü",
+                    "kaynak": model_id,
+                    "_error_code": "empty_response",
+                    "_stage": "groq_vision",
+                }
+            parsed = self._parse_json_response(raw, source=f"Groq Vision ({model_id})")
+            parsed = self._sanitize_model_output_templates(parsed, f"Groq Vision ({model_id})")
+            parsed["_error_code"] = None
+            parsed["_stage"] = "groq_vision"
+            return parsed
+        except Exception as exc:
+            code = classify_groq_vision_error(exc)
+            _log_vision.warning(
+                "groq_vision_error model=%s attempt=%s code=%s err=%s",
+                model_id,
+                attempt,
+                code,
+                exc,
+            )
+            return {
+                "hata": f"Groq görüntü hatası ({code}): {exc!s}",
+                "kaynak": model_id,
+                "_error_code": code,
+                "_stage": "groq_vision",
+            }
 
-    def scan_with_groq_fallback(self) -> Dict[str, Any]:
-        """LLaVA başarısız → Groq fallback (text mode, image yok)."""
-        # Groq text model'den ilaç bilgisi talebinde bulunamıyız (image yok).
-        # Kullanıcıyı metin girişine yönlendir.
-        return {
-            "hata": "Görsel analizi LLaVA ve Groq ile başarısız oldu. Metin girişi kullanarak devam edin.",
-            "kaynak": "Groq Fallback",
-            "okunabilirlik_skoru": 0,
-            "notlar": "Görsel işlenemiyor — metin girişi tercih edilir.",
-        }
+    def _run_vision_with_retries(self, prepared: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], str]:
+        from image_pipeline import build_gorsel_analiz_envelope, groq_vision_model_chain
+
+        variants = [
+            ("vision_primary", prepared["vision_rgb"]),
+            ("vision_retry", prepared["vision_retry"]),
+        ]
+        models = groq_vision_model_chain()
+        last = "vision_no_success"
+        for label, frame in variants:
+            for model_id in models:
+                for attempt in (1, 2):
+                    r = self._call_groq_vision_once(frame, model_id, attempt)
+                    if self._vision_payload_useful(r):
+                        r["gorsel_analiz"] = build_gorsel_analiz_envelope(
+                            success=True,
+                            status="full_success",
+                            source=model_id,
+                            extracted_text="",
+                            identified_medicine=(r.get("ticari_ad") or "")[:500],
+                            dosage=(r.get("dozaj") or "")[:120],
+                            message="Görsel analiz tamamlandı.",
+                            error_code=None,
+                        )
+                        return r, f"{label}:{model_id}:attempt{attempt}"
+                    last = r.get("_error_code") or r.get("hata") or "parse_or_empty"
+                    ec = r.get("_error_code")
+                    if ec in ("model_decommissioned", "model_not_found", "model_unavailable"):
+                        break
+        return None, str(last)
+
+    def _run_gemini_vision_fallback(self, prepared: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Groq görüntü zinciri boş döndüyse Google Gemini ile kutu görseli analizi (LLaVA yerine güncel multimodal)."""
+        try:
+            _init_gemini()
+        except Exception:
+            return None
+        models = _gemini_model_chain()
+        variants = [
+            ("gemini_primary", prepared["vision_rgb"]),
+            ("gemini_retry", prepared["vision_retry"]),
+        ]
+        for _label, frame in variants:
+            for idx, name in enumerate(models):
+                try:
+                    model = genai.GenerativeModel(name)
+                    response = model.generate_content(
+                        [VISION_PROMPT, frame],
+                        generation_config=genai.GenerationConfig(
+                            temperature=0.1,
+                            max_output_tokens=1024,
+                        ),
+                    )
+                    raw = (response.text or "").strip()
+                    if not raw:
+                        continue
+                    parsed = self._parse_json_response(raw, source=f"Gemini Vision ({name})")
+                    parsed = self._sanitize_model_output_templates(parsed, f"Gemini Vision ({name})")
+                    if self._vision_payload_useful(parsed):
+                        parsed["_error_code"] = None
+                        parsed["_stage"] = "gemini_vision"
+                        _log_vision.info("gemini_vision_ok model=%s", name)
+                        return parsed
+                except Exception as exc:
+                    _log_vision.warning("gemini_vision_fail model=%s err=%s", name, exc)
+                    if idx < len(models) - 1:
+                        continue
+                    break
+        return None
+
+    def _attach_barkod_qr(
+        self, result: Dict[str, Any], kodlar: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        from barcode_detection import merge_codes_into_vision
+
+        return merge_codes_into_vision(result, kodlar["barkod"], kodlar["qr_kod"])
 
     def scan(self, image: Image.Image) -> Dict[str, Any]:
         """
-        Önce LLaVA (Groq) dener, başarısız olursa Groq fallback hata döndürür.
-        (Gemini Vision kaldırıldı — quota tasarrufu)
-        Barkod: pyzbar + PIL ön işleme (her durumda görüntüden denenir).
-        Orchestrator bu metodu çağırır.
+        Sıra: (1) Çok aşamalı ön işleme (2) Groq görüntü modelleri + yeniden deneme
+        (3) Tesseract OCR (4) OCR metnini Groq metin modeliyle yapılandırma
+        (5) OCR satır sezgisel kısmi sonuç (6) Son çare kullanıcı rehberi.
         """
-        from barcode_detection import merge_codes_into_vision, scan_codes_from_image
+        from barcode_detection import scan_codes_from_image
+        from image_pipeline import (
+            build_gorsel_analiz_envelope,
+            groq_vision_model_chain,
+            heuristic_medicine_line,
+            ocr_extract_text,
+            prepare_multimodal_inputs,
+            structure_ocr_with_groq_text_model,
+        )
 
-        kodlar = scan_codes_from_image(image)
-        barkod_detay = kodlar["barkod"]
-        qr_detay = kodlar["qr_kod"]
-        result = self.scan_with_groq_llava(image)
-        if "hata" in result:
-            print(f"[VisionScanner] LLaVA başarısız ({result['hata']}), Groq fallback…")
-            result = self.scan_with_groq_fallback()
-            result["barkod_detay"] = barkod_detay
-            result["qr_kod_detay"] = qr_detay
-            if barkod_detay.get("tespit_edildi") and barkod_detay.get("deger"):
-                result["barkod"] = barkod_detay["deger"]
-        else:
-            result = merge_codes_into_vision(result, barkod_detay, qr_detay)
-        return result
+        meta0 = {"pil_mode": image.mode, "pil_size": image.size}
+        _log_vision.info("pipeline_start %s", meta0)
 
-    def scan_text_input(self, drug_name: str) -> Dict[str, Any]:
-        """Görsel yoksa, metin girişinden ilaç bilgisi yap."""
-        return {
-            "ticari_ad": drug_name,
+        prepared = prepare_multimodal_inputs(image)
+        meta = prepared.get("meta") or {}
+        _log_vision.info(
+            "pipeline_preprocess upload=%s normalized=%s ocr=%s",
+            meta.get("upload_size"),
+            meta.get("normalized_size"),
+            meta.get("ocr_size"),
+        )
+
+        kodlar = scan_codes_from_image(prepared["vision_rgb"])
+        _log_vision.info(
+            "barcode_stage barkod=%s qr=%s",
+            kodlar["barkod"].get("tespit_edildi"),
+            kodlar["qr_kod"].get("tespit_edildi"),
+        )
+
+        vr, vtag = self._run_vision_with_retries(prepared)
+        if vr is not None:
+            _log_vision.info("vision_success path=%s models=%s", vtag, groq_vision_model_chain())
+            return self._finalize_scan_vision_output(self._attach_barkod_qr(vr, kodlar))
+
+        gm = self._run_gemini_vision_fallback(prepared)
+        if gm is not None:
+            gm["gorsel_analiz"] = build_gorsel_analiz_envelope(
+                success=True,
+                status="full_success",
+                source="gemini_vision",
+                extracted_text="",
+                identified_medicine=(gm.get("ticari_ad") or "")[:500],
+                dosage=(gm.get("dozaj") or "")[:120],
+                message=(
+                    "Groq görüntü modelleri sonuç vermedi veya kota/model sınırına takıldı; "
+                    "aynı kutu görseli Gemini ile analiz edildi (Groq’ta LLaVA artık sunulmuyor)."
+                ),
+                error_code=None,
+            )
+            _log_vision.info("vision_gemini_fallback_used")
+            return self._finalize_scan_vision_output(self._attach_barkod_qr(gm, kodlar))
+
+        ocr_text, ocr_code = ocr_extract_text(prepared["ocr_image"])
+        _log_vision.info("ocr_stage code=%s text_len=%s", ocr_code, len(ocr_text or ""))
+
+        structured, st_err = structure_ocr_with_groq_text_model(
+            self.groq_client, ocr_text, _groq_safety_model_chain()
+        )
+        if structured is not None:
+            sk = str(structured.get("kaynak") or "OCR+Groq metin").strip()
+            structured = self._sanitize_model_output_templates(structured, sk)
+        if structured is not None and self._vision_payload_useful(structured):
+            structured["gorsel_analiz"] = build_gorsel_analiz_envelope(
+                success=True,
+                status="ocr_recovered",
+                source="ocr+groq",
+                extracted_text=(ocr_text or "")[:8000],
+                identified_medicine=(structured.get("ticari_ad") or "")[:500],
+                dosage=(structured.get("dozaj") or "")[:120],
+                message=(
+                    "OCR ile kutu metni okundu; analiz bu metin üzerinden "
+                    "yapılandırılarak sürdürüldü."
+                ),
+                error_code=ocr_code,
+            )
+            _log_vision.info("ocr_groq_structure_ok")
+            return self._finalize_scan_vision_output(self._attach_barkod_qr(structured, kodlar))
+
+        if structured is not None and not self._vision_payload_useful(structured):
+            t0 = (structured.get("ticari_ad") or "").strip()
+            e0 = (structured.get("etken_madde") or "").strip()
+            if len(t0) >= 2 or len(e0) >= 2:
+                structured["gorsel_analiz"] = build_gorsel_analiz_envelope(
+                    success=True,
+                    status="partial_success",
+                    source="ocr+groq",
+                    extracted_text=(ocr_text or "")[:8000],
+                    identified_medicine=t0[:500],
+                    dosage=(structured.get("dozaj") or "")[:120],
+                    message=(
+                        "Görselden kısmi bilgi çıkarıldı. Analiz elde edilen metin "
+                        "üzerinden devam etti."
+                    ),
+                    error_code=st_err or ocr_code,
+                )
+                _log_vision.info("ocr_groq_partial_accept")
+                return self._finalize_scan_vision_output(self._attach_barkod_qr(structured, kodlar))
+
+        if ocr_text and len(ocr_text.strip()) >= 4:
+            line, how = heuristic_medicine_line(ocr_text)
+            if len(line.strip()) >= 3:
+                partial = {
+                    "ticari_ad": line.strip()[:200],
+                    "etken_madde": None,
+                    "dozaj": None,
+                    "form": None,
+                    "barkod": kodlar["barkod"].get("deger") if kodlar["barkod"].get("tespit_edildi") else None,
+                    "uretici": None,
+                    "okunabilirlik_skoru": 4,
+                    "notlar": f"OCR kısmi başarı ({how}); doğrulama için daha net fotoğraf önerilir.",
+                    "kaynak": "OCR kısmi (sezgisel)",
+                    "gorsel_analiz": build_gorsel_analiz_envelope(
+                        success=True,
+                        status="partial_success",
+                        source="ocr_partial",
+                        extracted_text=ocr_text[:8000],
+                        identified_medicine=line.strip()[:200],
+                        dosage="",
+                        message=(
+                            "Görselden kısmi bilgi çıkarıldı. Analiz elde edilen metin "
+                            "üzerinden devam etti."
+                        ),
+                        error_code=ocr_code or "heuristic_line",
+                    ),
+                }
+                _log_vision.info("ocr_heuristic_partial line_len=%s", len(line))
+                return self._finalize_scan_vision_output(self._attach_barkod_qr(partial, kodlar))
+
+        fail = {
+            "ticari_ad": None,
             "etken_madde": None,
             "dozaj": None,
             "form": None,
-            "barkod": None,
+            "barkod": kodlar["barkod"].get("deger") if kodlar["barkod"].get("tespit_edildi") else None,
             "uretici": None,
-            "okunabilirlik_skoru": 10,
-            "notlar": "Metin girişi ile sağlandı, görsel analiz yapılmadı.",
-            "kaynak": "Metin Girişi",
+            "okunabilirlik_skoru": 1,
+            "notlar": (
+                "Görselden yeterli bilgi çıkarılamadı. Daha net, aydınlık ve yakın çekilmiş "
+                "bir fotoğraf deneyin (kutu ön yüzü, yazılar, mümkünse barkod alanı). "
+                "Alternatif olarak ilaç adını metin olarak girebilirsiniz."
+            ),
+            "kaynak": "Görsel pipeline — tam başarısızlık",
+            "gorsel_analiz": build_gorsel_analiz_envelope(
+                success=False,
+                status="failed",
+                source=None,
+                extracted_text=(ocr_text or "")[:8000],
+                identified_medicine="",
+                dosage="",
+                message=(
+                    "Görselden yeterli bilgi çıkarılamadı. Daha net, ışıklı ve yakın çekilmiş "
+                    "bir fotoğraf deneyin veya ilaç adını metin olarak girin."
+                ),
+                error_code="all_strategies_failed",
+            ),
         }
+        fail["barkod_detay"] = kodlar["barkod"]
+        fail["qr_kod_detay"] = kodlar["qr_kod"]
+        _log_vision.warning("pipeline_failed last_vision=%s ocr_struct_err=%s", vtag, st_err)
+        return self._finalize_scan_vision_output(fail)
+
+    def scan_text_input(self, drug_name: str) -> Dict[str, Any]:
+        """Görsel yoksa, metin girişinden ilaç bilgisi yap."""
+        from image_pipeline import build_gorsel_analiz_envelope
+
+        return self._finalize_scan_vision_output(
+            {
+                "ticari_ad": drug_name,
+                "etken_madde": None,
+                "dozaj": None,
+                "form": None,
+                "barkod": None,
+                "uretici": None,
+                "okunabilirlik_skoru": 10,
+                "notlar": "Metin girişi ile sağlandı, görsel analiz yapılmadı.",
+                "kaynak": "Metin Girişi",
+                "gorsel_analiz": build_gorsel_analiz_envelope(
+                    success=True,
+                    status="full_success",
+                    source="text_input",
+                    extracted_text=drug_name or "",
+                    identified_medicine=drug_name or "",
+                    dosage="",
+                    message="Metin girişi kullanıldı.",
+                    error_code=None,
+                ),
+            }
+        )
+
+    @staticmethod
+    def _pdf_prospectus_extraction_prompt(pdf_text: str, char_limit: int) -> str:
+        snippet = (pdf_text or "")[:char_limit]
+        return f"""Aşağıdaki metin bir ilaç prospektüsünden çıkarılmıştır. SADECE geçerli bir JSON nesnesi döndür.
+
+Şema (anahtarlar tam olarak böyle olsun):
+{{
+  "ticari_ad": "string veya null",
+  "etken_madde": "string veya null",
+  "dozaj": "string veya null",
+  "form": "string veya null",
+  "barkod": null,
+  "uretici": "string veya null",
+  "okunabilirlik_skoru": 1-10 arası sayı (metin kalitesine göre),
+  "notlar": "kısa not",
+  "endikasyonlar": "kısa kullanım amacı (1-2 cümle) veya null",
+  "prospektus_ozeti": "3-5 cümle özet veya null"
+}}
+
+Kurallar:
+- Metinde açıkça geçmeyen alan için null kullan; uydurma.
+- ticari_ad veya etken_madde mümkün olduğunca prospektüs başlığı / ruhsat bölümünden alınmalı.
+
+PROSPEKTÜS METNİ:
+---
+{snippet}
+---
+"""
+
+    def _scan_pdf_with_groq(self, pdf_text: str, filename: str) -> Optional[Dict[str, Any]]:
+        """PDF metninden yapılandırılmış alanlar — birincil yol (Gemini kotasından bağımsız)."""
+        prompt = self._pdf_prospectus_extraction_prompt(pdf_text, 12000)
+        for mid in _groq_safety_model_chain():
+            try:
+                r = self.groq_client.chat.completions.create(
+                    model=mid,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": (
+                                "Sen ilaç prospektüsü metin çıkarıcısısın. Sadece JSON nesnesi döndür; "
+                                "emin olmadığın alanlarda null kullan."
+                            ),
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    max_tokens=2500,
+                    temperature=0.1,
+                    response_format={"type": "json_object"},
+                )
+                raw = r.choices[0].message.content or ""
+                parsed = self._parse_json_response(raw, source=f"PDF+Groq ({filename}) · {mid}")
+                if (parsed.get("ticari_ad") or "").strip() or (parsed.get("etken_madde") or "").strip():
+                    parsed["pdf_metin_uzunlugu"] = len(pdf_text)
+                    base_n = (parsed.get("notlar") or "").strip()
+                    suf = "Prospektüs metni Groq ile yapılandırıldı."
+                    parsed["notlar"] = f"{base_n} ({suf})" if base_n else suf
+                    return self._finalize_scan_vision_output(parsed)
+            except Exception:
+                continue
+        return None
+
+    def _scan_pdf_with_openai_compat(self, pdf_text: str, filename: str) -> Optional[Dict[str, Any]]:
+        """OpenAI uyumlu API (OpenAI, OpenRouter, Together vb.) — Groq sonrası ikinci yol."""
+        cfg = self._openai_compat_config()
+        if not cfg:
+            return None
+        from openai_compat import chat_json_completion
+
+        prompt = self._pdf_prospectus_extraction_prompt(pdf_text, 12000)
+        try:
+            raw = chat_json_completion(
+                api_key=cfg["api_key"],
+                base_url=cfg["base_url"],
+                model=cfg["model"],
+                system=(
+                    "Sen ilaç prospektüsü metin çıkarıcısısın. Yanıt yalnızca geçerli bir JSON nesnesi olmalı; "
+                    "emin olmadığın alanlarda null kullan."
+                ),
+                user=prompt,
+                max_tokens=2500,
+                temperature=0.1,
+            )
+            parsed = self._parse_json_response(
+                raw, source=f"PDF+OpenAI-uyumlu ({filename}) · {cfg['model']}"
+            )
+            if (parsed.get("ticari_ad") or "").strip() or (parsed.get("etken_madde") or "").strip():
+                parsed["pdf_metin_uzunlugu"] = len(pdf_text)
+                base_n = (parsed.get("notlar") or "").strip()
+                suf = "Prospektüs metni OpenAI-uyumlu API ile yapılandırıldı."
+                parsed["notlar"] = f"{base_n} ({suf})" if base_n else suf
+                return self._finalize_scan_vision_output(parsed)
+        except Exception:
+            return None
+        return None
+
+    def _scan_pdf_with_gemini(self, pdf_text: str, filename: str) -> Tuple[Optional[Dict[str, Any]], Optional[Exception]]:
+        """Üçüncü yedek: Groq ve OpenAI-uyumlu yol başarısız olursa Gemini zinciri."""
+        _init_gemini()
+        pdf_prompt = self._pdf_prospectus_extraction_prompt(pdf_text, 6000)
+        models = _gemini_model_chain()
+        last_err: Optional[Exception] = None
+        for idx, name in enumerate(models):
+            try:
+                model = genai.GenerativeModel(name)
+                response = model.generate_content(
+                    pdf_prompt,
+                    generation_config=genai.GenerationConfig(temperature=0.1),
+                )
+                result = self._parse_json_response(response.text, source=f"PDF+Gemini ({filename}) · {name}")
+                result["pdf_metin_uzunlugu"] = len(pdf_text)
+                base_n = (result.get("notlar") or "").strip()
+                suf = "Groq ve OpenAI-uyumlu API sonrası Gemini ile çıkarım yapıldı."
+                result["notlar"] = f"{base_n} ({suf})" if base_n else suf
+                return self._finalize_scan_vision_output(result), None
+            except Exception as e:
+                last_err = e
+                if idx < len(models) - 1:
+                    continue
+                break
+        return None, last_err
 
     def scan_pdf(self, pdf_bytes: bytes, filename: str = "prospektus.pdf") -> Dict[str, Any]:
         """
-        PDF prospektüsünden metin çıkarır ve Gemini ile ilaç bilgilerini ayıklar.
-        Kullanıcı doğrudan prospektüs PDF'i yüklediğinde çağrılır.
+        PDF prospektüsünden metin çıkarır; sıra: Groq → (isteğe bağlı) OpenAI-uyumlu API → Gemini.
         """
         # 1) PDF metnini çıkar
         try:
@@ -343,57 +816,46 @@ class VisionScannerAgent:
                     pages_text.append(f"[Sayfa {i+1}]\n{t.strip()}")
             pdf_text = "\n\n".join(pages_text)
         except Exception as e:
-            return {"hata": f"PDF okunamadı: {e}", "kaynak": f"PDF ({filename})"}
+            return self._finalize_scan_vision_output(
+                {"hata": f"PDF okunamadı: {e}", "kaynak": f"PDF ({filename})"}
+            )
 
         if not pdf_text.strip():
-            return {
-                "hata": "PDF'den metin çıkarılamadı (taranmış/görüntü tabanlı PDF olabilir).",
+            return self._finalize_scan_vision_output(
+                {
+                    "hata": "PDF'den metin çıkarılamadı (taranmış/görüntü tabanlı PDF olabilir).",
+                    "kaynak": f"PDF ({filename})",
+                }
+            )
+
+        groq_pdf = self._scan_pdf_with_groq(pdf_text, filename)
+        if groq_pdf is not None:
+            return groq_pdf
+
+        oa_pdf = self._scan_pdf_with_openai_compat(pdf_text, filename)
+        if oa_pdf is not None:
+            return oa_pdf
+
+        gem_pdf, gem_err = self._scan_pdf_with_gemini(pdf_text, filename)
+        if gem_pdf is not None:
+            return gem_pdf
+
+        err_msg = f"PDF analiz hatası (Groq, OpenAI-uyumlu API ve Gemini): {gem_err}"
+        if gem_err is not None and gemini_quota_or_rate_limit(gem_err):
+            err_msg = (
+                "Groq ve tanımlı OpenAI-uyumlu API prospektüsten sonuç veremedi; "
+                "Gemini yedeği de kota veya ağ hatasıyla başarısız oldu. "
+                "Kenar çubuğundan ikinci API anahtarı ekleyebilir veya "
+                "https://ai.google.dev/gemini-api/docs/rate-limits — Teknik: "
+                f"{gem_err!s}"
+            )
+        return self._finalize_scan_vision_output(
+            {
+                "hata": err_msg,
                 "kaynak": f"PDF ({filename})",
+                "okunabilirlik_skoru": 5,
             }
-
-        # 2) Gemini ile ilaç bilgilerini ayıkla
-        pdf_prompt = f"""
-Aşağıdaki ilaç prospektüsü metninden ilaç bilgilerini çıkar ve JSON formatında döndür:
-
-{{
-  "ticari_ad": "İlacın ticari adı",
-  "etken_madde": "Etken madde(ler)",
-  "dozaj": "Dozaj bilgisi (mg/ml/mcg)",
-  "form": "Tablet / Kapsül / Şurup / vb.",
-  "barkod": null,
-  "uretici": "Üretici firma adı",
-  "okunabilirlik_skoru": 9,
-  "notlar": "PDF prospektüsünden çıkarıldı",
-  "endikasyonlar": "Kısa kullanım amacı (1-2 cümle)",
-  "prospektus_ozeti": "Prospektüsten elde edilen kritik bilgilerin özeti (3-5 cümle)"
-}}
-
-PROSPEKTÜS METNİ:
-{pdf_text[:6000]}
-"""
-        models = _gemini_model_chain()
-        last_err = None
-        for name in models:
-            try:
-                model = genai.GenerativeModel(name)
-                response = model.generate_content(
-                    pdf_prompt,
-                    generation_config=genai.GenerationConfig(temperature=0.1),
-                )
-                result = self._parse_json_response(response.text, source=f"PDF ({filename})")
-                result["pdf_metin_uzunlugu"] = len(pdf_text)
-                return result
-            except Exception as e:
-                last_err = e
-                if _gemini_model_missing_error(e) and name != models[-1]:
-                    continue
-                break
-
-        return {
-            "hata": f"PDF analiz hatası: {last_err}",
-            "kaynak": f"PDF ({filename})",
-            "okunabilirlik_skoru": 5,
-        }
+        )
 
     @staticmethod
     def _parse_json_response(raw: str, source: str) -> Dict[str, Any]:
@@ -403,6 +865,8 @@ PROSPEKTÜS METNİ:
         # 2) Doğrudan parse
         try:
             data = json.loads(cleaned)
+            if isinstance(data, dict):
+                data.pop("kaynak", None)
             data["kaynak"] = source
             return data
         except json.JSONDecodeError:
@@ -412,6 +876,8 @@ PROSPEKTÜS METNİ:
         if m:
             try:
                 data = json.loads(m.group())
+                if isinstance(data, dict):
+                    data.pop("kaynak", None)
                 data["kaynak"] = source
                 return data
             except json.JSONDecodeError:
@@ -447,6 +913,13 @@ class RAGSpecialistAgent:
     def __init__(self):
         self.vectorstore = None
         self.corpus_loaded = False
+        # Ağır embedding yükünü orkestratör __init__'inden çıkarır; ilk RAG aramasında yüklenir.
+        self._rag_index_initialized = False
+
+    def _ensure_rag_index(self) -> None:
+        if self._rag_index_initialized:
+            return
+        self._rag_index_initialized = True
         self._load_or_build_index()
 
     def _load_or_build_index(self):
@@ -516,6 +989,7 @@ class RAGSpecialistAgent:
         Semantik arama yapar. Corpus boş olsa bile, vision_data'dan mock sonuçlar oluşturur.
         Bu sayede Fact-Check'in karşılaştıracak verileri olur.
         """
+        self._ensure_rag_index()
         if not self.corpus_loaded or self.vectorstore is None:
             # Corpus boş — vision bilgisinden mock sonuçlar oluştur
             if vision_data:
@@ -553,6 +1027,7 @@ class RAGSpecialistAgent:
             shutil.rmtree(self.CHROMA_DIR)
         self.corpus_loaded = False
         self.vectorstore = None
+        self._rag_index_initialized = True
         self._load_or_build_index()
 
 
@@ -566,8 +1041,8 @@ class SafetyAuditorAgent:
     Yan etki, etkileşim ve kontrendikasyon kontrolü gerçekleştirir.
     """
 
-    def __init__(self):
-        self.groq_client = _init_groq()
+    def __init__(self, groq_client: Optional[Groq] = None):
+        self.groq_client = groq_client or _init_groq()
 
     def audit(self, drug_info: Dict[str, Any], rag_data: List[Dict]) -> Dict[str, Any]:
         """İlaç bilgisi ve RAG verisi ile güvenlik raporu oluşturur."""
@@ -683,8 +1158,8 @@ class CorporateAnalystAgent:
     (Önceki: Gemini — quota tasarrufu için Groq'a taşındı)
     """
 
-    def __init__(self):
-        self.groq_client = _init_groq()
+    def __init__(self, groq_client: Optional[Groq] = None):
+        self.groq_client = groq_client or _init_groq()
 
     def analyze(self, drug_name: str, manufacturer: Optional[str]) -> Dict[str, Any]:
         """Firma analizi yapar (Groq + Llama-3 ile)."""
@@ -795,9 +1270,14 @@ class ReportSynthesizerAgent:
     FALLBACK: Gemini (Groq unavailable ise)
     """
 
-    def __init__(self):
-        self.groq_client = _init_groq()
-        _init_gemini()
+    def __init__(self, groq_client: Optional[Groq] = None):
+        self.groq_client = groq_client or _init_groq()
+        self._gemini_configured = False
+
+    def _ensure_gemini(self) -> None:
+        if not self._gemini_configured:
+            _init_gemini()
+            self._gemini_configured = True
 
     def synthesize(
         self,
@@ -864,9 +1344,10 @@ class ReportSynthesizerAgent:
 
         # ADIM 2: Gemini fallback (Groq başarısızsa)
         print(f"[ReportSynthesizer] Groq başarısız ({groq_err}), Gemini fallback'e geçiliyor...")
+        self._ensure_gemini()
         gemini_models = _gemini_model_chain()
         gemini_err = None
-        for name in gemini_models:
+        for idx, name in enumerate(gemini_models):
             try:
                 model = genai.GenerativeModel(
                     name,
@@ -886,8 +1367,11 @@ class ReportSynthesizerAgent:
                     return report_text, avg_confidence, None
             except Exception as e:
                 gemini_err = e
-                if _gemini_model_missing_error(e) and name != gemini_models[-1]:
-                    print(f"[ReportSynthesizer] {name} kullanılamadı, sıradaki…")
+                if idx < len(gemini_models) - 1:
+                    if _gemini_model_missing_error(e) or gemini_quota_or_rate_limit(e):
+                        print(f"[ReportSynthesizer] {name} atlandı ({e!s}), sıradaki…")
+                    else:
+                        print(f"[ReportSynthesizer] {name} hata, sıradaki…")
                     continue
                 break
 
@@ -984,6 +1468,8 @@ class PharmaGuardOrchestrator:
 
     def __init__(self):
         print("[Orchestrator] Başlatılıyor...")
+        # Groq istemcileri ayrı: Safety + Corporate ThreadPoolExecutor ile paralel;
+        # tek httpx tabanlı istemciyi iki iplikte paylaşmaktan kaçınılır.
         self.vision_agent = VisionScannerAgent()
         self.rag_agent = RAGSpecialistAgent()
         self.safety_agent = SafetyAuditorAgent()
@@ -999,6 +1485,7 @@ class PharmaGuardOrchestrator:
         pdf_bytes: Optional[bytes] = None,
         pdf_filename: str = "prospektus.pdf",
         progress_callback=None,
+        openai_compat: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Ana analiz iş akışını çalıştırır.
@@ -1009,6 +1496,7 @@ class PharmaGuardOrchestrator:
             pdf_bytes: Prospektüs PDF'inin ham bytes'ı (doğrudan PDF analizi)
             pdf_filename: PDF dosya adı (gösterim için)
             progress_callback: Streamlit progress bar için callable(step: int, message: str)
+            openai_compat: İsteğe bağlı OpenAI-uyumlu API (api_key, base_url, model) — PDF çıkarımı için.
 
         Returns:
             {
@@ -1028,6 +1516,13 @@ class PharmaGuardOrchestrator:
             if progress_callback:
                 progress_callback(step, msg)
             print(f"[Step {step}] {msg}")
+
+        if openai_compat is None:
+            self.vision_agent._openai_compat_overrides = None
+        else:
+            self.vision_agent._openai_compat_overrides = (
+                {k: v for k, v in openai_compat.items() if str(v).strip()} or None
+            )
 
         results = {}
 
@@ -1059,8 +1554,8 @@ class PharmaGuardOrchestrator:
         if "hata" in vision_data and pdf_bytes is not None:
             _progress(1, f"⚠️ PDF hatası: {vision_data['hata']}")
 
-        # ADIM 2: RAG Araması
-        _progress(2, "📚 RAG Specialist: Prospektüs veritabanı taranıyor...")
+        # ADIM 2: RAG (embedding + Chroma ilk kez burada yüklenir; “Ajanlar başlatılıyor” adımı kısalır)
+        _progress(2, "📚 RAG Specialist: veritabanı hazırlanıyor / taranıyor…")
         ticari_ad = vision_data.get("ticari_ad", drug_name_text or "")
         etken = vision_data.get("etken_madde", "")
         bd = vision_data.get("barkod_detay") or {}

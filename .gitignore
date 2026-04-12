@@ -1,5 +1,8 @@
 # API Anahtarları — asla GitHub'a yükleme!
 .env
+.env.*
+!.env.example
+.envrc
 
 # Python
 __pycache__/

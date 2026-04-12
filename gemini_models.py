@@ -7,11 +7,12 @@ Ortam: GEMINI_MODEL (isteğe bağlı), ardından sabit zincir; 404’te sıradak
 from __future__ import annotations
 
 import os
-from typing import Dict, List, Tuple
+import re
+from typing import Dict, List, Optional, Tuple
 
 DEFAULT_GEMINI_CHAIN: Tuple[str, ...] = (
-    "gemini-2.5-flash",
     "gemini-2.5-flash-lite",
+    "gemini-2.5-flash",
     "gemini-2.0-flash",
     "gemini-1.5-flash",
     "gemini-1.5-pro",
@@ -64,3 +65,29 @@ def model_missing_error(exc: Exception) -> bool:
         or "is not supported" in t
         or "invalid model" in t
     )
+
+
+def gemini_quota_or_rate_limit(exc: BaseException) -> bool:
+    """429, günlük/dakikalık kota, resource exhausted vb."""
+    s = str(exc).lower()
+    raw = str(exc)
+    return (
+        "429" in raw
+        or "quota" in s
+        or "rate limit" in s
+        or "resource exhausted" in s
+        or "exceeded your current quota" in s
+        or "generaterequestsperday" in s.replace(" ", "")
+    )
+
+
+def gemini_retry_delay_seconds(exc: BaseException) -> Optional[float]:
+    """API metninden önerilen bekleme (sn); yoksa None."""
+    raw = str(exc)
+    m = re.search(r"please retry in ([\d.]+)s", raw, re.I)
+    if m:
+        return min(90.0, float(m.group(1)) + 0.75)
+    m = re.search(r"retry_delay\s*\{\s*seconds:\s*([\d.]+)", raw, re.I)
+    if m:
+        return min(90.0, float(m.group(1)) + 0.75)
+    return None
