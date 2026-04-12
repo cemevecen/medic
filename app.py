@@ -26,6 +26,14 @@ from utils import (
     ALARM_MESSAGE,
 )
 
+
+def pg_section(title: str, icon: str) -> None:
+    """Bölüm başlığı (özel CSS ile)."""
+    st.markdown(
+        f'<p class="pg-section"><span class="pg-section-icon">{icon}</span>{title}</p>',
+        unsafe_allow_html=True,
+    )
+
 # ---------------------------------------------------------------------------
 # SAYFA YAPILANDIRMASI
 # ---------------------------------------------------------------------------
@@ -38,48 +46,531 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------------------------
-# ÖZEL CSS
+# TASARIM — tipografi + Streamlit bileşenleri + kartlar
 # ---------------------------------------------------------------------------
 
 st.markdown(
     """
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
-    .main-header {
-        background: linear-gradient(135deg, #1A3A5C 0%, #0078D4 100%);
-        padding: 1.5rem 2rem;
-        border-radius: 12px;
-        color: white;
-        margin-bottom: 1.5rem;
+    :root {
+      --pg-ink: #0c1222;
+      --pg-muted: #5c6578;
+      --pg-line: #e2e6ef;
+      --pg-surface: #ffffff;
+      --pg-canvas: #f0f2f7;
+      --pg-accent: #0f766e;
+      --pg-accent-soft: #ccfbf1;
+      --pg-warm: #ea580c;
+      --pg-sidebar: #0f172a;
+      --pg-sidebar-muted: #94a3b8;
+      --pg-glow: rgba(15, 118, 110, 0.12);
     }
-    .main-header h1 { color: white; margin: 0; font-size: 2rem; }
-    .main-header p  { color: #cce4ff; margin: 0.3rem 0 0; font-size: 1rem; }
 
-    .alarm-red    { background:#fdecea; border-left:5px solid #C0392B; padding:12px 16px; border-radius:6px; }
-    .alarm-yellow { background:#fef9e7; border-left:5px solid #F39C12; padding:12px 16px; border-radius:6px; }
-    .alarm-green  { background:#eafaf1; border-left:5px solid #27AE60; padding:12px 16px; border-radius:6px; }
-    .alarm-unknown{ background:#f4f4f4; border-left:5px solid #95a5a6; padding:12px 16px; border-radius:6px; }
+    html, body, .stApp, [data-testid="stAppViewContainer"] {
+      font-family: "Instrument Sans", system-ui, sans-serif !important;
+      color: var(--pg-ink);
+    }
+
+    .stApp {
+      background: var(--pg-canvas) !important;
+      background-image:
+        radial-gradient(ellipse 120% 80% at 100% -20%, rgba(15, 118, 110, 0.08), transparent),
+        radial-gradient(ellipse 80% 50% at 0% 100%, rgba(234, 88, 12, 0.05), transparent) !important;
+    }
+
+    [data-testid="stHeader"] {
+      background: transparent !important;
+    }
+
+    .block-container {
+      padding-top: 1.25rem !important;
+      padding-bottom: 3rem !important;
+      max-width: 1400px !important;
+    }
+
+    /* Sekmeler — hap şeklinde */
+    .stTabs [data-baseweb="tab-list"] {
+      gap: 0.35rem;
+      background: var(--pg-surface);
+      padding: 0.35rem;
+      border-radius: 14px;
+      border: 1px solid var(--pg-line);
+      box-shadow: 0 1px 3px rgba(12, 18, 34, 0.06);
+    }
+    .stTabs [data-baseweb="tab"] {
+      border-radius: 10px !important;
+      padding: 0.65rem 1.1rem !important;
+      font-weight: 600 !important;
+      font-size: 0.95rem !important;
+    }
+    .stTabs [aria-selected="true"] {
+      background: var(--pg-accent) !important;
+      color: #fff !important;
+    }
+
+    /* İç sekmeler */
+    div[data-testid="stVerticalBlock"] > div > .stTabs [data-baseweb="tab-list"] {
+      background: #f8fafc;
+    }
+
+    /* Butonlar */
+    .stButton > button {
+      border-radius: 12px !important;
+      font-weight: 600 !important;
+      padding: 0.55rem 1.25rem !important;
+      border: none !important;
+      transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+    }
+    .stButton > button[kind="primary"] {
+      background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%) !important;
+      box-shadow: 0 4px 14px var(--pg-glow) !important;
+    }
+    .stButton > button[kind="primary"]:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(15, 118, 110, 0.25) !important;
+    }
+    .stButton > button:disabled {
+      opacity: 0.45 !important;
+    }
+
+    /* Girişler */
+    .stTextInput input, .stRadio label, [data-baseweb="select"] {
+      font-family: "Instrument Sans", sans-serif !important;
+    }
+    .stTextInput input {
+      border-radius: 12px !important;
+      border-color: var(--pg-line) !important;
+    }
+    .stFileUploader section {
+      border-radius: 14px !important;
+      border: 2px dashed #cbd5e1 !important;
+      background: #fafbfc !important;
+    }
+
+    /* Uyarı kutuları — yumuşak köşe */
+    .stAlert {
+      border-radius: 12px !important;
+    }
+
+    /* Progress */
+    .stProgress > div > div {
+      background: linear-gradient(90deg, #0f766e, #14b8a6) !important;
+      border-radius: 999px !important;
+    }
+
+    /* Sidebar */
+    [data-testid="stSidebar"] {
+      background: linear-gradient(180deg, var(--pg-sidebar) 0%, #1e293b 100%) !important;
+      border-right: 1px solid rgba(255,255,255,0.06) !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] li,
+    [data-testid="stSidebar"] .stCaption {
+      color: var(--pg-sidebar-muted) !important;
+    }
+    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3,
+    [data-testid="stSidebar"] strong {
+      color: #f1f5f9 !important;
+    }
+    [data-testid="stSidebar"] hr {
+      border-color: rgba(255,255,255,0.08) !important;
+    }
+    [data-testid="stSidebar"] .stExpander {
+      background: rgba(255,255,255,0.04) !important;
+      border-radius: 12px !important;
+      border: 1px solid rgba(255,255,255,0.08) !important;
+    }
+
+    /* Hero */
+    .pg-hero {
+      position: relative;
+      overflow: hidden;
+      border-radius: 20px;
+      padding: 2rem 2.25rem;
+      margin-bottom: 1.75rem;
+      background: linear-gradient(135deg, #0f172a 0%, #134e4a 55%, #0f766e 100%);
+      color: #f8fafc;
+      box-shadow: 0 20px 50px -12px rgba(15, 23, 42, 0.35);
+    }
+    .pg-hero::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+      opacity: 0.9;
+      pointer-events: none;
+    }
+    .pg-hero-inner { position: relative; z-index: 1; }
+    .pg-hero h1 {
+      margin: 0;
+      font-size: clamp(1.65rem, 3vw, 2.15rem);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      color: #fff !important;
+    }
+    .pg-hero p {
+      margin: 0.65rem 0 0;
+      font-size: 1.02rem;
+      color: rgba(226, 232, 240, 0.88) !important;
+      max-width: 52rem;
+      line-height: 1.5;
+    }
+    .pg-hero-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 1.1rem;
+    }
+    .pg-hero-tags span {
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 0.35rem 0.75rem;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.18);
+      color: #e2e8f0 !important;
+    }
+
+    /* Bölüm başlıkları */
+    .pg-section {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--pg-ink);
+      margin: 0 0 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      letter-spacing: -0.02em;
+    }
+    .pg-section-icon {
+      width: 2rem;
+      height: 2rem;
+      border-radius: 10px;
+      background: var(--pg-accent-soft);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+    }
+
+    /* Kart yüzeyi (ana alan panelleri) */
+    .pg-panel {
+      background: var(--pg-surface);
+      border: 1px solid var(--pg-line);
+      border-radius: 16px;
+      padding: 1.35rem 1.5rem;
+      box-shadow: 0 1px 2px rgba(12, 18, 34, 0.04);
+    }
+
+    .alarm-red {
+      background: linear-gradient(90deg, #fef2f2, #fff7f7);
+      border: 1px solid #fecaca;
+      border-left: 4px solid #dc2626;
+      padding: 14px 18px;
+      border-radius: 12px;
+      color: #7f1d1d;
+    }
+    .alarm-yellow {
+      background: linear-gradient(90deg, #fffbeb, #fffef5);
+      border: 1px solid #fde68a;
+      border-left: 4px solid #d97706;
+      padding: 14px 18px;
+      border-radius: 12px;
+      color: #78350f;
+    }
+    .alarm-green {
+      background: linear-gradient(90deg, #ecfdf5, #f0fdf9);
+      border: 1px solid #a7f3d0;
+      border-left: 4px solid #059669;
+      padding: 14px 18px;
+      border-radius: 12px;
+      color: #064e3b;
+    }
+    .alarm-unknown {
+      background: #f8fafc;
+      border: 1px solid var(--pg-line);
+      border-left: 4px solid #64748b;
+      padding: 14px 18px;
+      border-radius: 12px;
+      color: #475569 !important;
+    }
+    .alarm-unknown b,
+    .alarm-unknown strong {
+      color: #0f172a !important;
+    }
+
+    /* Koyu temada Streamlit’in açık zemin + beyaz metin kalıtımını kır */
+    .alarm-red,
+    .alarm-red b,
+    .alarm-red strong {
+      color: #7f1d1d !important;
+    }
+    .alarm-yellow,
+    .alarm-yellow b,
+    .alarm-yellow strong {
+      color: #78350f !important;
+    }
+    .alarm-green,
+    .alarm-green b,
+    .alarm-green strong {
+      color: #064e3b !important;
+    }
 
     .metric-card {
-        background: #f5f8fa;
-        border: 1px solid #dce3ea;
-        border-radius: 10px;
-        padding: 14px 18px;
-        text-align: center;
+      background: var(--pg-surface);
+      border: 1px solid var(--pg-line);
+      border-radius: 14px;
+      padding: 1.1rem 1rem;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(12, 18, 34, 0.04);
     }
-    .metric-card h3 { margin:0; font-size:1.6rem; color:#1A3A5C; }
-    .metric-card p  { margin:0; font-size:0.8rem; color:#7f8c8d; }
+    .metric-card h3 { margin: 0; font-size: 1.55rem; font-weight: 700; color: var(--pg-ink); }
+    .metric-card p  { margin: 0.35rem 0 0; font-size: 0.8rem; color: var(--pg-muted); font-weight: 500; }
 
-    .step-badge {
-        display:inline-block;
-        background:#0078D4;
-        color:white;
-        border-radius:50%;
-        width:26px; height:26px;
-        text-align:center; line-height:26px;
-        font-weight:bold; font-size:0.85rem;
-        margin-right:8px;
+    .pg-empty {
+      text-align: center;
+      padding: 3.5rem 1.5rem;
+      background: var(--pg-surface);
+      border: 1px dashed #cbd5e1;
+      border-radius: 16px;
+      color: var(--pg-muted);
     }
-    .stProgress > div > div { background-color: #0078D4 !important; }
+    .pg-empty .pg-empty-icon {
+      font-size: 2.75rem;
+      line-height: 1;
+      margin-bottom: 1rem;
+      filter: grayscale(0.2);
+    }
+    .pg-empty p { margin: 0; font-size: 1.05rem; line-height: 1.6; }
+
+    .pg-status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.85rem;
+      padding: 0.45rem 0.75rem;
+      border-radius: 10px;
+      margin-bottom: 0.35rem;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: #e2e8f0 !important;
+    }
+    .pg-status-pill.ok { border-color: rgba(45, 212, 191, 0.35); background: rgba(45, 212, 191, 0.1); }
+    .pg-status-pill.bad { border-color: rgba(248, 113, 113, 0.35); background: rgba(248, 113, 113, 0.08); }
+
+    .pg-about-card {
+      background: var(--pg-surface);
+      border: 1px solid var(--pg-line);
+      border-radius: 16px;
+      padding: 1.5rem 1.75rem;
+      box-shadow: 0 2px 12px rgba(12, 18, 34, 0.05);
+    }
+    .pg-about-card table { width: 100%; border-collapse: collapse; margin-top: 0.75rem; }
+    .pg-about-card th, .pg-about-card td {
+      border-bottom: 1px solid var(--pg-line);
+      padding: 0.65rem 0.5rem;
+      text-align: left;
+      font-size: 0.92rem;
+    }
+    .pg-about-card th { color: var(--pg-muted); font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+
+    code, .stMarkdown code {
+      font-family: "JetBrains Mono", monospace !important;
+      font-size: 0.85em;
+      background: #f1f5f9 !important;
+      padding: 0.15rem 0.4rem;
+      border-radius: 6px;
+    }
+
+    /* Analiz adım satırı */
+    .pg-step-line {
+      font-size: 0.9rem;
+      color: #475569;
+      padding: 0.25rem 0 0.35rem;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .pg-step-num {
+      display: inline-block;
+      min-width: 2.75rem;
+      font-weight: 700;
+      color: #0f766e;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Streamlit status kutusu */
+    [data-testid="stStatus"] {
+      border-radius: 14px !important;
+      border: 1px solid var(--pg-line) !important;
+    }
+
+    /* Koyu tema (sistem / Streamlit) uyumu */
+    [data-theme="dark"] .stApp {
+      background: #0b0f14 !important;
+      background-image:
+        radial-gradient(ellipse 100% 80% at 100% 0%, rgba(20, 184, 166, 0.12), transparent),
+        radial-gradient(ellipse 80% 60% at 0% 100%, rgba(251, 146, 60, 0.08), transparent) !important;
+    }
+    [data-theme="dark"] .metric-card {
+      background: #111827 !important;
+      border-color: #1f2937 !important;
+      box-shadow: none !important;
+    }
+    [data-theme="dark"] .metric-card h3 { color: #f1f5f9 !important; }
+    [data-theme="dark"] .metric-card p { color: #94a3b8 !important; }
+    [data-theme="dark"] .pg-step-line { color: #cbd5e1; border-bottom-color: #1f2937; }
+    [data-theme="dark"] .pg-step-num { color: #2dd4bf; }
+    [data-theme="dark"] .pg-empty {
+      background: #111827 !important;
+      border-color: #334155 !important;
+      color: #94a3b8 !important;
+    }
+    [data-theme="dark"] .stTabs [data-baseweb="tab-list"] {
+      background: #111827 !important;
+      border-color: #1f2937 !important;
+    }
+    [data-theme="dark"] .stFileUploader section {
+      background: #0f172a !important;
+      border-color: #334155 !important;
+    }
+
+    /* --- Koyu tema: alarm bantları (yüksek kontrast) --- */
+    [data-theme="dark"] .alarm-red,
+    [data-color-scheme="dark"] .alarm-red {
+      background: rgba(127, 29, 29, 0.45) !important;
+      border: 1px solid rgba(248, 113, 113, 0.5) !important;
+      border-left: 4px solid #f87171 !important;
+      color: #fecaca !important;
+    }
+    [data-theme="dark"] .alarm-red b,
+    [data-theme="dark"] .alarm-red strong,
+    [data-color-scheme="dark"] .alarm-red b,
+    [data-color-scheme="dark"] .alarm-red strong {
+      color: #fff7ed !important;
+    }
+
+    [data-theme="dark"] .alarm-yellow,
+    [data-color-scheme="dark"] .alarm-yellow {
+      background: rgba(120, 53, 15, 0.45) !important;
+      border: 1px solid rgba(251, 191, 36, 0.45) !important;
+      border-left: 4px solid #fbbf24 !important;
+      color: #fef3c7 !important;
+    }
+    [data-theme="dark"] .alarm-yellow b,
+    [data-theme="dark"] .alarm-yellow strong,
+    [data-color-scheme="dark"] .alarm-yellow b,
+    [data-color-scheme="dark"] .alarm-yellow strong {
+      color: #fffbeb !important;
+    }
+
+    [data-theme="dark"] .alarm-green,
+    [data-color-scheme="dark"] .alarm-green {
+      background: rgba(6, 78, 59, 0.45) !important;
+      border: 1px solid rgba(52, 211, 153, 0.45) !important;
+      border-left: 4px solid #34d399 !important;
+      color: #d1fae5 !important;
+    }
+    [data-theme="dark"] .alarm-green b,
+    [data-theme="dark"] .alarm-green strong,
+    [data-color-scheme="dark"] .alarm-green b,
+    [data-color-scheme="dark"] .alarm-green strong {
+      color: #ecfdf5 !important;
+    }
+
+    [data-theme="dark"] .alarm-unknown,
+    [data-color-scheme="dark"] .alarm-unknown {
+      background: #1e293b !important;
+      border: 1px solid #475569 !important;
+      border-left: 4px solid #94a3b8 !important;
+      color: #e2e8f0 !important;
+    }
+    [data-theme="dark"] .alarm-unknown b,
+    [data-theme="dark"] .alarm-unknown strong,
+    [data-color-scheme="dark"] .alarm-unknown b,
+    [data-color-scheme="dark"] .alarm-unknown strong {
+      color: #f8fafc !important;
+    }
+
+    [data-theme="dark"] .pg-section,
+    [data-color-scheme="dark"] .pg-section {
+      color: #f1f5f9 !important;
+    }
+    [data-theme="dark"] .pg-section-icon,
+    [data-color-scheme="dark"] .pg-section-icon {
+      background: rgba(45, 212, 191, 0.18) !important;
+    }
+
+    [data-theme="dark"] div[data-testid="stVerticalBlock"] > div > .stTabs [data-baseweb="tab-list"],
+    [data-color-scheme="dark"] div[data-testid="stVerticalBlock"] > div > .stTabs [data-baseweb="tab-list"] {
+      background: #0f172a !important;
+      border-color: #334155 !important;
+    }
+
+    [data-theme="dark"] .stTabs [data-baseweb="tab"][aria-selected="false"],
+    [data-color-scheme="dark"] .stTabs [data-baseweb="tab"][aria-selected="false"] {
+      color: #94a3b8 !important;
+    }
+
+    [data-theme="dark"] .stButton > button[kind="primary"],
+    [data-color-scheme="dark"] .stButton > button[kind="primary"] {
+      background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%) !important;
+      color: #f8fafc !important;
+    }
+    [data-theme="dark"] .stButton > button[kind="secondary"],
+    [data-color-scheme="dark"] .stButton > button[kind="secondary"] {
+      background: #1e293b !important;
+      color: #e2e8f0 !important;
+      border: 1px solid #475569 !important;
+    }
+
+    [data-theme="dark"] code,
+    [data-theme="dark"] .stMarkdown code,
+    [data-color-scheme="dark"] code,
+    [data-color-scheme="dark"] .stMarkdown code {
+      background: #1e293b !important;
+      color: #e2e8f0 !important;
+    }
+
+    [data-theme="dark"] .pg-about-card,
+    [data-color-scheme="dark"] .pg-about-card {
+      background: #111827 !important;
+      border-color: #334155 !important;
+      color: #cbd5e1 !important;
+    }
+    [data-theme="dark"] .pg-about-card th,
+    [data-color-scheme="dark"] .pg-about-card th {
+      color: #94a3b8 !important;
+    }
+    [data-theme="dark"] .pg-about-card td,
+    [data-color-scheme="dark"] .pg-about-card td {
+      border-bottom-color: #334155 !important;
+      color: #e2e8f0 !important;
+    }
+
+    [data-theme="dark"] [data-testid="stStatus"],
+    [data-color-scheme="dark"] [data-testid="stStatus"] {
+      background: #111827 !important;
+      border-color: #334155 !important;
+    }
+
+    [data-theme="dark"] .stRadio label,
+    [data-color-scheme="dark"] .stRadio label {
+      color: #e2e8f0 !important;
+    }
+    [data-theme="dark"] .stTextInput label,
+    [data-color-scheme="dark"] .stTextInput label {
+      color: #cbd5e1 !important;
+    }
+    [data-theme="dark"] .stTextInput input,
+    [data-color-scheme="dark"] .stTextInput input {
+      background: #0f172a !important;
+      color: #f1f5f9 !important;
+      border-color: #334155 !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -91,10 +582,18 @@ st.markdown(
 
 st.markdown(
     """
-    <div class="main-header">
-        <h1>💊 Pharma-Guard AI</h1>
-        <p>Yapay Zeka Destekli Akıllı İlaç Denetçisi &nbsp;|&nbsp;
-           Gemini · LLaVA · Llama-3 · RAG (ChromaDB)</p>
+    <div class="pg-hero">
+      <div class="pg-hero-inner">
+        <h1>Pharma-Guard AI</h1>
+        <p>Akıllı ilaç denetimi: görüntü ve metinle çoklu ajan analizi,
+           yerel prospektüs (RAG) doğrulaması ve tek tıkla PDF raporu.</p>
+        <div class="pg-hero-tags">
+          <span>Gemini</span>
+          <span>Groq · LLaVA</span>
+          <span>ChromaDB</span>
+          <span>Fact-check</span>
+        </div>
+      </div>
     </div>
     """,
     unsafe_allow_html=True,
@@ -105,44 +604,57 @@ st.markdown(
 # ---------------------------------------------------------------------------
 
 with st.sidebar:
-    st.markdown("### ⚙️ Sistem Durumu")
+    st.markdown(
+        """
+        <div style="padding:0.25rem 0 1rem;">
+          <div style="font-size:1.65rem;line-height:1;">💊</div>
+          <div style="font-weight:700;font-size:1.1rem;color:#f8fafc;letter-spacing:-0.02em;">
+            Pharma-Guard
+          </div>
+          <div style="font-size:0.78rem;color:#94a3b8;margin-top:0.2rem;">Kontrol paneli</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
+    st.markdown("##### Bağlantılar")
     gemini_key = os.getenv("GEMINI_API_KEY", "")
     groq_key = os.getenv("GROQ_API_KEY", "")
 
+    g_cls = "ok" if gemini_key else "bad"
+    q_cls = "ok" if groq_key else "bad"
     st.markdown(
-        f"{'✅' if gemini_key else '❌'} **Gemini API** "
-        f"{'Bağlı' if gemini_key else '— .env dosyasına ekleyin'}"
+        f'<div class="pg-status-pill {g_cls}">{"●" if gemini_key else "○"} Gemini API — '
+        f'{"aktif" if gemini_key else ".env / Secrets"}</div>',
+        unsafe_allow_html=True,
     )
     st.markdown(
-        f"{'✅' if groq_key else '❌'} **Groq API (LLaVA + Llama-3)** "
-        f"{'Bağlı' if groq_key else '— .env dosyasına ekleyin'}"
+        f'<div class="pg-status-pill {q_cls}">{"●" if groq_key else "○"} Groq — '
+        f'{"aktif" if groq_key else ".env / Secrets"}</div>',
+        unsafe_allow_html=True,
     )
 
     pdf_list = list_corpus_pdfs()
-    st.markdown(f"📚 **RAG Corpus:** {len(pdf_list)} prospektüs")
+    st.markdown(
+        f'<div class="pg-status-pill ok" style="margin-top:0.6rem;">📚 RAG: '
+        f"{len(pdf_list)} prospektüs</div>",
+        unsafe_allow_html=True,
+    )
     if pdf_list:
-        with st.expander("Yüklü Prospektüsler", expanded=False):
+        with st.expander("Dosya listesi", expanded=False):
             for f in pdf_list:
                 st.markdown(f"- `{f}`")
     else:
-        st.caption("Corpus boş. Sol panelden PDF yükleyin.")
+        st.caption("Corpus boş — Prospektüs sekmesinden PDF ekleyin.")
 
     st.markdown("---")
-    st.markdown("### 📖 Sistem Hakkında")
+    st.markdown("##### Ajanlar")
     st.caption(
-        "Pharma-Guard AI, ilaç kutularının görselini veya ilaç adını alarak "
-        "çoklu yapay zeka ajanı mimarisiyle güvenlik analizi yapar.\n\n"
-        "**Ajanlar:**\n"
-        "- 👁️ Vision Scanner (LLaVA)\n"
-        "- 📚 RAG Specialist (ChromaDB)\n"
-        "- 🔍 Fact-Checker\n"
-        "- 🛡️ Safety Auditor (Llama-3)\n"
-        "- 🏭 Corporate Analyst (Gemini)\n"
-        "- 📝 Report Synthesizer (Gemini)\n"
+        "Vision · RAG · Fact-check · Safety · Corporate · Rapor — "
+        "orkestrasyon otomatik."
     )
     st.markdown("---")
-    st.caption("⚕️ Bu araç tıbbi tavsiye niteliği taşımaz.")
+    st.caption("Bilgilendirme amaçlıdır; tıbbi karar için hekime danışın.")
 
 # ---------------------------------------------------------------------------
 # ANA SEKMELER
@@ -161,7 +673,7 @@ with tab_analyze:
 
     # ── Giriş Bölümü ──────────────────────────────────────────────────────
     with col_input:
-        st.markdown("#### 📥 Giriş Yöntemi")
+        pg_section("Giriş yöntemi", "📥")
 
         input_method = st.radio(
             "Nasıl analiz etmek istiyorsunuz?",
@@ -217,71 +729,80 @@ with tab_analyze:
 
     # ── Sonuç Bölümü ──────────────────────────────────────────────────────
     with col_result:
-        st.markdown("#### 📊 Analiz Sonuçları")
+        pg_section("Analiz sonuçları", "📊")
 
         if analyze_btn:
-            # Session state'i temizle
-            for k in ["analysis_result", "report_pdf"]:
-                if k in st.session_state:
-                    del st.session_state[k]
+            for k in ("analysis_result", "report_pdf"):
+                st.session_state.pop(k, None)
 
-            progress_placeholder = st.empty()
-            status_placeholder = st.empty()
+            from agents import PharmaGuardOrchestrator
 
-            # Progress callback
-            progress_bar = progress_placeholder.progress(0)
-            steps = {
-                1: "👁️ Vision Scanner çalışıyor...",
-                2: "📚 RAG veritabanı taranıyor...",
-                3: "🔍 Fact-Checker devreye giriyor...",
-                4: "🛡️ Safety Auditor analiz yapıyor...",
-                5: "🏭 Corporate Analyst araştırıyor...",
-                6: "📝 Rapor sentezleniyor...",
-                7: "✅ Analiz tamamlandı!",
-            }
+            # Eski oturum önbelleği (farklı Gemini model sürümü) temizliği
+            for _old in (
+                "orchestrator",
+                "pharma_orchestrator_v2",
+                "pharma_orchestrator_v3",
+                "pharma_orchestrator_v4",
+                "pharma_orchestrator_v5",
+            ):
+                if _old in st.session_state:
+                    del st.session_state[_old]
 
-            def update_progress(step: int, msg: str):
-                progress_bar.progress(step / 7)
-                status_placeholder.info(msg)
+            _orch_key = "pharma_orchestrator_v6"
+            if _orch_key not in st.session_state:
+                st.session_state[_orch_key] = PharmaGuardOrchestrator()
 
-            # Orkestratörü başlat ve çalıştır
-            with st.spinner("Pharma-Guard ajanları devreye alınıyor..."):
-                try:
-                    from agents import PharmaGuardOrchestrator
-
-                    # Orkestratör önbelleği (her seferinde yeniden başlatmak pahalı)
-                    if "orchestrator" not in st.session_state:
-                        st.session_state.orchestrator = PharmaGuardOrchestrator()
-
-                    orch = st.session_state.orchestrator
-
-                    result = orch.run(
-                        image=image_obj,
-                        drug_name_text=drug_name_input,
-                        progress_callback=update_progress,
+            def _run_pipeline(progress_bar, step_log, status_ui):
+                def update_progress(step: int, msg: str):
+                    progress_bar.progress(step / 7)
+                    step_log.markdown(
+                        f'<p class="pg-step-line"><span class="pg-step-num">{step}/7</span>{msg}</p>',
+                        unsafe_allow_html=True,
                     )
+                    if status_ui is not None:
+                        label = msg if len(msg) < 72 else msg[:69] + "…"
+                        status_ui.update(label=label, state="running")
 
-                    st.session_state.analysis_result = result
+                return st.session_state[_orch_key].run(
+                    image=image_obj,
+                    drug_name_text=drug_name_input,
+                    progress_callback=update_progress,
+                )
 
-                    # PDF oluştur
-                    drug_display = (
-                        result["vision"].get("ticari_ad") or drug_name_input or "İlaç"
-                    )
-                    pdf_bytes = generate_pdf_report(
-                        report_markdown=result["report"],
-                        drug_name=drug_display,
-                        alarm_level=result["alarm"],
-                        avg_confidence=result["avg_confidence"],
-                        vision_data=result["vision"],
-                    )
-                    st.session_state.report_pdf = pdf_bytes
+            try:
+                if hasattr(st, "status"):
+                    with st.status("Pipeline: Vision → RAG → Fact-check → Güvenlik → Firma → Rapor", expanded=True) as pg_status:
+                        prog = st.progress(0)
+                        log = st.empty()
+                        result = _run_pipeline(prog, log, pg_status)
+                        prog.progress(1.0)
+                        pg_status.update(
+                            label="Tamamlandı — sonuçlar aşağıda",
+                            state="complete",
+                            expanded=False,
+                        )
+                else:
+                    prog_ph = st.empty()
+                    log_ph = st.empty()
+                    prog = prog_ph.progress(0)
+                    log = log_ph.empty()
+                    with st.spinner("Ajanlar sırayla çalışıyor…"):
+                        result = _run_pipeline(prog, log, None)
+                    prog_ph.empty()
+                    log_ph.empty()
 
-                except Exception as e:
-                    status_placeholder.error(f"❌ Analiz sırasında hata oluştu: {str(e)}")
-                    st.exception(e)
-
-            progress_placeholder.empty()
-            status_placeholder.empty()
+                st.session_state.analysis_result = result
+                drug_display = result["vision"].get("ticari_ad") or drug_name_input or "İlaç"
+                st.session_state.report_pdf = generate_pdf_report(
+                    report_markdown=result["report"],
+                    drug_name=drug_display,
+                    alarm_level=result["alarm"],
+                    avg_confidence=result["avg_confidence"],
+                    vision_data=result["vision"],
+                )
+            except Exception as e:
+                st.error(f"Analiz durdu: {e!s}")
+                st.exception(e)
 
         # Sonuçları göster
         if "analysis_result" in st.session_state:
@@ -303,22 +824,23 @@ with tab_analyze:
             )
             st.markdown("")
 
-            # ── Metrik Kartları ──
-            m1, m2, m3 = st.columns(3)
+            # ── Metrik kartları + sentez durumu ──
+            synth_err = result.get("synthesis_error")
+            m1, m2, m3, m4 = st.columns(4)
             with m1:
                 confidence = result.get("avg_confidence", 0)
-                conf_color = "#27AE60" if confidence >= 8 else "#F39C12" if confidence >= 5 else "#C0392B"
+                conf_color = "#059669" if confidence >= 8 else "#d97706" if confidence >= 5 else "#dc2626"
                 st.markdown(
                     f'<div class="metric-card"><h3 style="color:{conf_color}">'
                     f'{confidence:.1f}<span style="font-size:1rem">/10</span></h3>'
-                    f"<p>Güven Puanı</p></div>",
+                    f"<p>Güven (ajan ort.)</p></div>",
                     unsafe_allow_html=True,
                 )
             with m2:
                 rag_count = len(result.get("rag_results", []))
                 st.markdown(
                     f'<div class="metric-card"><h3>{rag_count}</h3>'
-                    f"<p>RAG Sonucu</p></div>",
+                    f"<p>RAG pasajları</p></div>",
                     unsafe_allow_html=True,
                 )
             with m3:
@@ -327,11 +849,34 @@ with tab_analyze:
                 fc_icon = "✅" if fc_ok else "⛔"
                 st.markdown(
                     f'<div class="metric-card"><h3>{fc_icon}</h3>'
-                    f"<p>Fact-Check</p></div>",
+                    f"<p>Fact-check</p></div>",
+                    unsafe_allow_html=True,
+                )
+            with m4:
+                rep_ok = not synth_err
+                rep_icon = "✅" if rep_ok else "⚠️"
+                rep_sub = "Özet rapor" if rep_ok else "Sentez hatası"
+                st.markdown(
+                    f'<div class="metric-card"><h3>{rep_icon}</h3>'
+                    f"<p>{rep_sub}</p></div>",
                     unsafe_allow_html=True,
                 )
 
+            if synth_err:
+                st.caption(
+                    "Güven puanı Gemini özetine dahil edilmedi; Vision / Safety / Corporate "
+                    "çıktılarından hesaplandı."
+                )
             st.markdown("")
+
+            if synth_err:
+                st.error(
+                    "**Özet rapor üretilemedi** (Gemini). Diğer ajanlar tamamlandı — "
+                    "bilgiler **Görsel Analiz**, **Güvenlik** ve **Firma** sekmelerinde. "
+                    "`.env` veya Secrets’ta örn. `GEMINI_MODEL=gemini-2.5-flash` veya `gemini-1.5-flash` deneyin."
+                )
+                with st.expander("Teknik ayrıntı", expanded=False):
+                    st.code(synth_err)
 
             # ── Fact-Check Uyarısı ──
             if not fc_ok:
@@ -353,13 +898,15 @@ with tab_analyze:
                     )
                     filename = f"pharma_guard_{drug_display.replace(' ', '_')}.pdf"
                     st.download_button(
-                        label="📥 PDF Raporu İndir",
+                        label="📥 PDF indir (mevcut metinle)",
                         data=st.session_state.report_pdf,
                         file_name=filename,
                         mime="application/pdf",
-                        type="primary",
+                        type="secondary" if synth_err else "primary",
                         use_container_width=True,
                     )
+                    if synth_err:
+                        st.caption("PDF, hata açıklaması ve mevcut ajan çıktılarını içerir.")
 
             with rt2:
                 st.markdown("**Vision Scanner Çıktısı**")
@@ -456,10 +1003,10 @@ with tab_analyze:
         else:
             st.markdown(
                 """
-                <div style="text-align:center; padding:3rem 1rem; color:#95a5a6;">
-                    <div style="font-size:3rem">💊</div>
-                    <p>İlaç görseli yükleyin veya ilaç adını yazın,<br>
-                    ardından <b>Analizi Başlat</b> butonuna tıklayın.</p>
+                <div class="pg-empty">
+                    <div class="pg-empty-icon">💊</div>
+                    <p>Görsel yükleyin veya ilaç adını yazın; ardından
+                    <strong>Analizi Başlat</strong> ile ajanları çalıştırın.</p>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -470,16 +1017,22 @@ with tab_analyze:
 # ═══════════════════════════════════════════════════════════════════════════
 
 with tab_corpus:
-    st.markdown("### 📚 RAG Prospektüs Veritabanı")
-    st.info(
-        "RAG sisteminin doğru çalışması için ilaç prospektüslerini (PDF) buraya yükleyin. "
-        "TİTCK veya FDA'nın resmi prospektüs belgelerini kullanmanız önerilir."
+    pg_section("RAG prospektüs veritabanı", "📚")
+    st.markdown(
+        """
+        <div style="background:linear-gradient(90deg,#ecfeff,#f0fdfa);border:1px solid #99f6e4;
+        border-radius:14px;padding:1rem 1.2rem;margin-bottom:1.25rem;color:#115e59;font-size:0.95rem;">
+        PDF prospektüsleri burada toplanır. Mümkünse <strong>TİTCK</strong> veya
+        <strong>FDA / EMA</strong> kaynaklı resmi belgeleri kullanın.
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
     col_upload, col_list = st.columns([1, 1])
 
     with col_upload:
-        st.markdown("#### Prospektüs Ekle")
+        pg_section("Prospektüs ekle", "➕")
         uploaded_pdfs = st.file_uploader(
             "PDF prospektüs yükle (çoklu seçim desteklenir)",
             type=["pdf"],
@@ -495,13 +1048,13 @@ with tab_corpus:
             st.success(f"✅ {len(saved)} dosya kaydedildi: {', '.join(saved)}")
 
             # İndeksi yeniden oluştur
-            if "orchestrator" in st.session_state:
+            if "pharma_orchestrator_v6" in st.session_state:
                 with st.spinner("ChromaDB indeksi güncelleniyor..."):
-                    st.session_state.orchestrator.rag_agent.rebuild_index()
+                    st.session_state.pharma_orchestrator_v6.rag_agent.rebuild_index()
                 st.success("✅ RAG indeksi güncellendi!")
 
     with col_list:
-        st.markdown("#### Mevcut Prospektüsler")
+        pg_section("Mevcut dosyalar", "📄")
         pdfs = list_corpus_pdfs()
         if pdfs:
             for pdf in pdfs:
@@ -510,22 +1063,27 @@ with tab_corpus:
             st.warning("Henüz prospektüs yüklenmedi.")
 
         if pdfs and st.button("🔄 İndeksi Yeniden Oluştur"):
-            if "orchestrator" in st.session_state:
+            if "pharma_orchestrator_v6" in st.session_state:
                 with st.spinner("Lütfen bekleyin..."):
-                    st.session_state.orchestrator.rag_agent.rebuild_index()
+                    st.session_state.pharma_orchestrator_v6.rag_agent.rebuild_index()
                 st.success("✅ İndeks yeniden oluşturuldu!")
             else:
-                st.warning("Lütfen önce bir analiz başlatın (Orkestratörü yüklemek için).")
+                st.warning("Önce İlaç Analizi sekmesinde bir kez analiz başlatın.")
 
     st.markdown("---")
-    st.markdown("#### 💡 Nereden Prospektüs Bulabilirim?")
+    pg_section("Kaynak önerileri", "💡")
     st.markdown(
         """
-        - **TİTCK (Türkiye İlaç ve Tıbbi Cihaz Kurumu):** titck.gov.tr → Ürün Bilgisi
-        - **FDA (ABD):** drugs@FDA veya DailyMed veri tabanı
-        - **EMA (Avrupa):** ema.europa.eu → Product information
-        - İlaç kutusunun içindeki kağıt prospektüsü tarayarak PDF'e dönüştürebilirsiniz.
-        """
+        <div class="pg-about-card" style="margin-top:0.5rem;">
+        <ul style="margin:0;padding-left:1.2rem;color:#475569;line-height:1.75;">
+        <li><strong>TİTCK:</strong> titck.gov.tr → Ürün bilgisi</li>
+        <li><strong>FDA:</strong> drugs@FDA, DailyMed</li>
+        <li><strong>EMA:</strong> ema.europa.eu → Ürün bilgisi</li>
+        <li>Kutu içi prospektüsü tarayıp PDF olarak da ekleyebilirsiniz.</li>
+        </ul>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -533,46 +1091,60 @@ with tab_corpus:
 # ═══════════════════════════════════════════════════════════════════════════
 
 with tab_about:
-    st.markdown("### ℹ️ Pharma-Guard AI Hakkında")
-
+    pg_section("Pharma-Guard AI", "ℹ️")
     st.markdown(
         """
-        **Pharma-Guard AI**, görüntü işleme (Computer Vision) ve doğal dil işleme (NLP)
-        teknolojilerini birleştirerek toplum sağlığına katkı sunmak amacıyla geliştirilmiş
-        otonom bir **Çoklu Ajan Sistemi (Multi-Agent System)**'dir.
+        <div class="pg-about-card">
+        <p style="margin:0 0 1rem;font-size:1.05rem;line-height:1.65;color:#334155;">
+        <strong>Pharma-Guard AI</strong>, görüntü işleme ve NLP'yi birleştiren,
+        otonom bir <strong>çoklu ajan</strong> mimarisidir. Amaç; prospektüsle
+        desteklenen, tutarlılık kontrollü bilgilendirme özetleri üretmektir.
+        </p>
 
-        #### 🤖 Ajan Mimarisi
-        | Ajan | Model | Görev |
-        |---|---|---|
-        | 👁️ Vision Scanner | LLaVA (Groq) + Gemini Vision | İlaç görselinden OCR ve veri çıkarımı |
-        | 📚 RAG Specialist | ChromaDB + Sentence-Transformers | Yerel prospektüs veritabanı araması |
-        | 🔍 Fact-Checker | Kural Tabanlı | Veri tutarsızlığı tespiti |
-        | 🛡️ Safety Auditor | Llama-3-70B (Groq) | Güvenlik ve yan etki analizi |
-        | 🏭 Corporate Analyst | Gemini 2.0 Flash | Firma ve sertifika araştırması |
-        | 📝 Report Synthesizer | Gemini 2.0 Flash | Nihai rapor sentezi |
+        <h4 style="margin:1.25rem 0 0.5rem;font-size:0.95rem;color:#0f766e;">Ajan mimarisi</h4>
+        <table>
+        <thead><tr><th>Ajan</th><th>Model</th><th>Görev</th></tr></thead>
+        <tbody>
+        <tr><td>👁️ Vision</td><td>LLaVA (Groq) + Gemini Vision</td><td>OCR, kutu verisi</td></tr>
+        <tr><td>📚 RAG</td><td>ChromaDB + ST</td><td>Yerel PDF arama</td></tr>
+        <tr><td>🔍 Fact-check</td><td>Kural tabanlı</td><td>Tutarsızlık</td></tr>
+        <tr><td>🛡️ Safety</td><td>Llama-3-70B</td><td>Yan etki / risk</td></tr>
+        <tr><td>🏭 Corporate</td><td>Gemini</td><td>Firma / menşe</td></tr>
+        <tr><td>📝 Rapor</td><td>Gemini</td><td>Özet + Markdown</td></tr>
+        </tbody>
+        </table>
 
-        #### 🔄 İş Akışı
-        1. Kullanıcı ilaç görseli veya adı girer
-        2. Vision Scanner görselden yapılandırılmış veri çıkarır
-        3. RAG Specialist yerel prospektüs veritabanını sorgular
-        4. Fact-Checker veri tutarlılığını kontrol eder
-        5. Safety Auditor güvenlik analizi yapar
-        6. Corporate Analyst üretici firma raporlar
-        7. Report Synthesizer tüm veriyi birleştirip rapor üretir
-        8. Kullanıcıya Markdown + indirilebilir PDF sunulur
+        <h4 style="margin:1.25rem 0 0.5rem;font-size:0.95rem;color:#0f766e;">İş akışı</h4>
+        <ol style="margin:0;padding-left:1.2rem;color:#475569;line-height:1.8;">
+        <li>Görsel veya ilaç adı</li>
+        <li>Vision → RAG → Fact-check</li>
+        <li>Paralel: Safety + Corporate</li>
+        <li>Rapor sentezi ve PDF</li>
+        </ol>
 
-        #### ⚕️ Yasal Uyarı
-        Bu sistem yalnızca **bilgilendirme amaçlıdır**. Sağlık kararları için
-        mutlaka lisanslı bir hekim veya eczacıya başvurun.
-        Pharma-Guard AI tıbbi tavsiye niteliği taşımaz.
-        """
+        <div style="margin-top:1.25rem;padding:1rem;border-radius:12px;background:#fff7ed;
+        border:1px solid #fed7aa;color:#9a3412;font-size:0.92rem;">
+        <strong>⚕️ Yasal:</strong> Yalnızca bilgilendirme amaçlıdır. Tanı ve tedavi için
+        hekim veya eczacıya başvurun; çıktı tıbbi tavsiye değildir.
+        </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
-    st.markdown("---")
+    st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown("**Geliştirici:** Yapay Zeka Uygulamaları Dersi Projesi")
-        st.markdown("**Sürüm:** 1.0.0")
+        st.markdown(
+            '<div class="pg-about-card"><p style="margin:0;color:#64748b;font-size:0.9rem;">'
+            "<strong style='color:#0f172a'>Sürüm</strong> 1.0.0 · Proje</p></div>",
+            unsafe_allow_html=True,
+        )
     with col2:
-        st.markdown("**Lisans:** MIT")
-        st.markdown("**GitHub:** [cemevecen/medic](https://github.com/cemevecen/medic)")
+        st.markdown(
+            '<div class="pg-about-card"><p style="margin:0;color:#64748b;font-size:0.9rem;">'
+            "<strong style='color:#0f172a'>MIT</strong> · "
+            '<a href="https://github.com/cemevecen/medic" target="_blank" rel="noopener">GitHub</a>'
+            "</p></div>",
+            unsafe_allow_html=True,
+        )

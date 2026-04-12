@@ -19,6 +19,16 @@ from PIL import Image
 
 load_dotenv()
 
+from gemini_models import (
+    model_chain as _gemini_model_chain,
+    model_missing_error as _gemini_model_missing_error,
+)
+
+
+def _gemini_model_name() -> str:
+    return _gemini_model_chain()[0]
+
+
 # ---------------------------------------------------------------------------
 # API İstemcileri
 # ---------------------------------------------------------------------------
@@ -34,6 +44,42 @@ def _init_groq() -> Groq:
     if not api_key:
         raise ValueError("GROQ_API_KEY bulunamadı. Lütfen .env dosyasını kontrol edin.")
     return Groq(api_key=api_key)
+
+
+def _groq_safety_model_chain() -> List[str]:
+    """Safety Auditor için Groq model sırası (429 / TPD limitinde sıradakine geçer)."""
+    raw = (os.getenv("GROQ_SAFETY_MODEL_PRIORITY") or "").strip()
+    if raw:
+        seen: set = set()
+        out: List[str] = []
+        for m in raw.split(","):
+            m = m.strip()
+            if m and m not in seen:
+                seen.add(m)
+                out.append(m)
+        return out
+    return [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+        "llama-3.1-70b-versatile",
+    ]
+
+
+def _groq_is_rate_limit(exc: Exception) -> bool:
+    t = str(exc).lower()
+    return "429" in str(exc) or "rate_limit" in t or "rate limit" in t
+
+
+def _groq_safety_failure_message(exc: Exception) -> str:
+    if _groq_is_rate_limit(exc):
+        return (
+            "Groq günlük token limiti (TPD) doldu veya istek sınırı aşıldı; Safety Auditor "
+            "yanıt veremedi. Yaklaşık 25–30 dakika sonra tekrar deneyin veya kotayı "
+            "https://console.groq.com/settings/billing adresinden yükseltin. "
+            "Önce hafif model denemek için `.env` içinde örn. "
+            "GROQ_SAFETY_MODEL_PRIORITY=llama-3.1-8b-instant,llama-3.3-70b-versatile kullanın."
+        )
+    return f"Safety Auditor hatası: {exc!s}"
 
 
 # ---------------------------------------------------------------------------
@@ -176,7 +222,6 @@ class VisionScannerAgent:
     def __init__(self):
         self.groq_client = _init_groq()
         _init_gemini()
-        self.vision_model = genai.GenerativeModel("gemini-2.0-flash-exp")
 
     def _encode_image(self, image: Image.Image) -> str:
         """PIL Image'ı base64 stringe çevirir."""
@@ -216,16 +261,28 @@ class VisionScannerAgent:
             return {"hata": f"LLaVA hatası: {str(e)}", "kaynak": "LLaVA (Groq)"}
 
     def scan_with_gemini(self, image: Image.Image) -> Dict[str, Any]:
-        """Gemini Vision ile görsel tarama (yedek model)."""
-        try:
-            response = self.vision_model.generate_content(
-                [VISION_PROMPT, image],
-                generation_config=genai.GenerationConfig(temperature=0.1),
-            )
-            raw = response.text
-            return self._parse_json_response(raw, source="Gemini Vision")
-        except Exception as e:
-            return {"hata": f"Gemini Vision hatası: {str(e)}", "kaynak": "Gemini Vision"}
+        """Gemini Vision ile görsel tarama (yedek; model zincirinde dener)."""
+        models = _gemini_model_chain()
+        last_err: Optional[Exception] = None
+        for name in models:
+            try:
+                model = genai.GenerativeModel(name)
+                response = model.generate_content(
+                    [VISION_PROMPT, image],
+                    generation_config=genai.GenerationConfig(temperature=0.1),
+                )
+                raw = response.text
+                return self._parse_json_response(raw, source=f"Gemini Vision ({name})")
+            except Exception as e:
+                last_err = e
+                if _gemini_model_missing_error(e) and name != models[-1]:
+                    print(f"[VisionScanner] {name} kullanılamadı, sıradaki model… ({e})")
+                    continue
+                break
+        return {
+            "hata": f"Gemini Vision hatası: {last_err}",
+            "kaynak": "Gemini Vision",
+        }
 
     def scan(self, image: Image.Image) -> Dict[str, Any]:
         """
@@ -403,24 +460,37 @@ class SafetyAuditorAgent:
             rag_data=rag_text,
         )
 
-        try:
-            response = self.groq_client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[
-                    {"role": "system", "content": MASTER_PROMPT},
-                    {"role": "user", "content": prompt},
-                ],
-                max_tokens=2048,
-                temperature=0.2,
-            )
-            raw = response.choices[0].message.content
-            return self._parse_json_response(raw)
-        except Exception as e:
-            return {
-                "hata": f"Safety Auditor hatası: {str(e)}",
-                "alarm_seviyesi": "BİLİNMİYOR",
-                "guven_puani": 1,
-            }
+        models = _groq_safety_model_chain()
+        last_err: Optional[Exception] = None
+        for model_id in models:
+            try:
+                response = self.groq_client.chat.completions.create(
+                    model=model_id,
+                    messages=[
+                        {"role": "system", "content": MASTER_PROMPT},
+                        {"role": "user", "content": prompt},
+                    ],
+                    max_tokens=2048,
+                    temperature=0.2,
+                )
+                raw = response.choices[0].message.content or ""
+                parsed = self._parse_json_response(raw)
+                if model_id != models[0]:
+                    parsed["groq_model_notu"] = (
+                        f"Ana model kotada olduğu için yanıt üretildi: `{model_id}`"
+                    )
+                return parsed
+            except Exception as e:
+                last_err = e
+                if _groq_is_rate_limit(e) and model_id != models[-1]:
+                    print(f"[SafetyAuditor] {model_id} limit/429, sıradaki Groq modeli… ({e})")
+                    continue
+                break
+
+        return {
+            "hata": _groq_safety_failure_message(last_err) if last_err else "Safety Auditor bilinmeyen hata.",
+            "alarm_seviyesi": "BİLİNMİYOR",
+        }
 
     @staticmethod
     def _parse_json_response(raw: str) -> Dict[str, Any]:
@@ -442,10 +512,6 @@ class CorporateAnalystAgent:
 
     def __init__(self):
         _init_gemini()
-        self.model = genai.GenerativeModel(
-            "gemini-2.0-flash-exp",
-            system_instruction=MASTER_PROMPT,
-        )
 
     def analyze(self, drug_name: str, manufacturer: Optional[str]) -> Dict[str, Any]:
         """Firma analizi yapar."""
@@ -453,18 +519,30 @@ class CorporateAnalystAgent:
             drug_name=drug_name or "Bilinmiyor",
             manufacturer=manufacturer or "Bilinmiyor",
         )
-        try:
-            response = self.model.generate_content(
-                prompt,
-                generation_config=genai.GenerationConfig(temperature=0.2),
-            )
-            raw = response.text
-            return self._parse_json_response(raw)
-        except Exception as e:
-            return {
-                "hata": f"Corporate Analyst hatası: {str(e)}",
-                "guven_puani": 1,
-            }
+        models = _gemini_model_chain()
+        last_err: Optional[Exception] = None
+        for name in models:
+            try:
+                model = genai.GenerativeModel(
+                    name,
+                    system_instruction=MASTER_PROMPT,
+                )
+                response = model.generate_content(
+                    prompt,
+                    generation_config=genai.GenerationConfig(temperature=0.2),
+                )
+                raw = response.text
+                return self._parse_json_response(raw)
+            except Exception as e:
+                last_err = e
+                if _gemini_model_missing_error(e) and name != models[-1]:
+                    print(f"[CorporateAnalyst] {name} kullanılamadı, sıradaki… ({e})")
+                    continue
+                break
+        return {
+            "hata": str(last_err) if last_err else "Corporate Analyst başarısız.",
+            "guven_puani": 1,
+        }
 
     @staticmethod
     def _parse_json_response(raw: str) -> Dict[str, Any]:
@@ -487,10 +565,6 @@ class ReportSynthesizerAgent:
 
     def __init__(self):
         _init_gemini()
-        self.model = genai.GenerativeModel(
-            "gemini-2.0-flash-exp",
-            system_instruction=MASTER_PROMPT,
-        )
 
     def synthesize(
         self,
@@ -498,10 +572,10 @@ class ReportSynthesizerAgent:
         safety_data: Dict,
         corporate_data: Dict,
         rag_sources: List[Dict],
-    ) -> Tuple[str, float]:
+    ) -> Tuple[str, float, Optional[str]]:
         """
         Tüm veriyi birleştirip Markdown raporu döndürür.
-        Returns: (rapor_metni, ortalama_guven_puani)
+        Returns: (rapor_metni, ortalama_guven_puani, hata veya None)
         """
         rag_kaynakca = "\n".join(
             f"- {r['kaynak']} (s.{r['sayfa']}): {r['metin'][:120]}..."
@@ -515,31 +589,41 @@ class ReportSynthesizerAgent:
             rag_sources=rag_kaynakca,
         )
 
-        try:
-            response = self.model.generate_content(
-                prompt,
-                generation_config=genai.GenerationConfig(
-                    temperature=0.3,
-                    max_output_tokens=4096,
-                ),
-            )
-            report_text = response.text
+        scores = []
+        for data in [safety_data, corporate_data]:
+            if isinstance(data.get("guven_puani"), (int, float)):
+                scores.append(float(data["guven_puani"]))
+        vision_score = vision_data.get("okunabilirlik_skoru")
+        if isinstance(vision_score, (int, float)):
+            scores.append(float(vision_score))
+        fallback_avg = sum(scores) / len(scores) if scores else 3.0
 
-            # Ortalama güven puanı hesapla
-            scores = []
-            for data in [safety_data, corporate_data]:
-                if isinstance(data.get("guven_puani"), (int, float)):
-                    scores.append(float(data["guven_puani"]))
-            vision_score = vision_data.get("okunabilirlik_skoru")
-            if isinstance(vision_score, (int, float)):
-                scores.append(float(vision_score))
+        models = _gemini_model_chain()
+        last_err: Optional[Exception] = None
+        for name in models:
+            try:
+                model = genai.GenerativeModel(
+                    name,
+                    system_instruction=MASTER_PROMPT,
+                )
+                response = model.generate_content(
+                    prompt,
+                    generation_config=genai.GenerationConfig(
+                        temperature=0.3,
+                        max_output_tokens=4096,
+                    ),
+                )
+                report_text = response.text
+                avg_confidence = sum(scores) / len(scores) if scores else 5.0
+                return report_text, avg_confidence, None
+            except Exception as e:
+                last_err = e
+                if _gemini_model_missing_error(e) and name != models[-1]:
+                    print(f"[ReportSynthesizer] {name} kullanılamadı, sıradaki… ({e})")
+                    continue
+                break
 
-            avg_confidence = sum(scores) / len(scores) if scores else 5.0
-
-            return report_text, avg_confidence
-
-        except Exception as e:
-            return f"**Sentez Hatası:** {str(e)}", 1.0
+        return "", fallback_avg, str(last_err) if last_err else "Bilinmeyen sentez hatası"
 
 
 # ---------------------------------------------------------------------------
@@ -682,17 +766,31 @@ class PharmaGuardOrchestrator:
 
         # ADIM 6: Rapor Sentezi
         _progress(6, "📝 Report Synthesizer: Nihai rapor hazırlanıyor...")
-        report_text, avg_confidence = self.synthesizer.synthesize(
+        report_text, avg_confidence, synthesis_error = self.synthesizer.synthesize(
             vision_data, safety_data, corporate_data, rag_results
         )
+        results["synthesis_error"] = synthesis_error
 
-        # Düşük güven uyarısı
-        if avg_confidence < 8:
-            warning = (
-                f"\n\n> ⚠️ **DİKKAT:** Ortalama güven puanı **{avg_confidence:.1f}/10**. "
-                "Bilgiler %100 doğrulanamadı. Lütfen bir sağlık uzmanına danışın.\n\n"
+        if synthesis_error:
+            model_hint = ", ".join(_gemini_model_chain())
+            report_text = (
+                "## Rapor metni oluşturulamadı\n\n"
+                "Nihai özet (Gemini) şu anda üretilemedi. **Görsel Analiz**, "
+                "**Güvenlik** ve **Firma** sekmelerindeki ajan çıktıları yine de "
+                "incelenebilir.\n\n"
+                f"- Denenen modeller: `{model_hint}`\n"
+                "- `.env` / Streamlit Secrets içinde `GEMINI_MODEL` ile sabitleyin; "
+                "ör. `gemini-2.5-flash`, `gemini-1.5-flash`.\n\n"
+                "**Teknik ayrıntı:**\n```\n"
+                f"{synthesis_error}\n```\n"
             )
-            report_text = warning + report_text
+        else:
+            if avg_confidence < 8:
+                warning = (
+                    f"\n\n> ⚠️ **DİKKAT:** Ortalama güven puanı **{avg_confidence:.1f}/10**. "
+                    "Bilgiler %100 doğrulanamadı. Lütfen bir sağlık uzmanına danışın.\n\n"
+                )
+                report_text = warning + report_text
 
         # VERİ UYUŞMAZLIĞI
         if fact_check["uyusmazlik"]:
