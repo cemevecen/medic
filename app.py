@@ -156,16 +156,23 @@ st.markdown("""
   border: 1px solid rgba(255,255,255,.1) !important;
 }
 
-/* Sidebar expander içindeki butonlar — açık renk */
+/* Sidebar expander içindeki butonlar — tutarlı tema */
 [data-testid="stSidebar"] .stButton > button {
-  background: rgba(15,118,110,.15) !important;
-  color: #94f0e8 !important;
-  border-color: rgba(15,118,110,.3) !important;
+  background: linear-gradient(135deg, rgba(13,148,136,.2), rgba(15,118,110,.2)) !important;
+  color: #5eead4 !important;
+  border: 1px solid rgba(13,148,136,.4) !important;
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+  transition: all .2s !important;
 }
 [data-testid="stSidebar"] .stButton > button:hover {
-  background: rgba(15,118,110,.25) !important;
-  border-color: rgba(15,118,110,.5) !important;
+  background: linear-gradient(135deg, rgba(13,148,136,.35), rgba(15,118,110,.35)) !important;
+  border-color: rgba(13,148,136,.7) !important;
   color: #d1faf4 !important;
+  box-shadow: 0 4px 12px rgba(13,148,136,.15) !important;
+}
+[data-testid="stSidebar"] .stButton > button:active {
+  background: linear-gradient(135deg, rgba(13,148,136,.45), rgba(15,118,110,.45)) !important;
 }
 
 /* Sidebar expander içindeki metin input'ları */
@@ -511,7 +518,7 @@ with st.sidebar:
     st.markdown("---")
 
     # GERÇEKLİ İLAÇ VERİSİ YÜKLEME (Wikidata + OpenFDA)
-    with st.expander(" Gerçek veri çek", expanded=False):
+    with st.expander(" Gerçek veri çek", expanded=True):
         st.caption("Wikidata ve OpenFDA'dan gerçek ilaç bilgilerini çeker.")
         drug_search = st.text_input(
             "İlaç adını girin",
