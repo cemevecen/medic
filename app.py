@@ -517,46 +517,6 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
     st.markdown("---")
-
-    # GERÇEKLİ İLAÇ VERİSİ YÜKLEME (Wikidata + OpenFDA)
-    with st.expander(" Gerçek veri çek", expanded=True):
-        st.caption("Wikidata ve OpenFDA'dan gerçek ilaç bilgilerini çeker.")
-        drug_search = st.text_input(
-            "İlaç adını girin",
-            placeholder="örn: Augmentin, Parol, Aspirin…",
-            key="drug_search_input"
-        )
-        if st.button(" Gerçek veriyi çek", use_container_width=True, key="fetch_real_data_btn"):
-            if drug_search.strip():
-                with st.spinner(f"'{drug_search}' için gerçek veri aranıyor…"):
-                    try:
-                        from real_drug_data import fetch_drug_info
-                        real_drug = fetch_drug_info(drug_search)
-                        if real_drug:
-                            st.session_state["test_drug_data"] = real_drug
-                            st.success(f" Gerçek veri bulundu!")
-                            # Verilen bilgileri açık tablo şeklinde göster
-                            drug_display = {
-                                "İlaç Adı": real_drug.get("ticari_ad", "—"),
-                                "Etken Madde": real_drug.get("etken_madde", "—"),
-                                "Dozaj": real_drug.get("dozaj", "—"),
-                                "Form": real_drug.get("form", "—"),
-                                "Üretici": real_drug.get("uretici", "—"),
-                                "Barkod": real_drug.get("barkod", "—"),
-                                "Kaynak": real_drug.get("kaynak", "—"),
-                            }
-                            for key, value in drug_display.items():
-                                st.caption(f"**{key}:** {value}")
-                        else:
-                            st.warning(f" '{drug_search}' için veri bulunamadı. Başka adla dene.")
-                    except ImportError:
-                        st.error("real_drug_data modülü bulunamadı")
-                    except Exception as e:
-                        st.error(f"Hata: {str(e)}")
-            else:
-                st.warning("İlaç adını gir")
-
-    st.markdown("---")
     st.markdown(f" **RAG:** {len(pdf_list)} prospektüs")
     if pdf_list:
         with st.expander("Yüklü dosyalar"):
@@ -594,8 +554,8 @@ st.markdown("""
 # ─────────────────────────────────────────────
 # ANA SEKMELER
 # ─────────────────────────────────────────────
-tab_analyze, tab_corpus, tab_about = st.tabs(
-    ["🔬 İlaç Analizi", " Prospektüs Yönetimi", " Hakkında"]
+tab_analyze, tab_corpus, tab_fda, tab_about = st.tabs(
+    ["🔬 İlaç Analizi", " Prospektüs Yönetimi", " FDA Arşivi", " Hakkında"]
 )
 
 # ═════════════════════════════════════════════
@@ -1098,7 +1058,76 @@ with tab_corpus:
                 "[EMA](https://www.ema.europa.eu)")
 
 # ═════════════════════════════════════════════
-# SEKME 3 — HAKKINDA
+# SEKME 3 — FDA ARŞİVİ (Gerçek İlaç Verisi)
+# ═════════════════════════════════════════════
+with tab_fda:
+    st.markdown(
+        '<p class="pg-section"><span class="pg-section-icon">🔍</span>FDA Arşivi — Gerçek İlaç Bilgisi</p>',
+        unsafe_allow_html=True,
+    )
+    st.caption("Wikidata ve OpenFDA veritabanlarından gerçek ilaç bilgilerini çeker. Tüm veriler Türkçeye çevrilir.")
+
+    col1, col2 = st.columns([2, 1], gap="medium")
+
+    with col1:
+        drug_search = st.text_input(
+            "İlaç adını girin",
+            placeholder="örn: Augmentin, Parol, Aspirin, Dikloron…",
+            key="drug_search_input",
+            help="Ticari ad veya etken madde adını yazın"
+        )
+
+    with col2:
+        fetch_clicked = st.button(" Arşiv'de Ara", use_container_width=True, key="fetch_real_data_btn")
+
+    if fetch_clicked or drug_search:
+        if drug_search.strip():
+            with st.spinner(f"'{drug_search}' FDA arşivinde aranıyor…"):
+                try:
+                    from real_drug_data import fetch_drug_info
+                    real_drug = fetch_drug_info(drug_search)
+                    if real_drug:
+                        st.session_state["test_drug_data"] = real_drug
+                        st.success(f"✓ Veriler bulundu ve Türkçeye çevrildi!")
+
+                        # Verilen bilgileri güzel tablo şeklinde göster
+                        col_label, col_value = st.columns([1, 2])
+
+                        with col_label:
+                            st.markdown("**Alan**")
+                        with col_value:
+                            st.markdown("**Bilgi**")
+
+                        st.divider()
+
+                        drug_display = {
+                            "İlaç Adı": real_drug.get("ticari_ad", "—"),
+                            "Etken Madde": real_drug.get("etken_madde", "—"),
+                            "Dozaj": real_drug.get("dozaj", "—"),
+                            "Form": real_drug.get("form", "—"),
+                            "Üretici": real_drug.get("uretici", "—"),
+                            "Barkod": real_drug.get("barkod", "—"),
+                            "Kaynak": real_drug.get("kaynak", "—"),
+                        }
+
+                        for key, value in drug_display.items():
+                            col_k, col_v = st.columns([1, 2])
+                            with col_k:
+                                st.markdown(f"**{key}**")
+                            with col_v:
+                                st.caption(value)
+                    else:
+                        st.warning(f"⚠️ '{drug_search}' için veriler bulunamadı. Başka bir isimle deneyin.")
+                        st.info("**İpucu:** Ticari isim (örn: Augmentin) veya etken madde adı (örn: Amoxicillin) yazabilirsiniz.")
+                except ImportError:
+                    st.error("❌ real_drug_data modülü bulunamadı")
+                except Exception as e:
+                    st.error(f"❌ Hata: {str(e)}")
+        else:
+            st.info("Araştırma yapmak için ilaç adını girin")
+
+# ═════════════════════════════════════════════
+# SEKME 4 — HAKKINDA
 # ═════════════════════════════════════════════
 with tab_about:
     try:
