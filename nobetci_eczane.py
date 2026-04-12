@@ -125,6 +125,8 @@ class NobetciEczaneAPI:
 
         if self.api_key:
             headers["authorization"] = f"apikey {self.api_key}"
+        else:
+            return {"success": False, "error": "API key ayarlanmamış"}
 
         try:
             response = self.session.get(url, params=params, headers=headers, timeout=10)
@@ -152,20 +154,22 @@ class NobetciEczaneAPI:
                         "source": "CollectAPI"
                     }
                 else:
+                    error_msg = data.get("message", data.get("error", "Bilinmeyen API hatası"))
                     return {
                         "success": False,
-                        "error": data.get("message", "API hatası")
+                        "error": f"API: {error_msg}"
                     }
             else:
+                error_detail = response.text[:200] if response.text else "Yanıt yok"
                 return {
                     "success": False,
-                    "error": f"HTTP {response.status_code}: {response.text}"
+                    "error": f"HTTP {response.status_code}: {error_detail}"
                 }
 
         except requests.exceptions.Timeout:
-            return {"success": False, "error": "İstek zaman aşımı"}
+            return {"success": False, "error": "Zaman aşımı (API yanıt vermiyor)"}
         except requests.exceptions.RequestException as e:
-            return {"success": False, "error": f"Ağ hatası: {str(e)}"}
+            return {"success": False, "error": f"Bağlantı hatası: {str(e)}"}
 
 
 # Singleton instance
