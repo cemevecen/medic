@@ -5,7 +5,7 @@ agents.py: Tüm ajan sınıfları ve ana orkestratör bu dosyada tanımlanmışt
 
 # Versiyon numarası — app.py session_state cache invalidation için kullanılır.
 # Fact-Checker / parser / orchestrator davranışı değiştiğinde artırın.
-PHARMA_GUARD_VERSION = "1.8"
+PHARMA_GUARD_VERSION = "1.9.1"
 
 import os
 import json
@@ -192,6 +192,12 @@ kapsamlı, bütünlüklü bir Türkçe ilaç analiz raporu oluştur.
 VISION / PDF SCANNER SONUCU:
 {vision_data}
 
+BARKOD / QR KOD TARAMA (makine okuması — görsel modelden bağımsız):
+{barcode_block}
+
+BENZER İLAÇ / MUADİL ÖZETİ (yerel katalog + isteğe bağlı model önerisi):
+{similar_drugs_block}
+
 SAFETY AUDITOR SONUCU:
 {safety_data}
 
@@ -206,13 +212,17 @@ KURALLAR:
 2. Güven < 8 ise raporun başına "DİKKAT" uyarısı ekle.
 3. PDF dosya adı ile çıkarılan bilgi arasındaki farkı "not" olarak belirt — raporu bloklama.
 4. Eksik veya belirsiz alanları "Bilgi mevcut değil" olarak işaretle, uydurma.
-5. Aşağıdaki Markdown bölüm başlıklarını kullan:
+5. Fiyat, ucuzluk veya eczane kampanyası iddiası yapma; fiyat için ayrı entegrasyon gerekir de.
+6. Benzer ilaçlar bölümünde eczacı/hekim onayı gerektiğini vurgula.
+7. Aşağıdaki Markdown bölüm başlıklarını kullan:
 
 ## 1. İlaç Kimlik Özeti
 ## 2. Kullanım Amacı (Endikasyonlar)
 ## 3. Kritik Uyarılar ve Yan Etkiler
 ## 4. Etken Madde ve Üretici Detayları
 ## 5. Kaynakça
+## 6. Barkod, QR Kod ve Kimlik Sinyali
+## 7. Benzer İlaçlar / Muadil Alternatifler
 
 Her bölümün sonuna güven puanını ekle: `[Güven: X/10]`
 """
@@ -283,12 +293,24 @@ class VisionScannerAgent:
         """
         Önce LLaVA (Groq) dener, başarısız olursa Groq fallback hata döndürür.
         (Gemini Vision kaldırıldı — quota tasarrufu)
+        Barkod: pyzbar + PIL ön işleme (her durumda görüntüden denenir).
         Orchestrator bu metodu çağırır.
         """
+        from barcode_detection import merge_codes_into_vision, scan_codes_from_image
+
+        kodlar = scan_codes_from_image(image)
+        barkod_detay = kodlar["barkod"]
+        qr_detay = kodlar["qr_kod"]
         result = self.scan_with_groq_llava(image)
         if "hata" in result:
             print(f"[VisionScanner] LLaVA başarısız ({result['hata']}), Groq fallback…")
             result = self.scan_with_groq_fallback()
+            result["barkod_detay"] = barkod_detay
+            result["qr_kod_detay"] = qr_detay
+            if barkod_detay.get("tespit_edildi") and barkod_detay.get("deger"):
+                result["barkod"] = barkod_detay["deger"]
+        else:
+            result = merge_codes_into_vision(result, barkod_detay, qr_detay)
         return result
 
     def scan_text_input(self, drug_name: str) -> Dict[str, Any]:
@@ -783,6 +805,8 @@ class ReportSynthesizerAgent:
         safety_data: Dict,
         corporate_data: Dict,
         rag_sources: List[Dict],
+        barcode_context: str = "",
+        similar_drugs_context: str = "",
     ) -> Tuple[str, float, Optional[str]]:
         """
         Tüm veriyi birleştirip Markdown raporu döndürür.
@@ -795,6 +819,8 @@ class ReportSynthesizerAgent:
 
         prompt = SYNTHESIS_PROMPT_TEMPLATE.format(
             vision_data=json.dumps(vision_data, ensure_ascii=False, indent=2),
+            barcode_block=barcode_context or "(Görsel barkod taraması yok veya uygulanmadı.)",
+            similar_drugs_block=similar_drugs_context or "(Benzer ilaç önerisi üretilmedi.)",
             safety_data=json.dumps(safety_data, ensure_ascii=False, indent=2),
             corporate_data=json.dumps(corporate_data, ensure_ascii=False, indent=2),
             rag_sources=rag_kaynakca,
@@ -986,7 +1012,8 @@ class PharmaGuardOrchestrator:
 
         Returns:
             {
-                "vision": {...},
+                "vision": {...},           # barkod_detay, qr_kod_detay (görselde), barkod alanı
+                "similar_drugs": {...},   # benzer ilaç / muadil yapılandırılmış sonuç
                 "rag_results": [...],
                 "fact_check": {...},
                 "safety": {...},
@@ -1016,6 +1043,15 @@ class PharmaGuardOrchestrator:
             vision_data = self.vision_agent.scan_text_input(drug_name_text or "")
         results["vision"] = vision_data
 
+        from similar_medicines import build_similar_drugs_bundle
+
+        similar_bundle = build_similar_drugs_bundle(
+            vision_data,
+            self.safety_agent.groq_client,
+            _groq_safety_model_chain(),
+        )
+        results["similar_drugs"] = similar_bundle
+
         # Okunabilirlik / PDF hata kontrolü
         score = vision_data.get("okunabilirlik_skoru", 10)
         if isinstance(score, (int, float)) and score < 5:
@@ -1027,7 +1063,15 @@ class PharmaGuardOrchestrator:
         _progress(2, "📚 RAG Specialist: Prospektüs veritabanı taranıyor...")
         ticari_ad = vision_data.get("ticari_ad", drug_name_text or "")
         etken = vision_data.get("etken_madde", "")
-        query = f"{ticari_ad} {etken}".strip()
+        bd = vision_data.get("barkod_detay") or {}
+        barkod_extra = ""
+        if isinstance(bd, dict) and bd.get("tespit_edildi"):
+            barkod_extra = str(bd.get("deger_normalize") or re.sub(r"\D", "", str(bd.get("deger") or "")))
+        qr = vision_data.get("qr_kod_detay") or {}
+        qr_snip = ""
+        if isinstance(qr, dict) and qr.get("tespit_edildi") and qr.get("deger"):
+            qr_snip = str(qr["deger"])[:120]
+        query = f"{ticari_ad} {etken} {barkod_extra} {qr_snip}".strip()
         rag_results = self.rag_agent.search(query, k=5, vision_data=vision_data)
         results["rag_results"] = rag_results
 
@@ -1052,8 +1096,20 @@ class PharmaGuardOrchestrator:
 
         # ADIM 6: Rapor Sentezi
         _progress(6, "📝 Report Synthesizer: Nihai Türkçe rapor hazırlanıyor...")
+        kimlik: Dict[str, Any] = {}
+        if vision_data.get("barkod_detay"):
+            kimlik["barkod"] = vision_data["barkod_detay"]
+        if vision_data.get("qr_kod_detay"):
+            kimlik["qr_kod"] = vision_data["qr_kod_detay"]
+        barcode_ctx = json.dumps(kimlik, ensure_ascii=False, indent=2) if kimlik else ""
+        similar_ctx = json.dumps(similar_bundle, ensure_ascii=False, indent=2)
         report_text, avg_confidence, synthesis_error = self.synthesizer.synthesize(
-            vision_data, safety_data, corporate_data, rag_results
+            vision_data,
+            safety_data,
+            corporate_data,
+            rag_results,
+            barcode_context=barcode_ctx,
+            similar_drugs_context=similar_ctx,
         )
         results["synthesis_error"] = synthesis_error
 

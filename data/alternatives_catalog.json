@@ -1,0 +1,44 @@
+[
+  {
+    "ticari_ad": "Majezik 100 mg Film Tablet",
+    "etken_madde": "Deksketoprofen",
+    "dozaj": "100 mg",
+    "form": "Film Tablet",
+    "benzerlik_aciklamasi": "Aynı etken madde ve dozaj bandı; ticari ad farklı ürünlerle karşılaştırma için yerel katalog örneği."
+  },
+  {
+    "ticari_ad": "Arveles 25 mg Tablet",
+    "etken_madde": "Deksketoprofen",
+    "dozaj": "25 mg",
+    "form": "Tablet",
+    "benzerlik_aciklamasi": "Aynı etken madde; dozaj farklı — muadil değerlendirmesi eczacı/hekim onayı gerektirir."
+  },
+  {
+    "ticari_ad": "Voltaren 50 mg Tablet",
+    "etken_madde": "Diklofenak sodyum",
+    "dozaj": "50 mg",
+    "form": "Tablet",
+    "benzerlik_aciklamasi": "Aynı etken madde ve oral form; farklı ticari adlar yaygındır."
+  },
+  {
+    "ticari_ad": "Voltaren Retard 100 mg Tablet",
+    "etken_madde": "Diklofenak sodyum",
+    "dozaj": "100 mg",
+    "form": "Tablet",
+    "benzerlik_aciklamasi": "Aynı etken madde; retard formülasyon — dozaj rejimi farklı olabilir."
+  },
+  {
+    "ticari_ad": "Parol 500 mg Tablet",
+    "etken_madde": "Parasetamol",
+    "dozaj": "500 mg",
+    "form": "Tablet",
+    "benzerlik_aciklamasi": "Aynı etken madde ve dozaj; farklı markalarla sınıflandırma için örnek kayıt."
+  },
+  {
+    "ticari_ad": "Minoset Tablet 500 mg",
+    "etken_madde": "Parasetamol",
+    "dozaj": "500 mg",
+    "form": "Tablet",
+    "benzerlik_aciklamasi": "Aynı etken madde ve dozaj bandı."
+  }
+]

@@ -10,6 +10,7 @@ import textwrap
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional
+from xml.sax.saxutils import escape
 
 from PIL import Image, ImageEnhance, ImageFilter
 
@@ -42,6 +43,7 @@ def _find_unicode_ttf() -> tuple:
     Returns: (regular_path, bold_path) — bulunamazsa (None, None)
     """
     candidates = [
+        # matplotlib DejaVu (numpy/scipy bağımlılığıyla gelebilir) — ÖNCELİKLİ
         # Ubuntu / Debian (Streamlit Cloud)
         ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
          "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
@@ -55,30 +57,39 @@ def _find_unicode_ttf() -> tuple:
         # Liberation Sans — Ubuntu
         ("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
          "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"),
-        # macOS
-        ("/Library/Fonts/Arial Unicode MS.ttf",
-         "/Library/Fonts/Arial Unicode MS.ttf"),
-        ("/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
-         "/System/Library/Fonts/Supplemental/Arial Unicode.ttf"),
+        # macOS — Helvetica yerine Courier New (Unicode desteği daha iyi)
+        ("/Library/Fonts/Courier New.ttf",
+         "/Library/Fonts/Courier New Bold.ttf"),
+        ("/System/Library/Fonts/Courier.dfont",
+         "/System/Library/Fonts/Courier.dfont"),
+        # macOS — Times New Roman (Sistem varsayılanı)
+        ("/Library/Fonts/Times New Roman.ttf",
+         "/Library/Fonts/Times New Roman Bold.ttf"),
+        # macOS Arial (varsa)
+        ("/Library/Fonts/Arial.ttf",
+         "/Library/Fonts/Arial Bold.ttf"),
         # Windows
         ("C:/Windows/Fonts/arial.ttf", "C:/Windows/Fonts/arialbd.ttf"),
         ("C:/Windows/Fonts/tahoma.ttf", "C:/Windows/Fonts/tahomabd.ttf"),
     ]
 
-    # matplotlib DejaVu (numpy/scipy bağımlılığıyla gelebilir)
+    # matplotlib DejaVu (numpy/scipy bağımlılığıyla gelebilir) — EN YÜKSEK ÖNCELİK
     try:
         import matplotlib
         mpl_dir = os.path.join(matplotlib.get_data_path(), "fonts", "ttf")
         reg = os.path.join(mpl_dir, "DejaVuSans.ttf")
         bold = os.path.join(mpl_dir, "DejaVuSans-Bold.ttf")
-        if os.path.exists(reg):
-            candidates.insert(0, (reg, bold if os.path.exists(bold) else reg))
+        if os.path.exists(reg) and os.path.exists(bold):
+            candidates.insert(0, (reg, bold))
     except Exception:
         pass
 
     for reg, bold in candidates:
         if os.path.exists(reg):
-            return reg, bold if os.path.exists(bold) else reg
+            # Bold font mutlaka var olmalı, yoksa regular'ı tekrar kullan
+            bold_path = bold if os.path.exists(bold) else reg
+            print(f"[utils] Font bulundu: {os.path.basename(reg)} (bold: {os.path.basename(bold_path)})")
+            return reg, bold_path
 
     return None, None
 
@@ -96,36 +107,43 @@ def _register_unicode_fonts() -> None:
 
     # Adım 2: Fallback path'ler (Streamlit Cloud Ubuntu'da daima vardır)
     if reg_path is None:
+        print("[utils] ⚠️  Sistem font'u bulunamadı, fallback path'lere bakılıyor...")
         fallback_paths = [
             "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVu Sans.ttf",
         ]
         for fb_path in fallback_paths:
             if os.path.exists(fb_path):
                 reg_path = fb_path
-                bold_path = fb_path.replace("Regular", "Bold").replace("DejaVuSans", "DejaVuSans-Bold")
-                if not os.path.exists(bold_path):
-                    bold_path = fb_path
+                # Bold path'i bulunuz
+                bold_path_cand = fb_path.replace("Regular", "Bold").replace("DejaVu Sans", "DejaVu Sans Bold")
+                bold_path = bold_path_cand if os.path.exists(bold_path_cand) else fb_path
+                print(f"[utils] Fallback font bulundu: {os.path.basename(reg_path)}")
                 break
 
     # Adım 3: Font registration
     if reg_path is None:
-        print("[utils] Font bulunamadı (Helvetica Türkçe desteklemez — çıktı bozuk olacak).")
+        print("[utils] ❌ Font bulunamadı! Helvetica kullanılacak (Türkçe karakterler ■ olarak görünecek).")
+        print("[utils] Çözüm: DejaVuSans, Arial, Courier New vb. Unicode font yükleyin.")
         return
 
     try:
-        print(f"[utils] Font kayıt ediliyor: {reg_path}")
+        print(f"[utils] 📝 Font kayıt ediliyor: {reg_path}")
         if "PGUnicode" not in pdfmetrics.getRegisteredFontNames():
             pdfmetrics.registerFont(TTFont("PGUnicode", reg_path))
             pdfmetrics.registerFont(TTFont("PGUnicodeBold", bold_path))
             _FONT_REGULAR = "PGUnicode"
             _FONT_BOLD = "PGUnicodeBold"
-            print(f"[utils] ✓ Font başarıyla kayıt edildi: {os.path.basename(reg_path)}")
+            print(f"[utils] ✅ Font başarıyla kayıt edildi: {os.path.basename(reg_path)}")
         else:
             _FONT_REGULAR = "PGUnicode"
             _FONT_BOLD = "PGUnicodeBold"
+            print(f"[utils] ℹ️  Font zaten register edilmiş: PGUnicode")
     except Exception as e:
-        print(f"[utils] Font kayıt hatası: {e}")
+        print(f"[utils] ❌ Font kayıt hatası: {e}")
+        print(f"[utils] Font dosyası: {reg_path}")
+        print(f"[utils] Helvetica fallback kullanılacak.")
 
 
 _register_unicode_fonts()
@@ -213,14 +231,22 @@ ALARM_COLOR_MAP = {
 def _build_styles():
     """PDF için özel stil seti oluşturur."""
     # Font adını kontrol et — global variable'ı oku
-    font_regular = _FONT_REGULAR if _FONT_REGULAR != "Helvetica" else "Liberation"
-    font_bold = _FONT_BOLD if _FONT_BOLD != "Helvetica-Bold" else "Liberation-Bold"
+    font_regular = _FONT_REGULAR
+    font_bold = _FONT_BOLD
     font_mono = _FONT_MONO
 
-    # Fallback: kurulum hatası case'i
-    if font_regular not in pdfmetrics.getRegisteredFontNames() and font_regular != "Helvetica":
+    # Eğer register edilen font (PGUnicode) varsa, onu kullan
+    # Yoksa Helvetica kullan (Türkçe desteklemez ama en azından PDF oluşur)
+    registered_fonts = pdfmetrics.getRegisteredFontNames()
+
+    if "PGUnicode" not in registered_fonts:
+        # PGUnicode bulunamadı, Helvetica'ya geri dön
         font_regular = "Helvetica"
         font_bold = "Helvetica-Bold"
+
+    # Fallback olarak Courier'i mono font olarak kullan
+    if font_mono not in registered_fonts and font_mono != "Courier":
+        font_mono = "Courier"
 
     base = getSampleStyleSheet()
 
@@ -417,6 +443,7 @@ def generate_pdf_report(
     alarm_level: str,
     avg_confidence: float,
     vision_data: Optional[Dict] = None,
+    similar_drugs_bundle: Optional[Dict] = None,
 ) -> bytes:
     """
     Analiz raporunu profesyonel PDF formatında oluşturur.
@@ -491,6 +518,59 @@ def generate_pdf_report(
                 styles["warning"],
             )
         )
+        story.append(Spacer(1, 0.2 * cm))
+
+    if vision_data and isinstance(vision_data.get("barkod_detay"), dict):
+        bd = vision_data["barkod_detay"]
+        story.append(Paragraph("<b>Barkod taraması</b>", styles["subtitle"]))
+        bd_lines = [
+            escape(str(bd.get("mesaj", "—"))),
+            f"Değer: {escape(str(bd.get('deger') or '—'))}",
+            f"Format: {escape(str(bd.get('format') or '—'))}",
+        ]
+        if bd.get("gorsel_celiski"):
+            bd_lines.append(
+                "Uyarı: Görsel OCR ile barkod okuması farklı — kimlik sinyali düşük güvenli."
+            )
+        story.append(Paragraph("<br/>".join(bd_lines), styles["body"]))
+        story.append(Spacer(1, 0.25 * cm))
+
+    if vision_data and isinstance(vision_data.get("qr_kod_detay"), dict):
+        qr = vision_data["qr_kod_detay"]
+        story.append(Paragraph("<b>QR kod taraması</b>", styles["subtitle"]))
+        qr_lines = [
+            escape(str(qr.get("mesaj", "—"))),
+            f"İçerik: {escape(str(qr.get('deger') or '—'))}",
+            f"Format: {escape(str(qr.get('format') or '—'))}",
+        ]
+        story.append(Paragraph("<br/>".join(qr_lines), styles["body"]))
+        story.append(Spacer(1, 0.25 * cm))
+
+    if similar_drugs_bundle and isinstance(similar_drugs_bundle, dict):
+        story.append(Paragraph("<b>Benzer İlaçlar / Muadil Alternatifler (özet)</b>", styles["subtitle"]))
+        story.append(
+            Paragraph(escape(str(similar_drugs_bundle.get("uyari", ""))), styles["footer"])
+        )
+        story.append(
+            Paragraph(
+                escape(str(similar_drugs_bundle.get("fiyat_entegrasyonu_notu", ""))),
+                styles["footer"],
+            )
+        )
+        story.append(Spacer(1, 0.15 * cm))
+        for row in similar_drugs_bundle.get("oneriler") or []:
+            if not isinstance(row, dict):
+                continue
+            line = (
+                f"<b>{escape(str(row.get('ticari_ad') or '—'))}</b><br/>"
+                f"Etken: {escape(str(row.get('etken_madde') or '—'))} · "
+                f"Dozaj: {escape(str(row.get('dozaj') or '—'))} · "
+                f"Form: {escape(str(row.get('form') or '—'))}<br/>"
+                f"<i>{escape(str(row.get('benzerlik_aciklamasi') or ''))}</i> "
+                f"({escape(str(row.get('kaynak') or ''))})"
+            )
+            story.append(Paragraph(line, styles["body"]))
+            story.append(Spacer(1, 0.12 * cm))
         story.append(Spacer(1, 0.2 * cm))
 
     # ── RAPOR İÇERİĞİ ─────────────────────────────────────────────────────

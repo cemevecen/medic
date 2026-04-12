@@ -517,6 +517,7 @@ with tab_analyze:
                     alarm_level=result["alarm"],
                     avg_confidence=result["avg_confidence"],
                     vision_data=result["vision"],
+                    similar_drugs_bundle=result.get("similar_drugs"),
                 )
             except Exception as e:
                 stat_ph.error(f"❌ Hata: {e}")
@@ -566,7 +567,35 @@ with tab_analyze:
                          "\n".join(f"- {s}" for s in fc.get("sorunlar", [])))
             st.markdown("")
 
-            rt1, rt2, rt3, rt4 = st.tabs(["📋 Rapor","🔬 Görsel"," Güvenlik"," Firma"])
+            vsum = res.get("vision") or {}
+            bd = vsum.get("barkod_detay")
+            if isinstance(bd, dict):
+                if bd.get("tespit_edildi"):
+                    st.success(
+                        f"Barkod bulundu: **{bd.get('deger', '—')}** "
+                        f"({bd.get('format', '—')})"
+                    )
+                    if bd.get("gorsel_celiski"):
+                        st.warning(
+                            "Görsel model ile barkod okuması uyuşmuyor; kimlik sinyali "
+                            "düşük güvenli kabul edin."
+                        )
+                else:
+                    st.caption("Barkod tespit edilemedi — analiz normal şekilde sürdü.")
+            qr = vsum.get("qr_kod_detay")
+            if isinstance(qr, dict):
+                if qr.get("tespit_edildi"):
+                    st.success(
+                        f"QR kod bulundu ({qr.get('format', '—')}): "
+                        f"`{qr.get('deger', '—')[:200]}{'…' if len(str(qr.get('deger') or '')) > 200 else ''}`"
+                    )
+                else:
+                    st.caption("QR kod tespit edilemedi — analiz normal şekilde sürdü.")
+            st.markdown("")
+
+            rt1, rt2, rt3, rt4, rt5 = st.tabs(
+                ["📋 Rapor", "🔬 Görsel", " Güvenlik", " Firma", " Benzer / Muadil"]
+            )
 
             with rt1:
                 st.markdown(res.get("report", "Rapor oluşturulamadı."))
@@ -595,6 +624,16 @@ with tab_analyze:
                 if v.get("pdf_metin_uzunlugu"):
                     st.caption(f"PDF metin uzunluğu: {v['pdf_metin_uzunlugu']:,} karakter")
                 if "hata" in v: st.warning(v["hata"])
+                bdet = v.get("barkod_detay")
+                if isinstance(bdet, dict):
+                    st.markdown("**Barkod taraması (makine)**")
+                    st.json(bdet)
+                    if v.get("barkod_gorsel_okuma"):
+                        st.caption(f"Görsel model barkod okuması: {v['barkod_gorsel_okuma']}")
+                qdet = v.get("qr_kod_detay")
+                if isinstance(qdet, dict):
+                    st.markdown("**QR kod taraması (makine)**")
+                    st.json(qdet)
                 st.markdown("---")
                 st.markdown("**RAG eşleşmeleri**")
                 for i, r in enumerate(res.get("rag_results", []), 1):
@@ -632,6 +671,34 @@ with tab_analyze:
                         st.markdown(f"**Sertifikalar:** {', '.join(c['sertifikalar'])}")
                     if c.get("genel_degerlendirme"):
                         st.info(c["genel_degerlendirme"])
+
+            with rt5:
+                sim = res.get("similar_drugs") or {}
+                st.markdown("### Benzer İlaçlar / Muadil Alternatifler")
+                if sim.get("uyari"):
+                    st.warning(str(sim["uyari"]))
+                if sim.get("fiyat_entegrasyonu_notu"):
+                    st.info(str(sim["fiyat_entegrasyonu_notu"]))
+                st.caption(f"Yerel katalog: `{sim.get('yerel_katalog_yolu', '—')}`")
+                rows = sim.get("oneriler") or []
+                if not rows:
+                    st.caption(
+                        "Bu sorgu için yerel katalogda eşleşme veya model önerisi üretilmedi; "
+                        "eczacınıza danışın."
+                    )
+                for i, row in enumerate(rows, 1):
+                    if not isinstance(row, dict):
+                        continue
+                    st.markdown(
+                        f"**{i}. {row.get('ticari_ad', '—')}** "
+                        f"(`{row.get('kaynak', '—')}`)"
+                    )
+                    st.markdown(
+                        f"- **Etken madde:** {row.get('etken_madde', '—')}\n"
+                        f"- **Dozaj:** {row.get('dozaj', '—')}\n"
+                        f"- **Form:** {row.get('form', '—')}\n"
+                        f"- **Benzerlik:** {row.get('benzerlik_aciklamasi', '—')}"
+                    )
         else:
             st.markdown("""
             <div class="pg-empty">
