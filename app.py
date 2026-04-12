@@ -86,7 +86,7 @@ def _gorsel_analiz_for_display_json(ga: dict) -> dict:
 # SAYFA YAPISI
 # ─────────────────────────────────────────────
 st.set_page_config(
-    page_title="Pharma-Guard AI",
+    page_title="WikiPharma",
     page_icon="static/favicon.png",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -525,7 +525,7 @@ def _session_openai_compat_kwargs():
 st.markdown("""
 <div class="pg-hero">
   <div class="pg-hero-inner">
-    <h1>Pharma-Guard AI</h1>
+    <h1>WikiPharma</h1>
   </div>
 </div>
 """, unsafe_allow_html=True)
@@ -1123,7 +1123,7 @@ with tab_about:
         _pgv_about = "?"
     st.markdown(f"""
     <div class="pg-about-card">
-      <strong style="font-size:1.1rem">Pharma-Guard AI</strong>
+      <strong style="font-size:1.1rem">WikiPharma</strong>
       <p style="margin:.5rem 0 1rem;color:#64748b">
         Görüntü işleme ve NLP'yi birleştiren otonom Çoklu Ajan Sistemi (MAS). Uygulama sürümü: <strong>v{_pgv_about}</strong>
       </p>
