@@ -5,7 +5,7 @@ agents.py: Tüm ajan sınıfları ve ana orkestratör bu dosyada tanımlanmışt
 
 # Versiyon numarası — app.py session_state cache invalidation için kullanılır.
 # Fact-Checker / parser / orchestrator davranışı değiştiğinde artırın.
-PHARMA_GUARD_VERSION = "1.6"
+PHARMA_GUARD_VERSION = "1.7"
 
 import os
 import json
@@ -781,11 +781,13 @@ class CorporateAnalystAgent:
 
 class ReportSynthesizerAgent:
     """
-    Tüm ajan çıktılarını birleştirip Gemini ile kapsamlı Türkçe rapor
-    üreten nihai sentez ajanı.
+    Tüm ajan çıktılarını birleştirip kapsamlı Türkçe rapor üreten nihai sentez ajanı.
+    PRIMARY: Groq Llama-3 (hızlı, güvenilir)
+    FALLBACK: Gemini (Groq unavailable ise)
     """
 
     def __init__(self):
+        self.groq_client = _init_groq()
         _init_gemini()
 
     def synthesize(
@@ -820,9 +822,38 @@ class ReportSynthesizerAgent:
             scores.append(float(vision_score))
         fallback_avg = sum(scores) / len(scores) if scores else 3.0
 
-        models = _gemini_model_chain()
-        last_err: Optional[Exception] = None
-        for name in models:
+        # ADIM 1: Groq ile dene (PRIMARY)
+        groq_models = _groq_safety_model_chain()
+        groq_err = None
+        for model_id in groq_models:
+            try:
+                print(f"[ReportSynthesizer] Groq {model_id} ile rapor oluşturuluyor...")
+                response = self.groq_client.chat.completions.create(
+                    model=model_id,
+                    messages=[
+                        {"role": "system", "content": "Sen Türkçe tıbbi rapor yazmanında uzmanısın. Kapsamlı, profesyonel, yapılandırılmış rapor üret."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    max_tokens=4096,
+                    temperature=0.3,
+                )
+                report_text = response.choices[0].message.content or ""
+                if report_text.strip():
+                    print("[ReportSynthesizer] Groq raporu başarıyla oluşturdu.")
+                    avg_confidence = sum(scores) / len(scores) if scores else 5.0
+                    return report_text, avg_confidence, None
+            except Exception as e:
+                groq_err = e
+                if _groq_is_rate_limit(e) and model_id != groq_models[-1]:
+                    print(f"[ReportSynthesizer] {model_id} limit/429, sıradaki…")
+                    continue
+                break
+
+        # ADIM 2: Gemini fallback (Groq başarısızsa)
+        print(f"[ReportSynthesizer] Groq başarısız ({groq_err}), Gemini fallback'e geçiliyor...")
+        gemini_models = _gemini_model_chain()
+        gemini_err = None
+        for name in gemini_models:
             try:
                 model = genai.GenerativeModel(
                     name,
@@ -836,16 +867,21 @@ class ReportSynthesizerAgent:
                     ),
                 )
                 report_text = response.text
-                avg_confidence = sum(scores) / len(scores) if scores else 5.0
-                return report_text, avg_confidence, None
+                if report_text.strip():
+                    print(f"[ReportSynthesizer] Gemini ({name}) raporu başarıyla oluşturdu.")
+                    avg_confidence = sum(scores) / len(scores) if scores else 5.0
+                    return report_text, avg_confidence, None
             except Exception as e:
-                last_err = e
-                if _gemini_model_missing_error(e) and name != models[-1]:
-                    print(f"[ReportSynthesizer] {name} kullanılamadı, sıradaki… ({e})")
+                gemini_err = e
+                if _gemini_model_missing_error(e) and name != gemini_models[-1]:
+                    print(f"[ReportSynthesizer] {name} kullanılamadı, sıradaki…")
                     continue
                 break
 
-        return "", fallback_avg, str(last_err) if last_err else "Bilinmeyen sentez hatası"
+        # HER İKİSİ DE BAŞARISIZ
+        combined_err = f"Groq: {groq_err}; Gemini: {gemini_err}"
+        print(f"[ReportSynthesizer] Tüm modeller başarısız: {combined_err}")
+        return "", fallback_avg, combined_err
 
 
 # ---------------------------------------------------------------------------
