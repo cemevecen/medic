@@ -829,8 +829,8 @@ st.markdown("""
 # ─────────────────────────────────────────────
 # ANA SEKMELER
 # ─────────────────────────────────────────────
-tab_analyze, tab_fda, tab_corpus, tab_about = st.tabs(
-    ["🔬 İlaç Analizi", "🔍 FDA Arşivi", "📄 Prospektüs Yönetimi", "ℹ️ Hakkında"]
+tab_analyze, tab_fda, tab_nobetci, tab_corpus, tab_about = st.tabs(
+    ["🔬 İlaç Analizi", "🔍 FDA Arşivi", "🏪 Nöbetçi Eczaneler", "📄 Prospektüs Yönetimi", "ℹ️ Hakkında"]
 )
 
 # ═════════════════════════════════════════════
@@ -1293,6 +1293,78 @@ with tab_analyze:
             st.session_state.pop(k, None)
         st.success(" Temizlendi — bir sonraki analizde yeniden başlatılır.")
         st.rerun()
+
+# ═════════════════════════════════════════════
+# SEKME 3 — NÖBETÇİ ECZANELER
+# ═════════════════════════════════════════════
+with tab_nobetci:
+    st.markdown(
+        '<p class="pg-section"><span class="pg-section-icon">🏪</span>Nöbetçi Eczaneler</p>',
+        unsafe_html=True,
+    )
+    st.caption("Türkiye'nin herhangi bir yerindeki nöbetçi (açık) eczaneleri bulun.")
+
+    col_city, col_district, col_btn = st.columns([2, 2, 1], gap="small")
+
+    with col_city:
+        selected_city_nobetci = st.text_input(
+            "İl Adını Yazın",
+            placeholder="örn: Ankara, İstanbul…",
+            key="nobetci_city_input"
+        )
+
+    with col_district:
+        selected_district_nobetci = st.text_input(
+            "İlçe (İsteğe Bağlı)",
+            placeholder="örn: Çankaya, Maslak…",
+            key="nobetci_district_input"
+        )
+
+    with col_btn:
+        search_nobetci_btn = st.button("🔍 Ara", use_container_width=True, key="nobetci_search_btn")
+
+    # Arama yap
+    if search_nobetci_btn and selected_city_nobetci:
+        with st.spinner(f"'{selected_city_nobetci}' ilinde nöbetçi eczaneler aranıyor…"):
+            try:
+                from nobetci_eczane import get_nobetci_eczaneler, format_pharmacy_result
+
+                result = get_nobetci_eczaneler(
+                    il=selected_city_nobetci.strip(),
+                    ilce=selected_district_nobetci.strip() if selected_district_nobetci else None
+                )
+
+                if result.get("success"):
+                    st.success(f"✓ {result['total']} nöbetçi eczane bulundu!")
+
+                    if result.get("data"):
+                        st.markdown("---")
+                        st.markdown("### 🏪 Nöbetçi Eczaneler Listesi")
+
+                        for idx, pharmacy in enumerate(result["data"][:20], 1):
+                            col_num, col_info = st.columns([0.5, 11])
+
+                            with col_num:
+                                st.caption(f"**{idx}**")
+
+                            with col_info:
+                                st.markdown(format_pharmacy_result(pharmacy))
+
+                        st.divider()
+                        st.info(f"📊 **Veri Kaynağı:** {result.get('source', 'Bilinmeyen')}")
+                    else:
+                        st.warning("Eczane verisi alınamadı.")
+
+                else:
+                    st.warning(f"⚠️ {result.get('error', 'Veri bulunamadı')}")
+                    st.info("💡 **İpucu:** İl adını tam yazın (örn: Ankara, İstanbul, Adana)")
+
+            except ImportError as e:
+                st.error(f"❌ nobetci_eczane modülü bulunamadı: {str(e)}")
+            except Exception as e:
+                st.error(f"❌ Hata: {str(e)}")
+    elif search_nobetci_btn:
+        st.info("Lütfen bir il adı girin")
 
 # ═════════════════════════════════════════════
 # SEKME 4 — PROSPEKTÜS YÖNETİMİ (CORPUS)
