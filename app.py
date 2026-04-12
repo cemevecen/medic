@@ -992,13 +992,11 @@ with tab_analyze:
 
     # Kontrol paneli — Önbellek temizleme
     st.markdown("---")
-    col_clear_left, col_clear_right = st.columns([1, 1])
-    with col_clear_left:
-        if st.button(" Önbelleği Temizle", use_container_width=True, key="clear_cache_btn"):
-            for k in ("orchestrator", "pg_version", "analysis_result", "report_pdf"):
-                st.session_state.pop(k, None)
-            st.success(" Temizlendi — bir sonraki analizde yeniden başlatılır.")
-            st.rerun()
+    if st.button(" Önbelleği Temizle", use_container_width=True, key="clear_cache_btn"):
+        for k in ("orchestrator", "pg_version", "analysis_result", "report_pdf"):
+            st.session_state.pop(k, None)
+        st.success(" Temizlendi — bir sonraki analizde yeniden başlatılır.")
+        st.rerun()
 
 # ═════════════════════════════════════════════
 # SEKME 3 — PROSPEKTÜS YÖNETİMİ (CORPUS)
