@@ -553,13 +553,13 @@ with tab_analyze:
                 fc_ok      = not fc.get("uyusmazlik", False)
                 corpus_bos = fc.get("corpus_bos", False)
                 fc_icon    = "" if corpus_bos else ("" if fc_ok else "")
-                fc_label   = "Corpus Boş" if corpus_bos else "Fact-Check"
+                fc_label   = "Genel Bilgi" if corpus_bos else "Fact-Check"
                 st.markdown(
                     f'<div class="metric-card"><h3>{fc_icon}</h3>'
                     f'<p>{fc_label}</p></div>', unsafe_allow_html=True)
 
             if corpus_bos:
-                st.info(" **Corpus boş** — Fact-Check yapılamadı. "
+                st.info("Prospektüs veritabanı boş ama Genel İlaç Bilgisi ile doğrulama yapıldı. "
                         "Daha güvenilir sonuçlar için Prospektüs sekmesinden PDF yükleyin.")
             elif not fc_ok:
                 st.error(" **VERİ UYUŞMAZLIĞI**\n\n" +
