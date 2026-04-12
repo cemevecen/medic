@@ -1360,7 +1360,6 @@ with tab_nobetci:
                                 st.markdown(format_pharmacy_result(pharmacy))
 
                         st.divider()
-                        st.info(f"📊 **Veri Kaynağı:** {result.get('source', 'Bilinmeyen')}")
                     else:
                         st.warning("Eczane verisi alınamadı.")
 
