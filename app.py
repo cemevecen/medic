@@ -1685,14 +1685,15 @@ with tab_about:
         from nobetci_eczane import init_nobetci_api
         init_nobetci_api(api_key=key_clean, source="collectapi")
 
-        # Ankara/demo test
+        # Ankara test
         from nobetci_eczane import get_nobetci_eczaneler
         test_result = get_nobetci_eczaneler("Ankara")
 
-        if test_result.get("success"):
-            st.success(f"✓ API çalışıyor! {test_result.get('total')} eczane bulundu (Kaynak: {test_result.get('source')})")
+        # Gerçek API verisini kontrol et (demo değil)
+        if test_result.get("source") == "CollectAPI":
+            st.success(f"✓ API çalışıyor! {test_result.get('total')} eczane bulundu (Kaynak: CollectAPI)")
         else:
-            st.warning(f"⚠️ API test başarısız: {test_result.get('error', 'Bilinmeyen hata')}")
+            st.error(f"❌ API bağlantı hatası: API key geçersiz veya API yanıt vermiyor. Demo verisi gösteriliyor.")
 
     # ─────────────────────────────────────────────
     # ITS (İLAÇ TAKIP SİSTEMİ) API
