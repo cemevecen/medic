@@ -519,42 +519,6 @@ def _session_openai_compat_kwargs():
         out["model"] = mo
     return out
 
-with st.sidebar:
-    st.markdown("### Kontrol paneli")
-    g_cls  = "ok"  if gemini_key else "bad"
-    gr_cls = "ok"  if groq_key   else "bad"
-    oa_sess = bool((st.session_state.get("pg_alt_api_key") or "").strip())
-    oa_cls = "ok" if (openai_env or oa_sess) else "bad"
-    oa_lbl = "aktif (.env veya kenar çubuğu)" if (openai_env or oa_sess) else "opsiyonel"
-    st.markdown(
-        f'<div class="pg-status-pill {g_cls}">{"●" if gemini_key else "○"} Gemini API — {"aktif" if gemini_key else "eksik"}</div><br>'
-        f'<div class="pg-status-pill {gr_cls}">{"●" if groq_key else "○"} Groq — {"aktif" if groq_key else "eksik"}</div>',
-        unsafe_allow_html=True,
-    )
-    st.markdown("---")
-    st.markdown(f" **RAG:** {len(pdf_list)} prospektüs")
-    if pdf_list:
-        with st.expander("Yüklü dosyalar"):
-            for f in pdf_list:
-                st.caption(f" {f}")
-    else:
-        st.caption("Corpus boş — Prospektüs sekmesinden PDF ekleyin.")
-    st.markdown("---")
-    st.markdown("**Ajanlar**")
-    st.caption("Vision · RAG · Fact-check · Safety · Corporate · Rapor — orkestrasyon otomatik.")
-    st.markdown("---")
-    # Versiyon + manuel cache temizleme
-    try:
-        from agents import PHARMA_GUARD_VERSION as _pgv
-    except Exception:
-        _pgv = "?"
-    st.caption(f"v{_pgv} · Bilgilendirme amaçlıdır; tıbbi karar için hekime danışın.")
-    if st.button(" Önbelleği Temizle", use_container_width=True, key="clear_cache_btn"):
-        for k in ("orchestrator", "pg_version", "analysis_result", "report_pdf"):
-            st.session_state.pop(k, None)
-        st.success(" Temizlendi — bir sonraki analizde yeniden başlatılır.")
-        st.rerun()
-
 # ─────────────────────────────────────────────
 # HERO BANNER
 # ─────────────────────────────────────────────
@@ -1026,6 +990,16 @@ with tab_analyze:
             </div>
             """, unsafe_allow_html=True)
 
+    # Kontrol paneli — Önbellek temizleme
+    st.markdown("---")
+    col_clear_left, col_clear_right = st.columns([1, 1])
+    with col_clear_left:
+        if st.button(" Önbelleği Temizle", use_container_width=True, key="clear_cache_btn"):
+            for k in ("orchestrator", "pg_version", "analysis_result", "report_pdf"):
+                st.session_state.pop(k, None)
+            st.success(" Temizlendi — bir sonraki analizde yeniden başlatılır.")
+            st.rerun()
+
 # ═════════════════════════════════════════════
 # SEKME 3 — PROSPEKTÜS YÖNETİMİ (CORPUS)
 # ═════════════════════════════════════════════
@@ -1228,7 +1202,38 @@ with tab_about:
             help="Boş bırakılırsa gpt-4o-mini kullanılır."
         )
 
-    st.markdown("")
+    # ─────────────────────────────────────────────
+    # KONTROL PANELİ VE SİSTEM BİLGİSİ
+    # ─────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("### Sistem Durumu")
+
+    # API Kontrol paneli
+    g_cls  = "ok"  if gemini_key else "bad"
+    gr_cls = "ok"  if groq_key   else "bad"
+    oa_sess = bool((st.session_state.get("pg_alt_api_key") or "").strip())
+    oa_cls = "ok" if (openai_env or oa_sess) else "bad"
+
+    st.markdown(
+        f'<div class="pg-status-pill {g_cls}">{"●" if gemini_key else "○"} Gemini API — {"aktif" if gemini_key else "eksik"}</div><br>'
+        f'<div class="pg-status-pill {gr_cls}">{"●" if groq_key else "○"} Groq — {"aktif" if groq_key else "eksik"}</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("---")
+    st.markdown(f" **RAG Prospektüs:** {len(pdf_list)} dosya")
+    if pdf_list:
+        with st.expander("Yüklü PDF dosyaları"):
+            for f in pdf_list:
+                st.caption(f" {f}")
+    else:
+        st.caption("Corpus boş — Prospektüs Yönetimi sekmesinden PDF ekleyin.")
+
+    st.markdown("---")
+    st.markdown("**Ajanlar (Orkestrasyon)**")
+    st.caption("Vision Scanner · RAG Specialist · Fact-Checker · Safety Auditor · Corporate Analyst · Report Synthesizer")
+
+    st.markdown("---")
     st.markdown(
         "**GitHub:** [cemevecen/medic](https://github.com/cemevecen/medic) &nbsp;|&nbsp; "
         "**Lisans:** MIT &nbsp;|&nbsp; **Uygulama sürümü:** v"
