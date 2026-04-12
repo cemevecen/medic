@@ -151,9 +151,20 @@ st.markdown("""
 [data-testid="stSidebar"] b         { color: #f1f5f9 !important; }
 [data-testid="stSidebar"] hr        { border-color: rgba(255,255,255,.08) !important; }
 [data-testid="stSidebar"] .stExpander {
-  background: rgba(255,255,255,.04) !important;
+  background: linear-gradient(135deg, rgba(13,148,136,.08), rgba(15,118,110,.08)) !important;
   border-radius: 12px !important;
-  border: 1px solid rgba(255,255,255,.1) !important;
+  border: 1px solid rgba(13,148,136,.25) !important;
+}
+
+/* Sidebar expander header — teal tema */
+[data-testid="stSidebar"] .stExpander > button {
+  color: #5eead4 !important;
+  font-weight: 600 !important;
+}
+
+[data-testid="stSidebar"] .stExpander > button:hover {
+  color: #d1faf4 !important;
+  background: rgba(13,148,136,.1) !important;
 }
 
 /* Sidebar expander içindeki butonlar — tutarlı tema */
@@ -175,21 +186,28 @@ st.markdown("""
   background: linear-gradient(135deg, rgba(13,148,136,.45), rgba(15,118,110,.45)) !important;
 }
 
-/* Sidebar expander içindeki metin input'ları */
+/* Sidebar expander içindeki metin input'ları — teal tema */
 [data-testid="stSidebar"] .stTextInput input {
-  background: rgba(255,255,255,.1) !important;
-  color: #1e293b !important;
-  border-color: rgba(15,118,110,.3) !important;
+  background: rgba(13,148,136,.08) !important;
+  color: #e0f2f1 !important;
+  border: 1px solid rgba(13,148,136,.3) !important;
+  border-radius: 8px !important;
 }
 
 [data-testid="stSidebar"] .stTextInput input::placeholder {
-  color: #94a3b8 !important;
+  color: #80cbc4 !important;
 }
 
 [data-testid="stSidebar"] .stTextInput input:focus {
-  background: rgba(255,255,255,.15) !important;
-  color: #0f172a !important;
+  background: rgba(13,148,136,.15) !important;
+  color: #ffffff !important;
   border-color: #0d9488 !important;
+  box-shadow: 0 0 0 2px rgba(13,148,136,.2) !important;
+}
+
+[data-testid="stSidebar"] .stTextInput label {
+  color: #5eead4 !important;
+  font-weight: 500 !important;
 }
 
 /* ── Sekmeler — hap/pill stili ───────────────── */
