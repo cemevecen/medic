@@ -5,7 +5,7 @@ agents.py: Tüm ajan sınıfları ve ana orkestratör bu dosyada tanımlanmışt
 
 # Versiyon numarası — app.py session_state cache invalidation için kullanılır.
 # Fact-Checker / parser / orchestrator davranışı değiştiğinde artırın.
-PHARMA_GUARD_VERSION = "1.4"
+PHARMA_GUARD_VERSION = "1.5"
 
 import os
 import json
@@ -132,61 +132,64 @@ KURALLAR:
 - Türkçe veya Latince ilaç isimlerini olduğu gibi al, çevirme.
 """
 
-SAFETY_PROMPT_TEMPLATE = """
-Sen bir ilaç güvenlik denetçisisin (Safety-Auditor). Aşağıdaki ilaç için güvenlik raporu oluştur.
+SAFETY_PROMPT_TEMPLATE = """SADECE geçerli bir JSON nesnesi döndür. Açıklama, başlık veya markdown kullanma.
 
 İLAÇ BİLGİLERİ:
 {drug_info}
 
-RAG KAYNAK VERİSİ:
+RAG KAYNAK VERİSİ (yoksa kendi tıbbi bilgini kullan):
 {rag_data}
 
-Aşağıdaki formatta JSON döndür:
+Genel farmakoloji bilgini kullanarak, ilaç adı veya etken maddesi bilinen bir ilaçsa
+gerçek klinik bilgiyle yanıt ver. RAG boşsa internet/genel bilginden yararlan.
+
+Döndüreceğin JSON şeması (tam olarak bu anahtarları kullan):
 {{
   "yan_etkiler": {{
-    "yaygin": ["..."],
-    "ciddi": ["..."],
-    "cok_nadir": ["..."]
+    "yaygin": ["en az 3 yaygın yan etki"],
+    "ciddi": ["ciddi yan etkiler"],
+    "cok_nadir": ["çok nadir görülen yan etkiler"]
   }},
-  "etkilesimler": ["Diğer ilaçlarla önemli etkileşimler"],
-  "kontrendikasyonlar": ["Kimler kesinlikle kullanamamalı"],
-  "ozel_uyarilar": ["Hamilelik, emzirme, yaşlı, çocuk vb. özel durumlar"],
-  "alarm_seviyesi": "YEŞİL / SARI / KIRMIZI",
-  "alarm_gerekce": "Alarm seviyesi neden bu şekilde belirlendi",
-  "guven_puani": 1-10
+  "etkilesimler": ["diğer ilaçlarla önemli etkileşimler — en az 2"],
+  "kontrendikasyonlar": ["kimler kullanamamalı — en az 2"],
+  "ozel_uyarilar": ["hamilelik, emzirme, yaşlı, çocuk, böbrek/karaciğer uyarıları"],
+  "alarm_seviyesi": "YEŞİL veya SARI veya KIRMIZI",
+  "alarm_gerekce": "alarm seviyesinin kısa gerekçesi (1-2 cümle)",
+  "guven_puani": 7
 }}
 
-KIRMIZI ALARM kriterleri: hamilelikte kontrendike, dar terapötik indeks, ölümcül etkileşim riski.
-SARI ALARM: dikkat gerektiren durumlar, yaş/doz kısıtlamaları.
-YEŞİL: Genel kullanım için güvenli (doktor/eczacı gözetiminde).
+KIRMIZI: hamilelikte kontrendike, dar terapötik indeks, ölümcül etkileşim.
+SARI: yaş/doz kısıtlaması, dikkat gerektiren etkileşimler.
+YEŞİL: genel kullanım için güvenli (hekime danışarak).
 """
 
-CORPORATE_PROMPT_TEMPLATE = """
-Sen bir ilaç firması analistsin (Corporate-Analyst). Aşağıdaki ilaç üreticisi hakkında
-mevcut bilgiler çerçevesinde bir rapor hazırla.
+CORPORATE_PROMPT_TEMPLATE = """SADECE geçerli bir JSON nesnesi döndür. Açıklama veya markdown kullanma.
 
-İLAÇ: {drug_name}
-ÜRETİCİ: {manufacturer}
+İLAÇ ADI: {drug_name}
+BİLİNEN ÜRETİCİ: {manufacturer}
 
-Aşağıdaki formatta JSON döndür:
+Bu ilacın üreticisini farmakoloji ve ilaç endüstrisi bilginle belirle.
+Özellikle Türk ilaç firmaları (Abdi İbrahim, Eczacıbaşı, Recordati, Santa Farma,
+Sandoz Türkiye, Pfizer Türkiye, Deva, Nobel, Bilim vb.) için bilgin varsa kullan.
+TİTCK onaylı ilaçlar için "TİTCK onaylı" yaz.
+
+Döndüreceğin JSON şeması:
 {{
-  "firma_adi": "...",
-  "ulke": "Menşe ülke",
-  "sertifikalar": ["GMP", "ISO vb. (bilinen standartlar)"],
-  "titck_durumu": "TİTCK onaylı / Belirsiz / Onaysız",
-  "genel_degerlendirme": "Firma hakkında kısa bilgi (2-3 cümle)",
-  "guven_puani": 1-10
+  "firma_adi": "üreticinin tam adı (bilinmiyorsa 'Tespit Edilemedi')",
+  "ulke": "menşe ülke (Türkiye / Almanya / vb.)",
+  "sertifikalar": ["GMP", "ISO 9001"],
+  "titck_durumu": "TİTCK onaylı veya Belirsiz",
+  "genel_degerlendirme": "firma hakkında 2-3 cümle gerçek bilgi",
+  "guven_puani": 6
 }}
 
-Eğer firma hakkında kesin bilgi yoksa guven_puani düşük tut ve genel_degerlendirme
-alanında "Firma bilgileri doğrulanamadı" yaz.
+guven_puani: kesin bilgi varsa 7-9, tahmini bilgi varsa 5-6, bilinmiyorsa 3.
 """
 
-SYNTHESIS_PROMPT_TEMPLATE = """
-Sen Pharma-Guard raporlama uzmanısın (Report-Synthesizer). Aşağıdaki ajan çıktılarını
-birleştirerek kapsamlı, profesyonel bir Türkçe ilaç analiz raporu oluştur.
+SYNTHESIS_PROMPT_TEMPLATE = """Sen Pharma-Guard raporlama uzmanısın. Aşağıdaki ajan çıktılarından
+kapsamlı, bütünlüklü bir Türkçe ilaç analiz raporu oluştur.
 
-VISION SCANNER SONUCU:
+VISION / PDF SCANNER SONUCU:
 {vision_data}
 
 SAFETY AUDITOR SONUCU:
@@ -199,18 +202,19 @@ RAG KAYNAKÇASI:
 {rag_sources}
 
 KURALLAR:
-1. Rapor Türkçe olmalı; tıbbi terimler parantez içinde açıklanmalı.
-2. Ortalama güven puanı 8'in altındaysa en üste "DİKKAT" uyarısı ekle.
-3. VERİ UYUŞMAZLIĞI varsa bunu açıkça belirt ve raporu blokla.
-4. Aşağıdaki bölüm başlıklarını kullan (Markdown formatında):
+1. Tamamen Türkçe yaz; tıbbi terimleri parantez içinde açıkla.
+2. Güven < 8 ise raporun başına "DİKKAT" uyarısı ekle.
+3. PDF dosya adı ile çıkarılan bilgi arasındaki farkı "not" olarak belirt — raporu bloklama.
+4. Eksik veya belirsiz alanları "Bilgi mevcut değil" olarak işaretle, uydurma.
+5. Aşağıdaki Markdown bölüm başlıklarını kullan:
 
 ## 1. İlaç Kimlik Özeti
 ## 2. Kullanım Amacı (Endikasyonlar)
 ## 3. Kritik Uyarılar ve Yan Etkiler
 ## 4. Etken Madde ve Üretici Detayları
-## 5. RAG Kaynakça
+## 5. Kaynakça
 
-Her bölümün sonuna o bölüm için güven puanını şu formatla ekle: `[Güven: X/10]`
+Her bölümün sonuna güven puanını ekle: `[Güven: X/10]`
 """
 
 
@@ -542,10 +546,13 @@ class SafetyAuditorAgent:
 
     def audit(self, drug_info: Dict[str, Any], rag_data: List[Dict]) -> Dict[str, Any]:
         """İlaç bilgisi ve RAG verisi ile güvenlik raporu oluşturur."""
-        rag_text = "\n\n".join(
-            f"[{r['kaynak']} — s.{r['sayfa']}]: {r['metin']}" for r in rag_data
-        ) or "RAG verisi bulunamadı."
+        rag_real = [r for r in rag_data if r.get("kaynak", "—") not in ("—", "")]
+        rag_text = (
+            "\n\n".join(f"[{r['kaynak']} — s.{r['sayfa']}]: {r['metin']}" for r in rag_real)
+            or "RAG verisi yok — kendi tıbbi bilginle yanıt ver."
+        )
 
+        drug_name = drug_info.get("ticari_ad") or drug_info.get("etken_madde") or "bilinmiyor"
         prompt = SAFETY_PROMPT_TEMPLATE.format(
             drug_info=json.dumps(drug_info, ensure_ascii=False, indent=2),
             rag_data=rag_text,
@@ -553,35 +560,64 @@ class SafetyAuditorAgent:
 
         models = _groq_safety_model_chain()
         last_err: Optional[Exception] = None
+
         for model_id in models:
+            # Groq JSON modu destekliyor mu? (llama-3.3 destekliyor)
+            use_json_mode = "llama-3" in model_id
             try:
-                response = self.groq_client.chat.completions.create(
+                kwargs: Dict[str, Any] = dict(
                     model=model_id,
                     messages=[
-                        {"role": "system", "content": MASTER_PROMPT},
-                        {"role": "user", "content": prompt},
+                        {"role": "system", "content": "Sen bir ilaç güvenlik uzmanısın. SADECE JSON döndür."},
+                        {"role": "user",   "content": prompt},
                     ],
                     max_tokens=2048,
-                    temperature=0.2,
+                    temperature=0.1,
                 )
+                if use_json_mode:
+                    kwargs["response_format"] = {"type": "json_object"}
+
+                response = self.groq_client.chat.completions.create(**kwargs)
                 raw = response.choices[0].message.content or ""
                 parsed = self._parse_json_response(raw)
+
+                # Kritik alanlar eksikse retry — kısa prompt
+                if not parsed.get("alarm_seviyesi") or not parsed.get("yan_etkiler"):
+                    parsed = self._retry_simplified(drug_name, model_id) or parsed
+
                 if model_id != models[0]:
-                    parsed["groq_model_notu"] = (
-                        f"Ana model kotada olduğu için yanıt üretildi: `{model_id}`"
-                    )
+                    parsed["groq_model_notu"] = f"Yanıt modeli: `{model_id}`"
                 return parsed
+
             except Exception as e:
                 last_err = e
                 if _groq_is_rate_limit(e) and model_id != models[-1]:
-                    print(f"[SafetyAuditor] {model_id} limit/429, sıradaki Groq modeli… ({e})")
+                    print(f"[SafetyAuditor] {model_id} limit/429, sıradaki… ({e})")
                     continue
                 break
 
         return {
             "hata": _groq_safety_failure_message(last_err) if last_err else "Safety Auditor bilinmeyen hata.",
-            "alarm_seviyesi": "BİLİNMİYOR",
+            "alarm_seviyesi": "SARI",
+            "alarm_gerekce": "Otomatik analiz tamamlanamadı — eczacıya danışın.",
+            "guven_puani": 2,
         }
+
+    def _retry_simplified(self, drug_name: str, model_id: str) -> Optional[Dict[str, Any]]:
+        """Kritik alanlar boşsa çok daha kısa prompt ile tekrar dener."""
+        simple = f"""Sadece JSON döndür. {drug_name} ilacı için:
+{{"yan_etkiler":{{"yaygin":["..."],"ciddi":["..."],"cok_nadir":["..."]}},"etkilesimler":["..."],"kontrendikasyonlar":["..."],"ozel_uyarilar":["..."],"alarm_seviyesi":"SARI","alarm_gerekce":"gerekçe","guven_puani":6}}"""
+        try:
+            r = self.groq_client.chat.completions.create(
+                model=model_id,
+                messages=[{"role": "user", "content": simple}],
+                max_tokens=1024,
+                temperature=0.1,
+                response_format={"type": "json_object"},
+            )
+            return self._parse_json_response(r.choices[0].message.content or "")
+        except Exception:
+            return None
 
     @staticmethod
     def _parse_json_response(raw: str) -> Dict[str, Any]:
@@ -640,10 +676,27 @@ class CorporateAnalystAgent:
                 )
                 response = model.generate_content(
                     prompt,
-                    generation_config=genai.GenerationConfig(temperature=0.2),
+                    generation_config=genai.GenerationConfig(
+                        temperature=0.2,
+                        response_mime_type="application/json",
+                    ),
                 )
                 raw = response.text
-                return self._parse_json_response(raw)
+                parsed = self._parse_json_response(raw)
+
+                # Kritik alanlar eksik veya güven çok düşükse retry
+                firma_adi = parsed.get("firma_adi", "")
+                guven = parsed.get("guven_puani", 0)
+                if (
+                    not firma_adi
+                    or firma_adi in ("Bilinmiyor", "Tespit Edilemedi", "")
+                    or guven < 4
+                ):
+                    retry = self._retry_simplified(drug_name, manufacturer, name)
+                    if retry:
+                        parsed = retry
+
+                return parsed
             except Exception as e:
                 last_err = e
                 if _gemini_model_missing_error(e) and name != models[-1]:
@@ -654,6 +707,33 @@ class CorporateAnalystAgent:
             "hata": str(last_err) if last_err else "Corporate Analyst başarısız.",
             "guven_puani": 1,
         }
+
+    def _retry_simplified(
+        self, drug_name: str, manufacturer: Optional[str], model_name: str
+    ) -> Optional[Dict[str, Any]]:
+        """Firma adı bulunamadıysa daha odaklı prompt ile tekrar dener."""
+        simple = (
+            f"Sadece JSON döndür. '{drug_name}' ilacının Türkiye veya dünya pazarındaki "
+            f"üreticisi hakkında bilgi ver. Bilinen üretici: {manufacturer or 'bilinmiyor'}.\n"
+            '{"firma_adi":"...","ulke":"...","sertifikalar":["GMP"],'
+            '"titck_durumu":"TİTCK onaylı veya Belirsiz","genel_degerlendirme":"...","guven_puani":5}'
+        )
+        try:
+            model = genai.GenerativeModel(model_name)
+            response = model.generate_content(
+                simple,
+                generation_config=genai.GenerationConfig(
+                    temperature=0.1,
+                    response_mime_type="application/json",
+                ),
+            )
+            result = self._parse_json_response(response.text)
+            # Retry sonucunu kabul et
+            if result.get("firma_adi") and result["firma_adi"] not in ("Bilinmiyor", ""):
+                return result
+        except Exception as e:
+            print(f"[CorporateAnalyst] retry hatası: {e}")
+        return None
 
     @staticmethod
     def _parse_json_response(raw: str) -> Dict[str, Any]:
