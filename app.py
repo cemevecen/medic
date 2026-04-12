@@ -1693,7 +1693,8 @@ with tab_about:
         if test_result.get("source") == "CollectAPI":
             st.success(f"✓ API çalışıyor! {test_result.get('total')} eczane bulundu (Kaynak: CollectAPI)")
         else:
-            st.error(f"❌ API bağlantı hatası: API key geçersiz veya API yanıt vermiyor. Demo verisi gösteriliyor.")
+            error_msg = test_result.get("error", "Bilinmeyen hata")
+            st.error(f"❌ API hatası: {error_msg}")
 
     # ─────────────────────────────────────────────
     # ITS (İLAÇ TAKIP SİSTEMİ) API
