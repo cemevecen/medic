@@ -156,6 +156,25 @@ st.markdown("""
   border: 1px solid rgba(255,255,255,.1) !important;
 }
 
+/* Sidebar expander içindeki butonlar — açık renk */
+[data-testid="stSidebar"] .stButton > button {
+  background: rgba(15,118,110,.15) !important;
+  color: #94f0e8 !important;
+  border-color: rgba(15,118,110,.3) !important;
+}
+[data-testid="stSidebar"] .stButton > button:hover {
+  background: rgba(15,118,110,.25) !important;
+  border-color: rgba(15,118,110,.5) !important;
+  color: #d1faf4 !important;
+}
+
+/* Sidebar expander içindeki metin input'ları */
+[data-testid="stSidebar"] .stTextInput input {
+  background: rgba(255,255,255,.05) !important;
+  color: #e2e8f0 !important;
+  border-color: rgba(255,255,255,.15) !important;
+}
+
 /* ── Sekmeler — hap/pill stili ───────────────── */
 .stTabs [data-baseweb="tab-list"] {
   gap: .3rem !important;
@@ -212,6 +231,21 @@ div[data-testid="stVerticalBlock"] .stTabs [data-baseweb="tab-list"] {
   color: var(--pg-ink) !important;
   border-color: var(--pg-line) !important;
 }
+.stButton > button[kind="secondary"]:hover {
+  background: var(--pg-accent-soft) !important;
+  border-color: var(--pg-accent) !important;
+}
+/* Varsayılan (secondary olmayan) butonlar */
+.stButton > button:not([kind="primary"]):not([kind="secondary"]) {
+  background: var(--pg-surface) !important;
+  color: var(--pg-ink) !important;
+  border-color: var(--pg-line) !important;
+}
+.stButton > button:not([kind="primary"]):not([kind="secondary"]):hover {
+  background: var(--pg-accent-soft) !important;
+  border-color: var(--pg-accent) !important;
+  color: var(--pg-accent) !important;
+}
 .stButton > button:disabled { opacity: .45 !important; }
 
 /* ── Download button ────────────────────────── */
@@ -228,7 +262,14 @@ div[data-testid="stVerticalBlock"] .stTabs [data-baseweb="tab-list"] {
   background: var(--pg-surface) !important;
   color: var(--pg-ink) !important;
 }
-.stTextInput label { color: var(--pg-ink) !important; }
+.stTextInput input::placeholder {
+  color: var(--pg-sidebar-muted) !important;
+}
+.stTextInput input:focus {
+  border-color: var(--pg-accent) !important;
+  box-shadow: 0 0 0 2px rgba(15,118,110,.1) !important;
+}
+.stTextInput label { color: var(--pg-ink) !important; font-weight: 500 !important; }
 .stRadio label     { color: var(--pg-ink) !important; }
 .stFileUploader section {
   border-radius: 14px !important;
