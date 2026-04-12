@@ -235,7 +235,15 @@ def get_nobetci_eczaneler(il: str, ilce: Optional[str] = None) -> Dict:
           .lower()
     )
 
-    # Önce demo veriye bak - tüm keyleri kontrol et
+    # Eğer API key varsa gerçek API'yi dene
+    if _api is not None and _api.api_key:
+        result = _api.get_nobetci_eczaneler(il, ilce)
+
+        if result.get("success"):
+            return result
+        # API başarısız olursa, demo veriye dön
+
+    # Demo veriye bak
     if il_normalized in DEMO_PHARMACIES:
         pharmacies = DEMO_PHARMACIES[il_normalized]
     else:
@@ -260,22 +268,14 @@ def get_nobetci_eczaneler(il: str, ilce: Optional[str] = None) -> Dict:
             "note": "⚠️ Bu demo veriler örnek amaçlıdır"
         }
 
-    # Gerçek API'ye fallback
-    if _api is None:
-        init_nobetci_api()
-    result = _api.get_nobetci_eczaneler(il, ilce)
-
-    # API başarısız olursa, demo verisi olmadığını söyle
-    if not result.get("success"):
-        return {
-            "success": False,
-            "total": 0,
-            "data": [],
-            "error": f"'{il}' için eczane bulunamadı. API key gerekebilir.",
-            "source": "CollectAPI (error)"
-        }
-
-    return result
+    # Demo veri de bulunamadı
+    return {
+        "success": False,
+        "total": 0,
+        "data": [],
+        "error": f"'{il}' için eczane bulunamadı. API key gerekebilir.",
+        "source": "CollectAPI (error)"
+    }
 
 def format_pharmacy_result(pharmacy: Dict) -> str:
     """Eczane sonucunu formatla"""
