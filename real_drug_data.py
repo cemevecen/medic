@@ -21,13 +21,37 @@ logger = logging.getLogger(__name__)
 def _clean_drug_name(name: str) -> str:
     """İlaç adını normalize et (dosajları ayır vb)"""
     # "augmentin 1000mg" -> "augmentin"
-    match = re.match(r'^([a-z]+)', name.lower().strip())
-    return match.group(1) if match else name.lower().strip()
+    if not name:
+        return ""
+
+    cleaned = name.lower().strip()
+
+    # Ortak Türkçe ilaç adı varyasyonları
+    variations = {
+        "dikloron": "diclofenac",
+        "diklofenak": "diclofenac",
+        "voltaren": "diclofenac",
+        "aspirin": "aspirin",
+        "ibuprofen": "ibuprofen",
+        "parol": "paracetamol",
+        "parasetamol": "paracetamol",
+        "augmentin": "amoxicillin",
+    }
+
+    # Eğer bilinen varyasyon varsa yönlendir
+    for variant, canonical in variations.items():
+        if variant in cleaned:
+            logger.info(f"Varyasyon tespit edildi: {cleaned} → {canonical}")
+            return canonical
+
+    # Normal çıkarma: ilk kelimeyi al
+    match = re.match(r'^([a-z]+)', cleaned)
+    return match.group(1) if match else cleaned
 
 
 def fetch_drug_from_wikidata(drug_name: str) -> Optional[Dict[str, Any]]:
     """
-    Wikidata'dan gerçek ilaç bilgilerini çeker.
+    Wikidata'dan gerçek ilaç bilgilerini çeker. Birden fazla arama stratejisi dener.
 
     Args:
         drug_name: İlaç adı
@@ -38,19 +62,43 @@ def fetch_drug_from_wikidata(drug_name: str) -> Optional[Dict[str, Any]]:
     try:
         clean_name = _clean_drug_name(drug_name)
 
-        # Wikidata Search API
-        search_url = "https://www.wikidata.org/w/api.php"
-        search_params = {
-            "action": "wbsearchentities",
-            "search": clean_name,
-            "language": "en",
-            "format": "json",
-            "type": "item"
-        }
+        # Deneme sırası: tam ad, kısaltma, temel adı
+        search_terms = [clean_name, drug_name.lower().strip(), drug_name]
 
-        search_response = requests.get(search_url, params=search_params, timeout=5)
-        search_response.raise_for_status()
-        search_results = search_response.json()
+        for search_term in search_terms:
+            if not search_term or len(search_term) < 2:
+                continue
+
+            logger.info(f"Wikidata'da '{search_term}' aranıyor...")
+
+            # Wikidata Search API
+            search_url = "https://www.wikidata.org/w/api.php"
+            search_params = {
+                "action": "wbsearchentities",
+                "search": search_term,
+                "language": "en",
+                "format": "json",
+                "type": "item"
+            }
+
+            try:
+                search_response = requests.get(search_url, params=search_params, timeout=5)
+                search_response.raise_for_status()
+                search_results = search_response.json()
+
+                if search_results.get("search"):
+                    logger.info(f"Wikidata'da '{search_term}' bulundu!")
+                    break
+            except requests.exceptions.Timeout:
+                logger.warning(f"Wikidata timeout — {search_term}")
+                continue
+            except requests.exceptions.RequestException as e:
+                logger.warning(f"Wikidata isteği hatası ({search_term}): {e}")
+                continue
+        else:
+            # Hiçbir arama sonuç vermedi
+            logger.info(f"Wikidata'da herhangi bir sonuç bulunamadı: {drug_name}")
+            return None
 
         if not search_results.get("search"):
             logger.info(f"Wikidata'da '{clean_name}' bulunamadı")
@@ -114,21 +162,42 @@ def fetch_drug_from_wikidata(drug_name: str) -> Optional[Dict[str, Any]]:
 def fetch_drug_from_openfda(drug_name: str) -> Optional[Dict[str, Any]]:
     """
     OpenFDA API'sinden gerçek ilaç bilgileri çeker (geliştirilmiş parser).
+    Birden fazla arama stratejisi dener: brand name, active ingredient, vb.
     """
     try:
         clean_name = _clean_drug_name(drug_name)
 
-        # OpenFDA brand name araması
+        # Deneme sırası: brand name, active ingredient, genel arama
+        search_queries = [
+            f"openfda.brand_name:{clean_name}",  # Brand name araması
+            f"openfda.active_ingredient:{clean_name}",  # Etken madde araması
+            f"brand_name:{drug_name.lower().strip()}",  # Tam ad araması
+        ]
+
         url = "https://api.fda.gov/drug/label.json"
-        params = {
-            "search": f"openfda.brand_name:{clean_name}",
-            "limit": 1
-        }
 
-        response = requests.get(url, params=params, timeout=5)
-        response.raise_for_status()
+        for query in search_queries:
+            logger.info(f"OpenFDA'da '{query}' aranıyor...")
 
-        results = response.json()
+            try:
+                params = {"search": query, "limit": 1}
+                response = requests.get(url, params=params, timeout=5)
+                response.raise_for_status()
+                results = response.json()
+
+                if results.get("results"):
+                    logger.info(f"OpenFDA'da '{query}' bulundu!")
+                    break
+            except requests.exceptions.Timeout:
+                logger.warning(f"OpenFDA timeout — {query}")
+                continue
+            except requests.exceptions.RequestException as e:
+                logger.warning(f"OpenFDA isteği hatası ({query}): {e}")
+                continue
+        else:
+            # Hiçbir arama sonuç vermedi
+            logger.info(f"OpenFDA'da herhangi bir sonuç bulunamadı: {drug_name}")
+            return None
 
         if not results.get("results"):
             logger.info(f"OpenFDA'da '{clean_name}' bulunamadı")
