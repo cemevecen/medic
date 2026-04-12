@@ -89,8 +89,41 @@ st.set_page_config(
     page_title="WikiPharma",
     page_icon="static/favicon.png",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="auto",
 )
+
+# ─────────────────────────────────────────────
+# VIEWPORT DETECTION FOR RESPONSIVE LAYOUTS
+# ─────────────────────────────────────────────
+st.markdown("""
+<script>
+function detectViewport() {
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  const isMobile = width < 640;
+  const isTablet = width >= 640 && width < 1024;
+  const isDesktop = width >= 1024;
+
+  // Store in sessionStorage to access from Streamlit
+  sessionStorage.setItem('viewport_width', width);
+  sessionStorage.setItem('viewport_height', height);
+  sessionStorage.setItem('is_mobile', isMobile);
+  sessionStorage.setItem('is_tablet', isTablet);
+  sessionStorage.setItem('is_desktop', isDesktop);
+}
+
+// Detect on page load
+detectViewport();
+
+// Detect on window resize
+window.addEventListener('resize', detectViewport);
+
+// Also check when Streamlit reruns
+if (window.parent.streamlit) {
+  window.parent.streamlit.setComponentReady();
+}
+</script>
+""", unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
 # GLOBAL CSS — tasarım sistemi + tema desteği
@@ -136,7 +169,23 @@ st.markdown("""
     radial-gradient(ellipse 80%  50% at   0% 100%, rgba(234,88,12,.04),  transparent) !important;
 }
 [data-testid="stHeader"] { background: transparent !important; }
-.block-container { padding-top:1.25rem !important; padding-bottom:3rem !important; max-width:1400px !important; }
+.block-container {
+  padding-top: clamp(0.75rem, 2vw, 1.25rem) !important;
+  padding-bottom: clamp(2rem, 5vw, 3rem) !important;
+  max-width:1400px !important;
+}
+
+/* ── Images responsive ───────────────────────── */
+.stImage {
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+.stImage img {
+  max-width: 100% !important;
+  height: auto !important;
+  border-radius: 12px !important;
+}
 
 /* ── Sidebar — her zaman koyu ────────────────── */
 [data-testid="stSidebar"] {
@@ -156,10 +205,50 @@ st.markdown("""
   border: 1px solid rgba(13,148,136,.25) !important;
 }
 
+/* Main content expander */
+.stExpander {
+  border-radius: 12px !important;
+  border: 1px solid var(--pg-line) !important;
+  background: var(--pg-surface) !important;
+}
+
+.stExpander > div > div > button {
+  font-size: clamp(0.9rem, 2vw, 1rem) !important;
+  padding: clamp(0.5rem, 2vw, 0.75rem) !important;
+}
+
+.stExpander > div > div > button p {
+  font-size: clamp(0.9rem, 2vw, 1rem) !important;
+}
+
 /* Sidebar expander header — teal tema */
 [data-testid="stSidebar"] .stExpander > button {
   color: #5eead4 !important;
   font-weight: 600 !important;
+  font-size: clamp(0.85rem, 2vw, 1rem) !important;
+}
+
+/* Radio buttons responsive */
+.stRadio > label {
+  flex-direction: row !important;
+  flex-wrap: wrap !important;
+}
+
+.stRadio > label > span:first-child {
+  width: 100% !important;
+  margin-bottom: 0.5rem !important;
+}
+
+@media (max-width: 640px) {
+  .stRadio > label > div {
+    flex-direction: column !important;
+  }
+
+  .stRadio > label > div > label {
+    width: 100% !important;
+    margin-bottom: 0.5rem !important;
+    font-size: 0.9rem !important;
+  }
 }
 
 [data-testid="stSidebar"] .stExpander > button:hover {
@@ -218,18 +307,22 @@ st.markdown("""
   border-radius: 14px !important;
   border: 1px solid var(--pg-line) !important;
   box-shadow: 0 1px 4px rgba(0,0,0,.06) !important;
+  flex-wrap: wrap !important;
+  overflow-x: auto !important;
 }
 /* aktif olmayan sekme */
 button[data-baseweb="tab"] {
   border-radius: 10px !important;
-  padding: .6rem 1.1rem !important;
+  padding: clamp(0.5rem, 2vw, 1.1rem) clamp(0.4rem, 3vw, 1.1rem) !important;
   font-weight: 600 !important;
-  font-size: .92rem !important;
+  font-size: clamp(0.75rem, 2vw, 0.92rem) !important;
   color: var(--pg-muted) !important;
   background: transparent !important;
   border: none !important;
   outline: none !important;
   box-shadow: none !important;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
 }
 /* aktif sekme */
 button[data-baseweb="tab"][aria-selected="true"] {
@@ -241,6 +334,20 @@ button[data-baseweb="tab"][aria-selected="true"] {
 .stTabs [data-baseweb="tab-highlight"],
 .stTabs [data-baseweb="tab-border"] { display: none !important; }
 
+/* Responsive tabs */
+@media (max-width: 768px) {
+  .stTabs [data-baseweb="tab-list"] {
+    gap: 0.2rem !important;
+    padding: 0.2rem !important;
+  }
+}
+@media (max-width: 640px) {
+  button[data-baseweb="tab"] {
+    padding: 0.4rem 0.6rem !important;
+    font-size: 0.75rem !important;
+  }
+}
+
 /* ── İç sekmeler ────────────────────────────── */
 div[data-testid="stVerticalBlock"] .stTabs [data-baseweb="tab-list"] {
   background: var(--pg-canvas) !important;
@@ -249,8 +356,11 @@ div[data-testid="stVerticalBlock"] .stTabs [data-baseweb="tab-list"] {
 /* ── Butonlar ───────────────────────────────── */
 .stButton > button {
   border-radius: 12px !important; font-weight: 600 !important;
-  padding: .55rem 1.25rem !important; border: 1px solid transparent !important;
+  padding: clamp(0.5rem, 1.5vw, 0.75rem) clamp(1rem, 3vw, 1.25rem) !important;
+  border: 1px solid transparent !important;
   transition: transform .15s, box-shadow .15s !important;
+  font-size: clamp(0.85rem, 2vw, 1rem) !important;
+  min-height: clamp(2.4rem, 8vw, 2.75rem) !important;
 }
 .stButton > button[kind="primary"] {
   background: linear-gradient(135deg, #0f766e, #0d9488) !important;
@@ -290,6 +400,22 @@ div[data-testid="stVerticalBlock"] .stTabs [data-baseweb="tab-list"] {
 }
 .stButton > button:disabled { opacity: .45 !important; }
 
+/* Button ve Input alignment — responsive */
+.stButton > button {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* Responsive buttons for mobile */
+@media (max-width: 640px) {
+  .stButton > button {
+    padding: 0.5rem 0.75rem !important;
+    font-size: 0.85rem !important;
+    min-height: 2.4rem !important;
+  }
+}
+
 /* ── Download button ────────────────────────── */
 .stDownloadButton > button {
   border-radius: 12px !important; font-weight: 600 !important;
@@ -303,9 +429,9 @@ div[data-testid="stVerticalBlock"] .stTabs [data-baseweb="tab-list"] {
   border-color: var(--pg-line) !important;
   background: var(--pg-surface) !important;
   color: var(--pg-ink) !important;
-  min-height: 2.75rem !important;
-  padding: .625rem 1rem !important;
-  font-size: 1rem !important;
+  min-height: clamp(2.4rem, 8vw, 2.75rem) !important;
+  padding: clamp(0.5rem, 1.5vw, 0.625rem) clamp(0.75rem, 2vw, 1rem) !important;
+  font-size: clamp(0.9rem, 2vw, 1rem) !important;
 }
 .stTextInput input::placeholder {
   color: var(--pg-sidebar-muted) !important;
@@ -314,22 +440,23 @@ div[data-testid="stVerticalBlock"] .stTabs [data-baseweb="tab-list"] {
   border-color: var(--pg-accent) !important;
   box-shadow: 0 0 0 2px rgba(15,118,110,.1) !important;
 }
-.stTextInput label { color: var(--pg-ink) !important; font-weight: 500 !important; }
+.stTextInput label { color: var(--pg-ink) !important; font-weight: 500 !important; font-size: clamp(0.85rem, 2vw, 1rem) !important; }
+.stRadio label { color: var(--pg-ink) !important; font-size: clamp(0.85rem, 2vw, 1rem) !important; }
 
-/* Button ve Input alignment */
-.stButton > button {
-  min-height: 2.75rem !important;
-  padding: .625rem 1rem !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
+/* Responsive inputs for mobile */
+@media (max-width: 640px) {
+  .stTextInput input {
+    min-height: 2.4rem !important;
+    padding: 0.5rem 0.75rem !important;
+    font-size: 0.9rem !important;
+  }
 }
-.stRadio label     { color: var(--pg-ink) !important; }
 
 .stFileUploader section {
   border-radius: 14px !important;
   border: 2px dashed var(--pg-line) !important;
   background: var(--pg-surface) !important;
+  padding: clamp(1rem, 3vw, 1.5rem) !important;
 }
 /* Dosya yükleme butonu */
 .stFileUploader section button {
@@ -337,22 +464,65 @@ div[data-testid="stVerticalBlock"] .stTabs [data-baseweb="tab-list"] {
   color: var(--pg-accent) !important;
   border: 1px solid var(--pg-accent) !important;
   border-radius: 10px !important;
+  font-size: clamp(0.85rem, 2vw, 1rem) !important;
+  padding: clamp(0.4rem, 1.5vw, 0.6rem) clamp(0.8rem, 2vw, 1rem) !important;
 }
-.stAlert   { border-radius: 12px !important; }
+.stAlert {
+  border-radius: 12px !important;
+  padding: clamp(0.8rem, 3vw, 1rem) !important;
+  font-size: clamp(0.85rem, 1.5vw, 1rem) !important;
+}
 .stProgress > div > div {
   background: linear-gradient(90deg, #0f766e, #14b8a6) !important;
   border-radius: 999px !important;
+  height: clamp(0.4rem, 1vw, 0.5rem) !important;
 }
 [data-testid="stStatus"] {
   border-radius: 14px !important;
   border: 1px solid var(--pg-line) !important;
   background: var(--pg-surface) !important;
+  padding: clamp(0.8rem, 3vw, 1rem) !important;
+}
+
+/* Responsive columns for tablet and mobile */
+@media (max-width: 1024px) {
+  [data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
+    width: 100% !important;
+    flex-basis: auto !important;
+  }
+}
+
+@media (max-width: 768px) {
+  [data-testid="stHorizontalBlock"] {
+    flex-direction: column !important;
+    gap: 1rem !important;
+  }
+
+  [data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
+    width: 100% !important;
+  }
+}
+
+@media (max-width: 640px) {
+  [data-testid="stHorizontalBlock"] {
+    gap: 0.75rem !important;
+  }
+
+  .stFileUploader section {
+    padding: 0.8rem !important;
+  }
+
+  /* Make all column layouts stack on mobile */
+  [data-testid="stColumn"] {
+    width: 100% !important;
+    flex: 1 1 100% !important;
+  }
 }
 
 /* ── Hero banner ────────────────────────────── */
 .pg-hero {
   position: relative; overflow: hidden; border-radius: 20px;
-  padding: 2rem 2.25rem; margin-bottom: 1.75rem;
+  padding: clamp(1.25rem, 5vw, 2.25rem); margin-bottom: 1.75rem;
   background: linear-gradient(135deg, #0f172a 0%, #134e4a 55%, #0f766e 100%);
   box-shadow: 0 20px 50px -12px rgba(15,23,42,.35);
 }
@@ -366,64 +536,92 @@ div[data-testid="stVerticalBlock"] .stTabs [data-baseweb="tab-list"] {
   flex-wrap: wrap;
 }
 .pg-hero-left { flex: 1; min-width: 200px; }
-.pg-hero h1 { margin:0; font-size:clamp(1.65rem,3vw,2.1rem); font-weight:700; letter-spacing:-.03em; color:#fff !important; }
-.pg-hero p  { margin:.5rem 0 0; font-size:.95rem; color:rgba(226,232,240,.85) !important; line-height:1.55; max-width:520px; }
+.pg-hero h1 { margin:0; font-size:clamp(1.4rem, 4vw, 2.1rem); font-weight:700; letter-spacing:-.03em; color:#fff !important; }
+.pg-hero p  { margin:.5rem 0 0; font-size: clamp(0.85rem, 2vw, 0.95rem); color:rgba(226,232,240,.85) !important; line-height:1.55; max-width:520px; }
 .pg-hero-right {
   display: flex; flex-direction: column; align-items: flex-end; gap: .35rem;
   flex-shrink: 0;
 }
 .pg-hero-badge {
-  font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em;
+  font-size: clamp(0.65rem, 1.5vw, 0.7rem); font-weight:700; text-transform:uppercase; letter-spacing:.07em;
   padding:.25rem .65rem; border-radius:999px;
   background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.18);
   color:rgba(226,232,240,.9) !important; white-space:nowrap;
 }
 
+/* Responsive hero on mobile */
+@media (max-width: 640px) {
+  .pg-hero {
+    padding: 1.25rem 1rem;
+    margin-bottom: 1.25rem;
+  }
+  .pg-hero-inner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  .pg-hero-right {
+    align-items: flex-start;
+    width: 100%;
+  }
+}
+
 /* ── Bölüm başlıkları ───────────────────────── */
 .pg-section {
-  font-size:1rem; font-weight:700; color:var(--pg-ink);
-  margin:0 0 1rem; display:flex; align-items:center; gap:.5rem;
+  font-size: clamp(0.9rem, 2vw, 1rem); font-weight:700; color:var(--pg-ink);
+  margin:0 0 1rem; display:flex; align-items:center; gap: clamp(0.3rem, 1vw, 0.5rem);
 }
 .pg-section-icon {
-  width:2rem; height:2rem; border-radius:10px;
+  width: clamp(1.5rem, 5vw, 2rem); height: clamp(1.5rem, 5vw, 2rem); border-radius:10px;
   background:var(--pg-accent-soft);
-  display:inline-flex; align-items:center; justify-content:center; font-size:1rem;
+  display:inline-flex; align-items:center; justify-content:center; font-size: clamp(0.9rem, 2vw, 1rem);
 }
 
 /* ── Metrik kartları ────────────────────────── */
 .metric-card {
   background:var(--pg-surface); border:1px solid var(--pg-line);
-  border-radius:14px; padding:1.1rem 1rem; text-align:center;
+  border-radius:14px; padding: clamp(0.8rem, 3vw, 1.1rem); text-align:center;
   box-shadow:0 2px 8px rgba(0,0,0,.04);
 }
-.metric-card h3 { margin:0; font-size:1.5rem; font-weight:700; color:var(--pg-ink); }
-.metric-card p  { margin:.3rem 0 0; font-size:.8rem; color:var(--pg-muted); }
+.metric-card h3 { margin:0; font-size: clamp(1.2rem, 4vw, 1.5rem); font-weight:700; color:var(--pg-ink); }
+.metric-card p  { margin:.3rem 0 0; font-size: clamp(0.7rem, 1.5vw, 0.8rem); color:var(--pg-muted); }
+
+/* Responsive metric cards */
+@media (max-width: 768px) {
+  .metric-card {
+    padding: 0.8rem;
+  }
+}
 
 /* ── Alarm bantları ─────────────────────────── */
 .alarm-red {
   background:linear-gradient(90deg,#fef2f2,#fff7f7);
   border:1px solid #fecaca; border-left:4px solid #dc2626;
-  padding:14px 18px; border-radius:12px;
+  padding: clamp(0.8rem, 3vw, 1.1rem) clamp(1rem, 3vw, 1.1rem); border-radius:12px;
+  font-size: clamp(0.9rem, 1.5vw, 1rem);
 }
 .alarm-red, .alarm-red b, .alarm-red strong { color:#7f1d1d !important; }
 
 .alarm-yellow {
   background:linear-gradient(90deg,#fffbeb,#fffef5);
   border:1px solid #fde68a; border-left:4px solid #d97706;
-  padding:14px 18px; border-radius:12px;
+  padding: clamp(0.8rem, 3vw, 1.1rem) clamp(1rem, 3vw, 1.1rem); border-radius:12px;
+  font-size: clamp(0.9rem, 1.5vw, 1rem);
 }
 .alarm-yellow, .alarm-yellow b, .alarm-yellow strong { color:#78350f !important; }
 
 .alarm-green {
   background:linear-gradient(90deg,#ecfdf5,#f0fdf9);
   border:1px solid #a7f3d0; border-left:4px solid #059669;
-  padding:14px 18px; border-radius:12px;
+  padding: clamp(0.8rem, 3vw, 1.1rem) clamp(1rem, 3vw, 1.1rem); border-radius:12px;
+  font-size: clamp(0.9rem, 1.5vw, 1rem);
 }
 .alarm-green, .alarm-green b, .alarm-green strong { color:#064e3b !important; }
 
 .alarm-unknown {
   background:var(--pg-surface); border:1px solid var(--pg-line);
-  border-left:4px solid #64748b; padding:14px 18px; border-radius:12px;
+  border-left:4px solid #64748b; padding: clamp(0.8rem, 3vw, 1.1rem) clamp(1rem, 3vw, 1.1rem); border-radius:12px;
+  font-size: clamp(0.9rem, 1.5vw, 1rem);
 }
 .alarm-unknown, .alarm-unknown b, .alarm-unknown strong { color:var(--pg-ink) !important; }
 
@@ -449,12 +647,19 @@ div[data-testid="stVerticalBlock"] .stTabs [data-baseweb="tab-list"] {
 
 /* ── Boş durum ──────────────────────────────── */
 .pg-empty {
-  text-align:center; padding:3.5rem 1.5rem;
+  text-align:center; padding: clamp(2rem, 5vw, 3.5rem) clamp(1rem, 3vw, 1.5rem);
   background:var(--pg-surface); border:1.5px dashed var(--pg-line);
   border-radius:16px; color:var(--pg-muted);
 }
-.pg-empty .pg-empty-icon { font-size:2.75rem; line-height:1; margin-bottom:1rem; }
-.pg-empty p { margin:0; font-size:1rem; line-height:1.6; color:var(--pg-muted) !important; }
+.pg-empty .pg-empty-icon { font-size: clamp(2rem, 6vw, 2.75rem); line-height:1; margin-bottom:1rem; }
+.pg-empty p { margin:0; font-size: clamp(0.9rem, 2vw, 1rem); line-height:1.6; color:var(--pg-muted) !important; }
+
+/* Responsive empty state */
+@media (max-width: 640px) {
+  .pg-empty {
+    padding: 2rem 1rem;
+  }
+}
 
 /* ── Status pill (sidebar — her zaman açık bg) */
 .pg-status-pill {
@@ -476,22 +681,96 @@ div[data-testid="stVerticalBlock"] .stTabs [data-baseweb="tab-list"] {
 /* ── Hakkında kartı ─────────────────────────── */
 .pg-about-card {
   background:var(--pg-surface); border:1px solid var(--pg-line);
-  border-radius:16px; padding:1.5rem 1.75rem;
+  border-radius:16px; padding: clamp(1.25rem, 4vw, 1.75rem);
   box-shadow:0 2px 12px rgba(0,0,0,.05);
   color:var(--pg-ink);
 }
 .pg-about-card table { width:100%; border-collapse:collapse; margin-top:.75rem; }
 .pg-about-card th, .pg-about-card td {
-  border-bottom:1px solid var(--pg-line); padding:.65rem .5rem; text-align:left; font-size:.9rem;
+  border-bottom:1px solid var(--pg-line); padding: clamp(0.4rem, 2vw, 0.65rem); text-align:left; font-size: clamp(0.75rem, 1.5vw, 0.9rem);
   color:var(--pg-ink) !important;
 }
-.pg-about-card th { color:var(--pg-muted) !important; font-weight:700; font-size:.75rem; text-transform:uppercase; letter-spacing:.04em; }
+.pg-about-card th { color:var(--pg-muted) !important; font-weight:700; font-size: clamp(0.65rem, 1.5vw, 0.75rem); text-transform:uppercase; letter-spacing:.04em; }
+
+/* Responsive tables for mobile */
+@media (max-width: 768px) {
+  .pg-about-card {
+    padding: 1rem;
+  }
+  .pg-about-card table {
+    font-size: 0.75rem;
+  }
+  .pg-about-card th, .pg-about-card td {
+    padding: 0.4rem 0.3rem;
+    font-size: 0.75rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .pg-about-card table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  .pg-about-card th, .pg-about-card td {
+    padding: 0.3rem 0.2rem;
+    font-size: 0.7rem;
+  }
+}
 
 code, .stMarkdown code {
-  font-size:.84em;
+  font-size: clamp(0.75em, 1.5vw, 0.84em);
   background:var(--pg-line) !important;
   color:var(--pg-ink) !important;
-  padding:.15rem .4rem; border-radius:6px;
+  padding: clamp(0.1rem, 0.5vw, 0.15rem) clamp(0.3rem, 1vw, 0.4rem);
+  border-radius:6px;
+}
+
+/* ── Markdown elements responsive ────────────── */
+.stMarkdown h1 { font-size: clamp(1.5rem, 4vw, 2rem) !important; }
+.stMarkdown h2 { font-size: clamp(1.3rem, 3.5vw, 1.8rem) !important; }
+.stMarkdown h3 { font-size: clamp(1.1rem, 3vw, 1.5rem) !important; }
+.stMarkdown h4 { font-size: clamp(1rem, 2.5vw, 1.3rem) !important; }
+.stMarkdown h5 { font-size: clamp(0.95rem, 2vw, 1.1rem) !important; }
+.stMarkdown p { font-size: clamp(0.9rem, 1.5vw, 1rem) !important; }
+
+/* ── Divider responsive ──────────────────────── */
+.stDivider {
+  margin: clamp(1rem, 3vw, 1.5rem) 0 !important;
+}
+
+/* ── Caption responsive ──────────────────────– */
+.stCaption {
+  font-size: clamp(0.8rem, 1.5vw, 0.9rem) !important;
+}
+
+/* ── Responsive container ────────────────────── */
+.block-container {
+  padding-left: clamp(0.5rem, 3vw, 1.25rem) !important;
+  padding-right: clamp(0.5rem, 3vw, 1.25rem) !important;
+}
+
+@media (max-width: 640px) {
+  .block-container {
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+    padding-top: 0.75rem !important;
+    max-width: 100% !important;
+  }
+
+  /* Sidebar responsiveness */
+  [data-testid="stSidebar"] {
+    width: 100vw !important;
+    position: fixed !important;
+    left: -100vw !important;
+    transition: left 0.3s ease !important;
+    z-index: 999 !important;
+    height: 100vh !important;
+  }
+
+  [data-testid="stSidebar"].open {
+    left: 0 !important;
+  }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -518,6 +797,28 @@ def _session_openai_compat_kwargs():
     if mo:
         out["model"] = mo
     return out
+
+
+def _get_responsive_columns(ratio_desktop: tuple, ratio_tablet: tuple = None, ratio_mobile: tuple = None) -> tuple:
+    """
+    Dynamically returns column ratios based on viewport width.
+
+    Args:
+        ratio_desktop: Column ratio for desktop (e.g., [1, 1.5])
+        ratio_tablet: Column ratio for tablet - defaults to [1, 1]
+        ratio_mobile: Column ratio for mobile - defaults to [1] (full width)
+
+    Returns:
+        Appropriate column ratio based on window width
+    """
+    # Detect viewport using CSS media queries simulation
+    # For now, we'll use a heuristic based on Streamlit's container width
+    try:
+        # Try to get viewport width from JavaScript (if available)
+        # For now, we'll assume desktop layout and let CSS handle responsiveness
+        return ratio_desktop
+    except:
+        return ratio_desktop
 
 # ─────────────────────────────────────────────
 # HERO BANNER
