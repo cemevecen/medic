@@ -1323,21 +1323,22 @@ with tab_pharmacy:
     col_il, col_ilce = st.columns(2, gap="small")
 
     with col_il:
+        from turkish_cities import get_cities_list
+
+        cities_list = get_cities_list()
         selected_city = st.selectbox(
             "İl Seçin",
-            options=["İstanbul", "Ankara", "İzmir"],
+            options=cities_list,
             index=0,
             key="pharmacy_city_select"
         )
 
     # İlçeleri seçili ile göre güncelle
     with col_ilce:
-        from pharmacy_prices import TURKISH_PHARMACIES
+        from turkish_cities import get_districts_for_city
 
         # Seçili ile göre ilçeleri bul
-        available_districts = sorted(
-            list(set([p["district"] for p in TURKISH_PHARMACIES if p["city"] == selected_city]))
-        )
+        available_districts = get_districts_for_city(selected_city)
 
         selected_district = st.selectbox(
             "İlçe Seçin",
