@@ -234,22 +234,27 @@ def _translate_to_turkish(text: str) -> str:
             logger.warning("GROQ_API_KEY bulunamadı, çeviri yapılamayacak")
             return text
 
-        client = Groq(api_key=api_key)
+        client = Groq(api_key=api_key, timeout=120.0)
 
-        message = client.messages.create(
-            model="mixtral-8x7b-32768",
-            max_tokens=500,
+        response = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
             messages=[
                 {
                     "role": "user",
                     "content": f"Bu tıbbi İngilizce metni kısaca ve doğru bir şekilde Türkçeye çevir. Sadece çeviriyi yaz, ek açıklama yapma:\n\n{text}"
                 }
-            ]
+            ],
+            max_completion_tokens=500,
+            temperature=0.3,
         )
 
-        translated = message.content[0].text.strip()
-        logger.info(f"✓ Çeviri tamamlandı: {text[:50]}... → {translated[:50]}...")
-        return translated
+        translated = (response.choices[0].message.content or "").strip()
+        if translated:
+            logger.info(f"✓ Çeviri tamamlandı: {text[:50]}... → {translated[:50]}...")
+            return translated
+        else:
+            logger.warning(f"Çeviri boş sonuç döndü: {text[:50]}")
+            return text
 
     except Exception as e:
         logger.warning(f"Çeviri hatası: {e}")
