@@ -5,7 +5,7 @@ agents.py: Tüm ajan sınıfları ve ana orkestratör bu dosyada tanımlanmışt
 
 # Versiyon numarası — app.py session_state cache invalidation için kullanılır.
 # Fact-Checker / parser / orchestrator davranışı değiştiğinde artırın.
-PHARMA_GUARD_VERSION = "1.17"
+PHARMA_GUARD_VERSION = "1.18"
 
 import logging
 import os
@@ -123,6 +123,24 @@ def vision_output_has_legacy_user_facing_copy(vision: Optional[Dict[str, Any]]) 
     if isinstance(ga, dict) and _legacy_noise_in_text(ga.get("message")):
         return True
     return False
+
+
+def _vision_field_str(
+    vision: Optional[Dict[str, Any]],
+    key: str,
+    *,
+    alt: str = "",
+) -> str:
+    """
+    Vision sözlüğünden güvenli metin. Anahtar yoksa veya değer None/boşsa `alt` kullanılır
+    (.get(x, '') Python'da x anahtarı açıkça None ise yine None döndüğü için strip() patlamasını önler).
+    """
+    if not isinstance(vision, dict):
+        return str(alt or "").strip()
+    if key not in vision or vision.get(key) is None:
+        return str(alt or "").strip()
+    s = str(vision.get(key) or "").strip()
+    return s if s else str(alt or "").strip()
 
 
 def vision_dict_for_ui(vision: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -1105,8 +1123,8 @@ class RAGSpecialistAgent:
         if not self.corpus_loaded or self.vectorstore is None:
             # Corpus boş — vision bilgisinden mock sonuçlar oluştur
             if vision_data:
-                drug_name = str(vision_data.get("ticari_ad") or "").strip()
-                etken = str(vision_data.get("etken_madde") or "").strip()
+                drug_name = _vision_field_str(vision_data, "ticari_ad")
+                etken = _vision_field_str(vision_data, "etken_madde")
                 if drug_name or etken:
                     # Fact-Check'in karşılaştıracak bir kaynak olsun
                     head = " / ".join(p for p in (drug_name, etken) if p)
@@ -1520,9 +1538,9 @@ class FactChecker:
                 "corpus_bos": True,
             }
 
-        drug_name = (vision_data.get("ticari_ad") or "").lower()
-        etken = (vision_data.get("etken_madde") or "").lower()
-        dozaj = vision_data.get("dozaj", "")
+        drug_name = _vision_field_str(vision_data, "ticari_ad").lower()
+        etken = _vision_field_str(vision_data, "etken_madde").lower()
+        dozaj = _vision_field_str(vision_data, "dozaj")
 
         # Görsel analiz başarısızsa fact-check yapma
         if not drug_name and not etken:
@@ -1671,8 +1689,8 @@ class PharmaGuardOrchestrator:
 
         # ADIM 2: RAG (embedding + Chroma ilk kez burada yüklenir; “Ajanlar başlatılıyor” adımı kısalır)
         _progress(2, "📚 RAG Specialist: veritabanı hazırlanıyor / taranıyor…")
-        ticari_ad = vision_data.get("ticari_ad", drug_name_text or "")
-        etken = vision_data.get("etken_madde", "")
+        ticari_ad = _vision_field_str(vision_data, "ticari_ad", alt=drug_name_text or "")
+        etken = _vision_field_str(vision_data, "etken_madde")
         bd = vision_data.get("barkod_detay") or {}
         barkod_extra = ""
         if isinstance(bd, dict) and bd.get("tespit_edildi"):
