@@ -408,7 +408,7 @@ with tab_analyze:
         )
         method = st.radio(
             "yöntem",
-            ["🖼️ Görsel Yükle", "📄 PDF Prospektüs", "✏️ İlaç Adı Yaz"],
+            ["🖼️ Görsel ile", "📄 Prospektüs PDF ile", "✏️ İlaç Adı ile"],
             horizontal=True,
             label_visibility="collapsed",
         )
