@@ -500,13 +500,19 @@ with tab_analyze:
                 st.markdown(f'<div class="metric-card"><h3>{rc}</h3><p>RAG Sonucu</p></div>',
                             unsafe_allow_html=True)
             with m3:
-                fc    = res.get("fact_check", {})
-                fc_ok = not fc.get("uyusmazlik", False)
+                fc         = res.get("fact_check", {})
+                fc_ok      = not fc.get("uyusmazlik", False)
+                corpus_bos = fc.get("corpus_bos", False)
+                fc_icon    = "⚠️" if corpus_bos else ("✅" if fc_ok else "⛔")
+                fc_label   = "Corpus Boş" if corpus_bos else "Fact-Check"
                 st.markdown(
-                    f'<div class="metric-card"><h3>{"✅" if fc_ok else "⛔"}</h3>'
-                    f'<p>Fact-Check</p></div>', unsafe_allow_html=True)
+                    f'<div class="metric-card"><h3>{fc_icon}</h3>'
+                    f'<p>{fc_label}</p></div>', unsafe_allow_html=True)
 
-            if not fc_ok:
+            if corpus_bos:
+                st.info("ℹ️ **Corpus boş** — Fact-Check yapılamadı. "
+                        "Daha güvenilir sonuçlar için Prospektüs sekmesinden PDF yükleyin.")
+            elif not fc_ok:
                 st.error("⛔ **VERİ UYUŞMAZLIĞI**\n\n" +
                          "\n".join(f"- {s}" for s in fc.get("sorunlar", [])))
             st.markdown("")

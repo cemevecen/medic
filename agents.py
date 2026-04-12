@@ -8,6 +8,7 @@ import json
 import base64
 import time
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import BytesIO
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
@@ -311,20 +312,38 @@ class VisionScannerAgent:
 
     @staticmethod
     def _parse_json_response(raw: str, source: str) -> Dict[str, Any]:
-        """Model çıktısından JSON bloğu ayıklar."""
-        # ```json ... ``` bloğunu temizle
+        """Model çıktısından JSON bloğu ayıklar — 3 aşamalı robust parser."""
+        # 1) ```json ... ``` bloğunu temizle
         cleaned = re.sub(r"```(?:json)?", "", raw).replace("```", "").strip()
+        # 2) Doğrudan parse
         try:
             data = json.loads(cleaned)
             data["kaynak"] = source
             return data
         except json.JSONDecodeError:
-            # JSON yoksa, ham metni döndür
-            return {
-                "ham_cikti": raw,
-                "kaynak": source,
-                "hata": "JSON ayrıştırma başarısız",
-            }
+            pass
+        # 3) Metin içindeki ilk { ... } bloğunu regex ile bul
+        m = re.search(r"\{[\s\S]*\}", cleaned)
+        if m:
+            try:
+                data = json.loads(m.group())
+                data["kaynak"] = source
+                return data
+            except json.JSONDecodeError:
+                pass
+        # 4) Ham metni sakla; ticari_ad'ı tahmin etmeye çalış
+        guessed: Dict[str, Any] = {
+            "kaynak": source,
+            "ham_cikti": raw[:500],
+            "notlar": "JSON ayrıştırılamadı; ham çıktı korundu.",
+        }
+        # Basit anahtar-değer satırlarını al (ör. "ticari_ad: Alka-Seltzer")
+        for key in ["ticari_ad", "etken_madde", "dozaj", "form", "uretici"]:
+            pat = rf'"{key}"\s*:\s*"([^"]+)"'
+            hit = re.search(pat, cleaned, re.IGNORECASE)
+            if hit:
+                guessed[key] = hit.group(1)
+        return guessed
 
 
 # ---------------------------------------------------------------------------
@@ -498,7 +517,27 @@ class SafetyAuditorAgent:
         try:
             return json.loads(cleaned)
         except json.JSONDecodeError:
-            return {"ham_cikti": raw, "hata": "JSON ayrıştırma başarısız", "guven_puani": 3}
+            pass
+        m = re.search(r"\{[\s\S]*\}", cleaned)
+        if m:
+            try:
+                return json.loads(m.group())
+            except json.JSONDecodeError:
+                pass
+        # Kritik alanları regex ile tahmin et
+        result: Dict[str, Any] = {"guven_puani": 3, "ham_cikti": raw[:400]}
+        for key in ["alarm_seviyesi", "alarm_gerekce"]:
+            pat = rf'"{key}"\s*:\s*"([^"]+)"'
+            hit = re.search(pat, cleaned, re.IGNORECASE)
+            if hit:
+                result[key] = hit.group(1)
+        # alarm_seviyesi metinden de çıkarılabilir
+        if "alarm_seviyesi" not in result:
+            for level in ["KIRMIZI", "SARI", "YEŞİL"]:
+                if level in raw.upper():
+                    result["alarm_seviyesi"] = level
+                    break
+        return result
 
 
 # ---------------------------------------------------------------------------
@@ -550,7 +589,20 @@ class CorporateAnalystAgent:
         try:
             return json.loads(cleaned)
         except json.JSONDecodeError:
-            return {"ham_cikti": raw, "hata": "JSON ayrıştırma başarısız", "guven_puani": 3}
+            pass
+        m = re.search(r"\{[\s\S]*\}", cleaned)
+        if m:
+            try:
+                return json.loads(m.group())
+            except json.JSONDecodeError:
+                pass
+        result: Dict[str, Any] = {"guven_puani": 3, "ham_cikti": raw[:400]}
+        for key in ["firma_adi", "ulke", "titck_durumu", "genel_degerlendirme"]:
+            pat = rf'"{key}"\s*:\s*"([^"]+)"'
+            hit = re.search(pat, cleaned, re.IGNORECASE)
+            if hit:
+                result[key] = hit.group(1)
+        return result
 
 
 # ---------------------------------------------------------------------------
@@ -638,39 +690,61 @@ class FactChecker:
 
     @staticmethod
     def check(vision_data: Dict, rag_results: List[Dict]) -> Dict[str, Any]:
-        issues = []
-        drug_name = vision_data.get("ticari_ad", "").lower()
-        etken = vision_data.get("etken_madde", "")
+        # Corpus boşsa veya tüm kaynaklar "—" ise karşılaştırma yapma
+        real_results = [
+            r for r in rag_results
+            if r.get("kaynak", "—") not in ("—", "") and "Prospektüs veritabanı" not in r.get("metin", "")
+        ]
+        if not real_results:
+            return {
+                "uyusmazlik": False,
+                "sorunlar": [],
+                "mesaj": "ℹ️ Corpus boş — Fact-Check atlandı (prospektüs yüklenmemiş).",
+                "corpus_bos": True,
+            }
+
+        drug_name = (vision_data.get("ticari_ad") or "").lower()
+        etken = (vision_data.get("etken_madde") or "").lower()
         dozaj = vision_data.get("dozaj", "")
 
-        for result in rag_results:
-            metin = result.get("metin", "").lower()
-            # Etken madde kontrolü
-            if etken and etken.lower() not in metin and drug_name not in metin:
-                issues.append(
-                    f"RAG kaynağı '{result['kaynak']}' içinde '{etken}' veya '{drug_name}' bulunamadı."
-                )
-            # Dozaj tutarsızlık kontrolü (basit sayısal kontrol)
-            if dozaj:
-                nums_vision = re.findall(r"\d+(?:\.\d+)?", str(dozaj))
-                nums_rag = re.findall(r"\d+(?:\.\d+)?", metin)
-                for n in nums_vision:
-                    if n in nums_rag:
-                        break
-                else:
-                    if nums_vision:
-                        issues.append(
-                            f"Dozaj uyuşmazlığı: Görselde '{dozaj}' — "
-                            f"RAG kaynağında '{result['kaynak']}' eşleşme yok."
-                        )
+        # Görsel analiz başarısızsa fact-check yapma
+        if not drug_name and not etken:
+            return {"uyusmazlik": False, "sorunlar": [], "mesaj": "ℹ️ İlaç adı yok — Fact-Check atlandı."}
+
+        issues = []
+        # En az bir sonuçta eşleşme varsa geçerli say
+        name_found = any(
+            (drug_name and drug_name in r.get("metin", "").lower()) or
+            (etken and etken in r.get("metin", "").lower())
+            for r in real_results
+        )
+        if not name_found and (drug_name or etken):
+            sample = real_results[0].get("kaynak", "?")
+            issues.append(
+                f"'{etken or drug_name}' hiçbir prospektüs kaynağında bulunamadı "
+                f"(örn. '{sample}'). Corpus'a doğru PDF yüklenmiş mi?"
+            )
+
+        # Dozaj kontrolü — en az bir sonuçta sayı eşleşmesi yeterli
+        if dozaj and not issues:
+            nums_vision = re.findall(r"\d+(?:[.,]\d+)?", str(dozaj))
+            if nums_vision:
+                all_rag_text = " ".join(r.get("metin", "") for r in real_results).lower()
+                nums_rag = re.findall(r"\d+(?:[.,]\d+)?", all_rag_text)
+                if not any(n in nums_rag for n in nums_vision):
+                    issues.append(
+                        f"Dozaj uyuşmazlığı olabilir: görselde '{dozaj}' — "
+                        "prospektüslerde bu sayısal değer bulunamadı."
+                    )
 
         if issues:
             return {
                 "uyusmazlik": True,
                 "sorunlar": issues,
                 "mesaj": "⚠️ VERİ UYUŞMAZLIĞI: Fact-Checker tutarsızlık tespit etti!",
+                "corpus_bos": False,
             }
-        return {"uyusmazlik": False, "sorunlar": [], "mesaj": "✅ Fact-Check geçti."}
+        return {"uyusmazlik": False, "sorunlar": [], "mesaj": "✅ Fact-Check geçti.", "corpus_bos": False}
 
 
 # ---------------------------------------------------------------------------
@@ -753,19 +827,22 @@ class PharmaGuardOrchestrator:
         fact_check = self.fact_checker.check(vision_data, rag_results)
         results["fact_check"] = fact_check
 
-        # ADIM 4: Güvenlik Denetimi
-        _progress(4, "🛡️ Safety Auditor: Güvenlik analizi yapılıyor...")
-        safety_data = self.safety_agent.audit(vision_data, rag_results)
-        results["safety"] = safety_data
-
-        # ADIM 5: Firma Analizi
-        _progress(5, "🏭 Corporate Analyst: Üretici firma analiz ediliyor...")
+        # ADIM 4+5: Safety Auditor ve Corporate Analyst — paralel çalıştır
+        _progress(4, "🛡️ Safety Auditor + 🏭 Corporate Analyst: Paralel analiz başladı...")
         manufacturer = vision_data.get("uretici")
-        corporate_data = self.corporate_agent.analyze(ticari_ad, manufacturer)
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            fut_safety    = pool.submit(self.safety_agent.audit, vision_data, rag_results)
+            fut_corporate = pool.submit(self.corporate_agent.analyze, ticari_ad, manufacturer)
+            safety_data   = fut_safety.result()
+            corporate_data = fut_corporate.result()
+
+        results["safety"]    = safety_data
         results["corporate"] = corporate_data
+        _progress(5, "✅ Safety + Corporate tamamlandı.")
 
         # ADIM 6: Rapor Sentezi
-        _progress(6, "📝 Report Synthesizer: Nihai rapor hazırlanıyor...")
+        _progress(6, "📝 Report Synthesizer: Nihai Türkçe rapor hazırlanıyor...")
         report_text, avg_confidence, synthesis_error = self.synthesizer.synthesize(
             vision_data, safety_data, corporate_data, rag_results
         )
