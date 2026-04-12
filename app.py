@@ -244,24 +244,29 @@ div[data-testid="stVerticalBlock"] .stTabs [data-baseweb="tab-list"] {
   box-shadow: 0 6px 20px rgba(15,118,110,.3) !important;
 }
 .stButton > button[kind="secondary"] {
-  background: var(--pg-surface) !important;
-  color: var(--pg-ink) !important;
-  border-color: var(--pg-line) !important;
+  background: linear-gradient(135deg, rgba(13,148,136,.1), rgba(15,118,110,.1)) !important;
+  color: #5eead4 !important;
+  border: 1px solid rgba(13,148,136,.3) !important;
 }
 .stButton > button[kind="secondary"]:hover {
-  background: var(--pg-accent-soft) !important;
-  border-color: var(--pg-accent) !important;
+  background: linear-gradient(135deg, rgba(13,148,136,.2), rgba(15,118,110,.2)) !important;
+  border-color: rgba(13,148,136,.6) !important;
+  color: #d1faf4 !important;
 }
-/* Varsayılan (secondary olmayan) butonlar */
+/* Varsayılan (secondary olmayan) butonlar — tema uyumlu */
 .stButton > button:not([kind="primary"]):not([kind="secondary"]) {
-  background: var(--pg-surface) !important;
-  color: var(--pg-ink) !important;
-  border-color: var(--pg-line) !important;
+  background: linear-gradient(135deg, rgba(13,148,136,.15), rgba(15,118,110,.15)) !important;
+  color: #5eead4 !important;
+  border: 1px solid rgba(13,148,136,.3) !important;
 }
 .stButton > button:not([kind="primary"]):not([kind="secondary"]):hover {
-  background: var(--pg-accent-soft) !important;
-  border-color: var(--pg-accent) !important;
-  color: var(--pg-accent) !important;
+  background: linear-gradient(135deg, rgba(13,148,136,.25), rgba(15,118,110,.25)) !important;
+  border-color: rgba(13,148,136,.6) !important;
+  color: #d1faf4 !important;
+  box-shadow: 0 4px 12px rgba(13,148,136,.15) !important;
+}
+.stButton > button:not([kind="primary"]):not([kind="secondary"]):active {
+  background: linear-gradient(135deg, rgba(13,148,136,.35), rgba(15,118,110,.35)) !important;
 }
 .stButton > button:disabled { opacity: .45 !important; }
 
