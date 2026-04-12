@@ -93,7 +93,7 @@ st.set_page_config(
 )
 
 # ─────────────────────────────────────────────
-# VIEWPORT DETECTION & GEOLOCATION
+# VIEWPORT DETECTION
 # ─────────────────────────────────────────────
 st.markdown("""
 <script>
@@ -104,7 +104,6 @@ function detectViewport() {
   const isTablet = width >= 640 && width < 1024;
   const isDesktop = width >= 1024;
 
-  // Store in sessionStorage to access from Streamlit
   sessionStorage.setItem('viewport_width', width);
   sessionStorage.setItem('viewport_height', height);
   sessionStorage.setItem('is_mobile', isMobile);
@@ -112,55 +111,14 @@ function detectViewport() {
   sessionStorage.setItem('is_desktop', isDesktop);
 }
 
-function getDeviceLocation() {
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-      function(position) {
-        const lat = position.coords.latitude;
-        const lon = position.coords.longitude;
-        const accuracy = position.coords.accuracy;
-
-        sessionStorage.setItem('user_latitude', lat);
-        sessionStorage.setItem('user_longitude', lon);
-        sessionStorage.setItem('location_accuracy', accuracy);
-        sessionStorage.setItem('location_available', 'true');
-
-        console.log('Konum başarıyla alındı:', lat, lon);
-      },
-      function(error) {
-        console.log('Konum izni reddedildi veya kullanılamadı:', error.message);
-        sessionStorage.setItem('location_available', 'false');
-        sessionStorage.setItem('location_error', error.message);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 5000,
-        maximumAge: 0
-      }
-    );
-  } else {
-    console.log('Geolocation desteklenmiyor');
-    sessionStorage.setItem('location_available', 'false');
-  }
-}
-
-// Detect on page load
 detectViewport();
-getDeviceLocation();
-
-// Detect on window resize
 window.addEventListener('resize', detectViewport);
 
-// Also check when Streamlit reruns
 if (window.parent.streamlit) {
   window.parent.streamlit.setComponentReady();
 }
 </script>
 """, unsafe_allow_html=True)
-
-# Initialize geolocation in session state
-if "user_location" not in st.session_state:
-    st.session_state.user_location = {"lat": None, "lon": None, "available": False}
 
 # ─────────────────────────────────────────────
 # GLOBAL CSS — tasarım sistemi + tema desteği
@@ -1359,125 +1317,71 @@ with tab_pharmacy:
     with col_search:
         pharmacy_search_btn = st.button("🔍 Fiyat Ara", use_container_width=True, key="pharmacy_search_btn")
 
-    # Konum seçeneği
+    # İl-İlçe seçimi
     st.markdown("---")
 
-    # Check for real geolocation from JavaScript
-    try:
-        from streamlit.runtime import get_script_run_ctx
-        # Try to get location from browser
-        location_html = st.empty()
-    except:
-        pass
+    col_il, col_ilce = st.columns(2, gap="small")
 
-    location_option = st.radio(
-        "Konum seçeneği",
-        ["📍 Tüm Eczaneleri Göster", "🗺️ Yakındaki Eczaneleri Bul (GPS)"],
-        horizontal=True,
-        label_visibility="collapsed",
-    )
+    with col_il:
+        selected_city = st.selectbox(
+            "İl Seçin",
+            options=["İstanbul", "Ankara", "İzmir"],
+            index=0,
+            key="pharmacy_city_select"
+        )
+
+    # İlçeleri seçili ile göre güncelle
+    with col_ilce:
+        from pharmacy_prices import TURKISH_PHARMACIES
+
+        # Seçili ile göre ilçeleri bul
+        available_districts = sorted(
+            list(set([p["district"] for p in TURKISH_PHARMACIES if p["city"] == selected_city]))
+        )
+
+        selected_district = st.selectbox(
+            "İlçe Seçin",
+            options=available_districts if available_districts else ["—"],
+            key="pharmacy_district_select"
+        )
 
     user_lat = None
     user_lon = None
-    max_distance = 10
-
-    if "Yakındaki" in location_option:
-        # Try to get real geolocation from JavaScript
-        location_placeholder = st.empty()
-
-        # Store location in JavaScript and read it
-        st.markdown("""
-        <script>
-        // Try to get saved location from sessionStorage
-        const userLat = sessionStorage.getItem('user_latitude');
-        const userLon = sessionStorage.getItem('user_longitude');
-        const locationAvailable = sessionStorage.getItem('location_available') === 'true';
-
-        if (userLat && userLon) {
-          console.log('Konum kullanılabilir:', userLat, userLon);
-        } else {
-          console.log('Konum henüz alınmadı');
-        }
-        </script>
-        """, unsafe_allow_html=True)
-
-        col_auto, col_manual, col_distance = st.columns(3, gap="small")
-
-        with col_auto:
-            use_auto_location = st.checkbox(
-                "📍 Otomatik konum kullan (GPS)",
-                value=True,
-                help="Cihazınızın GPS konumunu kullanır (hızlı ve doğru)"
-            )
-
-        if use_auto_location:
-            with col_manual:
-                st.markdown("**Konum alınıyor…** ⏳")
-
-            # Default values (will be overridden if user allows location)
-            user_lat = 41.0082  # Default İstanbul Taksim
-            user_lon = 28.9784
-
-            # Show note
-            st.info("""
-📍 **Konum İzni Gerekli:**
-1. Tarayıcı konumu sorduğunda "İzin Ver" seçin
-2. Sistem konumunuzu otomatik algılayacak
-3. Yakın eczaneler listelenecek
-            """)
-
-        else:
-            with col_manual:
-                st.markdown("**Manuel Giriş:**")
-
-            col_lat, col_lon = st.columns(2, gap="small")
-
-            with col_lat:
-                user_lat = st.number_input(
-                    "Enlem",
-                    value=41.0082,
-                    format="%.6f",
-                    help="Örn: İstanbul = 41.0082"
-                )
-
-            with col_lon:
-                user_lon = st.number_input(
-                    "Boylam",
-                    value=28.9784,
-                    format="%.6f",
-                    help="Örn: İstanbul = 28.9784"
-                )
-
-        with col_distance:
-            max_distance = st.number_input(
-                "Mesafe (km)",
-                value=10,
-                min_value=1,
-                max_value=50,
-                step=1
-            )
+    max_distance = 50  # Search radius
 
     # Arama yap
     if pharmacy_search_btn or pharmacy_drug_search:
         if pharmacy_drug_search.strip():
-            with st.spinner(f"'{pharmacy_drug_search}' fiyatları aranıyor…"):
+            with st.spinner(f"'{pharmacy_drug_search}' fiyatları {selected_city}/{selected_district} aranıyor…"):
                 try:
-                    from pharmacy_prices import get_pharmacy_prices, price_comparison_summary
+                    from pharmacy_prices import get_pharmacy_prices, price_comparison_summary, TURKISH_PHARMACIES
 
-                    # Fiyat bilgisi çek
-                    if "Yakındaki" in location_option and user_lat and user_lon:
-                        pharmacy_results = get_pharmacy_prices(
-                            drug_name=pharmacy_drug_search,
-                            user_latitude=user_lat,
-                            user_longitude=user_lon,
-                            max_distance_km=max_distance,
-                            limit=10
-                        )
+                    # Seçili il-ilçedeki eczaneleri filtrele
+                    filtered_pharmacies = [
+                        p for p in TURKISH_PHARMACIES
+                        if p["city"] == selected_city and p["district"] == selected_district
+                    ]
+
+                    if not filtered_pharmacies:
+                        st.warning(f"⚠️ {selected_city}/{selected_district} alanında eczane bulunamadı")
                     else:
+                        # Fiyat bilgisi çek
                         pharmacy_results = get_pharmacy_prices(
                             drug_name=pharmacy_drug_search,
-                            limit=10
+                            limit=len(filtered_pharmacies)
                         )
+
+                        # Sonuçları seçili il-ilçeyle sınırla
+                        if pharmacy_results["success"]:
+                            pharmacy_results["results"] = [
+                                r for r in pharmacy_results["results"]
+                                if r["city"] == selected_city and r["district"] == selected_district
+                            ]
+
+                            # Boşsa
+                            if not pharmacy_results["results"]:
+                                pharmacy_results["success"] = False
+                                pharmacy_results["error"] = f"'{selected_city}/{selected_district}' alanında bu ilaç bulunamadı"
 
                     if pharmacy_results["success"]:
                         # Özet göster
