@@ -1300,7 +1300,7 @@ with tab_analyze:
 with tab_nobetci:
     st.markdown(
         '<p class="pg-section"><span class="pg-section-icon">🏪</span>Nöbetçi Eczaneler</p>',
-        unsafe_html=True,
+        unsafe_allow_html=True,
     )
     st.caption("Türkiye'nin herhangi bir yerindeki nöbetçi (açık) eczaneleri bulun.")
 
@@ -1372,7 +1372,7 @@ with tab_nobetci:
 with tab_its:
     st.markdown(
         '<p class="pg-section"><span class="pg-section-icon">💊</span>İlaç Bilgileri & Fiyatları</p>',
-        unsafe_html=True,
+        unsafe_allow_html=True,
     )
     st.caption("Sağlık Bakanlığı İlaç Takip Sistemi (ITS) üzerinden ilaç fiyatları, onay durumları ve güvenlik uyarılarını görüntüleyin.")
 
