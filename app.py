@@ -205,14 +205,23 @@ div[data-testid="stVerticalBlock"] .stTabs [data-baseweb="tab-list"] {
   content: ""; position: absolute; inset: 0; pointer-events: none;
   background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
 }
-.pg-hero-inner { position: relative; z-index: 1; }
+.pg-hero-inner {
+  position: relative; z-index: 1;
+  display: flex; align-items: center; justify-content: space-between; gap: 1.5rem;
+  flex-wrap: wrap;
+}
+.pg-hero-left { flex: 1; min-width: 200px; }
 .pg-hero h1 { margin:0; font-size:clamp(1.65rem,3vw,2.1rem); font-weight:700; letter-spacing:-.03em; color:#fff !important; }
-.pg-hero p  { margin:.6rem 0 0; font-size:1rem; color:rgba(226,232,240,.88) !important; line-height:1.5; }
-.pg-hero-tags { display:flex; flex-wrap:wrap; gap:.5rem; margin-top:1rem; }
-.pg-hero-tags span {
-  font-size:.75rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
-  padding:.3rem .7rem; border-radius:999px;
-  background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.2); color:#e2e8f0 !important;
+.pg-hero p  { margin:.5rem 0 0; font-size:.95rem; color:rgba(226,232,240,.85) !important; line-height:1.55; max-width:520px; }
+.pg-hero-right {
+  display: flex; flex-direction: column; align-items: flex-end; gap: .35rem;
+  flex-shrink: 0;
+}
+.pg-hero-badge {
+  font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em;
+  padding:.25rem .65rem; border-radius:999px;
+  background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.18);
+  color:rgba(226,232,240,.9) !important; white-space:nowrap;
 }
 
 /* ── Bölüm başlıkları ───────────────────────── */
@@ -378,11 +387,16 @@ with st.sidebar:
 st.markdown("""
 <div class="pg-hero">
   <div class="pg-hero-inner">
-    <h1>💊 Pharma-Guard AI</h1>
-    <p>Akıllı ilaç denetimi: görüntü ve metinle çoklu ajan analizi,
-       yerel prospektüs (RAG) doğrulaması ve tek tıkla PDF raporu.</p>
-    <div class="pg-hero-tags">
-      <span>Gemini</span><span>Groq · LLaVA</span><span>ChromaDB</span><span>Fact-check</span>
+    <div class="pg-hero-left">
+      <h1>💊 Pharma-Guard AI</h1>
+      <p>Akıllı ilaç denetimi: görüntü ve metinle çoklu ajan analizi,
+         yerel prospektüs (RAG) doğrulaması ve tek tıkla PDF raporu.</p>
+    </div>
+    <div class="pg-hero-right">
+      <span class="pg-hero-badge">Gemini</span>
+      <span class="pg-hero-badge">Groq · LLaVA</span>
+      <span class="pg-hero-badge">ChromaDB · RAG</span>
+      <span class="pg-hero-badge">Fact-Check</span>
     </div>
   </div>
 </div>
