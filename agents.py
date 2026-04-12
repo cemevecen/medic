@@ -5,7 +5,7 @@ agents.py: Tüm ajan sınıfları ve ana orkestratör bu dosyada tanımlanmışt
 
 # Versiyon numarası — app.py session_state cache invalidation için kullanılır.
 # Fact-Checker / parser / orchestrator davranışı değiştiğinde artırın.
-PHARMA_GUARD_VERSION = "1.7"
+PHARMA_GUARD_VERSION = "1.8"
 
 import os
 import json
@@ -224,13 +224,12 @@ Her bölümün sonuna güven puanını ekle: `[Güven: X/10]`
 
 class VisionScannerAgent:
     """
-    LLaVA (Groq) veya Gemini Vision kullanarak ilaç görselinden
-    yapılandırılmış veri çıkaran ajan.
+    LLaVA (Groq) kullanarak ilaç görselinden yapılandırılmış veri çıkaran ajan.
+    (Gemini Vision fallback kaldırıldı — quota tasarrufu)
     """
 
     def __init__(self):
         self.groq_client = _init_groq()
-        _init_gemini()
 
     def _encode_image(self, image: Image.Image) -> str:
         """PIL Image'ı base64 stringe çevirir."""
@@ -269,39 +268,27 @@ class VisionScannerAgent:
         except Exception as e:
             return {"hata": f"LLaVA hatası: {str(e)}", "kaynak": "LLaVA (Groq)"}
 
-    def scan_with_gemini(self, image: Image.Image) -> Dict[str, Any]:
-        """Gemini Vision ile görsel tarama (yedek; model zincirinde dener)."""
-        models = _gemini_model_chain()
-        last_err: Optional[Exception] = None
-        for name in models:
-            try:
-                model = genai.GenerativeModel(name)
-                response = model.generate_content(
-                    [VISION_PROMPT, image],
-                    generation_config=genai.GenerationConfig(temperature=0.1),
-                )
-                raw = response.text
-                return self._parse_json_response(raw, source=f"Gemini Vision ({name})")
-            except Exception as e:
-                last_err = e
-                if _gemini_model_missing_error(e) and name != models[-1]:
-                    print(f"[VisionScanner] {name} kullanılamadı, sıradaki model… ({e})")
-                    continue
-                break
+    def scan_with_groq_fallback(self) -> Dict[str, Any]:
+        """LLaVA başarısız → Groq fallback (text mode, image yok)."""
+        # Groq text model'den ilaç bilgisi talebinde bulunamıyız (image yok).
+        # Kullanıcıyı metin girişine yönlendir.
         return {
-            "hata": f"Gemini Vision hatası: {last_err}",
-            "kaynak": "Gemini Vision",
+            "hata": "Görsel analizi LLaVA ve Groq ile başarısız oldu. Metin girişi kullanarak devam edin.",
+            "kaynak": "Groq Fallback",
+            "okunabilirlik_skoru": 0,
+            "notlar": "Görsel işlenemiyor — metin girişi tercih edilir.",
         }
 
     def scan(self, image: Image.Image) -> Dict[str, Any]:
         """
-        Önce LLaVA dener, başarısız olursa Gemini Vision'a geçer.
+        Önce LLaVA (Groq) dener, başarısız olursa Groq fallback hata döndürür.
+        (Gemini Vision kaldırıldı — quota tasarrufu)
         Orchestrator bu metodu çağırır.
         """
         result = self.scan_with_groq_llava(image)
         if "hata" in result:
-            print(f"[VisionScanner] LLaVA başarısız, Gemini Vision deneniyor... ({result['hata']})")
-            result = self.scan_with_gemini(image)
+            print(f"[VisionScanner] LLaVA başarısız ({result['hata']}), Groq fallback…")
+            result = self.scan_with_groq_fallback()
         return result
 
     def scan_text_input(self, drug_name: str) -> Dict[str, Any]:
