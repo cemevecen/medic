@@ -829,8 +829,8 @@ st.markdown("""
 # ─────────────────────────────────────────────
 # ANA SEKMELER
 # ─────────────────────────────────────────────
-tab_analyze, tab_fda, tab_nobetci, tab_corpus, tab_about = st.tabs(
-    ["🔬 İlaç Analizi", "🔍 FDA Arşivi", "🏪 Nöbetçi Eczaneler", "📄 Prospektüs Yönetimi", "ℹ️ Hakkında"]
+tab_analyze, tab_fda, tab_nobetci, tab_its, tab_corpus, tab_about = st.tabs(
+    ["🔬 İlaç Analizi", "🔍 FDA Arşivi", "🏪 Nöbetçi Eczaneler", "💊 İlaç Fiyatları", "📄 Prospektüs Yönetimi", "ℹ️ Hakkında"]
 )
 
 # ═════════════════════════════════════════════
@@ -1367,7 +1367,108 @@ with tab_nobetci:
         st.info("Lütfen bir il adı girin")
 
 # ═════════════════════════════════════════════
-# SEKME 4 — PROSPEKTÜS YÖNETİMİ (CORPUS)
+# SEKME 4 — İTS (İLAÇ FİYATLARI VE BİLGİLERİ)
+# ═════════════════════════════════════════════
+with tab_its:
+    st.markdown(
+        '<p class="pg-section"><span class="pg-section-icon">💊</span>İlaç Bilgileri & Fiyatları</p>',
+        unsafe_html=True,
+    )
+    st.caption("Sağlık Bakanlığı İlaç Takip Sistemi (ITS) üzerinden ilaç fiyatları, onay durumları ve güvenlik uyarılarını görüntüleyin.")
+
+    col_search_its, col_btn_its = st.columns([4, 1], gap="small")
+
+    with col_search_its:
+        drug_search_its = st.text_input(
+            "İlaç adı veya etken madde yazın",
+            placeholder="örn: Aspirin, Parasetamol, Amoksisilin…",
+            key="its_search_input"
+        )
+
+    with col_btn_its:
+        search_its_btn = st.button("🔍 Ara", use_container_width=True, key="its_search_btn")
+
+    # Arama yap
+    if search_its_btn and drug_search_its:
+        with st.spinner(f"'{drug_search_its}' için ilaç bilgileri aranıyor…"):
+            try:
+                from its_api import get_demo_medicines
+
+                # Şu anda demo verisi kullanıyoruz (API key yapılandırıldığında canlı API'ye geçer)
+                result = get_demo_medicines(drug_search_its)
+
+                if result.get("success"):
+                    st.success(f"✓ {result['total']} ilaç bulundu!")
+
+                    if result.get("data"):
+                        st.markdown("---")
+                        st.markdown("### 💊 Ilaç Bilgileri")
+
+                        for idx, medicine in enumerate(result["data"], 1):
+                            with st.expander(f"**{idx}. {medicine['trade_name']}** — {medicine.get('manufacturer', 'Bilinmeyen')}"):
+                                col_left, col_right = st.columns([1, 1])
+
+                                with col_left:
+                                    st.markdown("**Temel Bilgiler**")
+                                    st.markdown(f"**Etken Madde:** {medicine['active_ingredient']}")
+                                    st.markdown(f"**Doz:** {medicine['dosage']}")
+                                    st.markdown(f"**Form:** {medicine['form']}")
+                                    st.markdown(f"**Üretici:** {medicine.get('manufacturer', '—')}")
+
+                                with col_right:
+                                    st.markdown("**Fiyat & Onay**")
+                                    st.markdown(f"**Fiyat:** ₺{medicine.get('price_tl', '—')}")
+
+                                    status = medicine.get('approval_status', 'Unknown')
+                                    if status == 'Approved':
+                                        st.markdown(f"**Durum:** ✅ Onaylı")
+                                    elif status == 'Warning':
+                                        st.markdown(f"**Durum:** ⚠️ Uyarılı")
+                                    elif status == 'Recalled':
+                                        st.markdown(f"**Durum:** 🚫 Geri Çekildi")
+                                    else:
+                                        st.markdown(f"**Durum:** {status}")
+
+                                if medicine.get('usage'):
+                                    st.markdown(f"**Kullanım:** {medicine['usage']}")
+
+                                if medicine.get('approval_date'):
+                                    st.markdown(f"**Onay Tarihi:** {medicine['approval_date']}")
+
+                        st.divider()
+                        st.info(f"📊 **Veri Kaynağı:** {result.get('source', 'Bilinmeyen')}")
+                        if "DEMO" in result.get('source', ''):
+                            st.warning("⚠️ **Not:** Şu anda demo verisi kullanılıyor. Gerçek ITS API entegrasyonu için Sağlık Bakanlığı API key gereklidir.")
+
+                    else:
+                        st.warning("İlaç verisi alınamadı.")
+
+                else:
+                    st.info(f"❌ '{drug_search_its}' için sonuç bulunamadı.")
+                    st.info("💡 **İpucu:** Ticari adı tam yazın (örn: Aspirin, Parol) veya etken madde adı kullanın (örn: Parasetamol)")
+
+            except ImportError as e:
+                st.error(f"❌ its_api modülü bulunamadı: {str(e)}")
+            except Exception as e:
+                st.error(f"❌ Hata: {str(e)}")
+
+    elif search_its_btn:
+        st.info("Lütfen bir ilaç adı girin")
+
+    st.markdown("---")
+    st.markdown("""
+    <div class="pg-about-card">
+      <strong>ℹ️ İTS (İlaç Takip Sistemi) Hakkında</strong><br><br>
+      Sağlık Bakanlığı'nın resmi sistemidir. Türkiye'ye giren her ilaçı üretimden hasta eline kadar takip eder.
+      <br><br>
+      <strong>Şu anda gösterilen veriler örnek/demo amaçlıdır.</strong> Gerçek sistem integrasyon için ITS API key gereklidir.
+      <br><br>
+      <em>Kaynak: <a href="https://its.gov.tr/" target="_blank">its.gov.tr</a></em>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ═════════════════════════════════════════════
+# SEKME 5 — PROSPEKTÜS YÖNETİMİ (CORPUS)
 # ═════════════════════════════════════════════
 with tab_corpus:
     st.markdown("""
