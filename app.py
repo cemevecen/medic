@@ -458,6 +458,34 @@ with st.sidebar:
             placeholder="gpt-4o-mini, openai/gpt-4o-mini, …",
         )
     st.markdown("---")
+
+    # TEST VERİ YÜKLEME (geliştirme amaçlı)
+    with st.expander(" Test veri seti", expanded=False):
+        st.caption("Dolu ilaç bilgileriyle test etmek için test ilaçlarından seçin.")
+        try:
+            from test_data import TEST_DRUGS
+            test_drug_names = {
+                "Augmentin 1000 mg": "augmentin_1000mg",
+                "Parol 500 mg": "parol_500mg",
+                "Aspirin 500 mg": "aspirin_500mg",
+                "Ventolin İnhaler": "ventolin_inhaler",
+                "Omeprazol 20 mg": "omeprazol_20mg",
+                "Metformin 500 mg": "metformin_500mg",
+                "Amoxil 500 mg": "amoxil_500mg",
+                "Fluconazole 150 mg": "fluconazole_150mg",
+            }
+            selected = st.selectbox("Test ilaç seç", list(test_drug_names.keys()))
+            if st.button("Test verisini yükle", use_container_width=True, key="load_test_btn"):
+                drug_key = test_drug_names[selected]
+                test_drug = TEST_DRUGS.get(drug_key, {})
+                if test_drug:
+                    st.session_state["test_drug_data"] = test_drug
+                    st.success(f" {selected} test verisi yüklendi!")
+                    st.json(test_drug, expanded=False)
+        except ImportError:
+            st.warning(" test_data modülü bulunamadı")
+
+    st.markdown("---")
     st.markdown(f" **RAG:** {len(pdf_list)} prospektüs")
     if pdf_list:
         with st.expander("Yüklü dosyalar"):
@@ -601,6 +629,9 @@ with tab_analyze:
                         st.session_state.orchestrator = PharmaGuardOrchestrator()
                         st.session_state.pg_version = PHARMA_GUARD_VERSION
 
+                # Test veri kontrol et
+                test_vision = st.session_state.get("test_drug_data")
+
                 result = st.session_state.orchestrator.run(
                     image=image_obj,
                     drug_name_text=drug_name_input,
@@ -608,6 +639,7 @@ with tab_analyze:
                     pdf_filename=pdf_name_input,
                     progress_callback=_prog,
                     openai_compat=_session_openai_compat_kwargs(),
+                    test_vision_data=test_vision,
                 )
                 st.session_state.analysis_result = result
 

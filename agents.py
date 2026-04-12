@@ -5,7 +5,7 @@ agents.py: Tüm ajan sınıfları ve ana orkestratör bu dosyada tanımlanmışt
 
 # Versiyon numarası — app.py session_state cache invalidation için kullanılır.
 # Fact-Checker / parser / orchestrator davranışı değiştiğinde artırın.
-PHARMA_GUARD_VERSION = "1.19"
+PHARMA_GUARD_VERSION = "1.20"
 
 import logging
 import os
@@ -1646,6 +1646,7 @@ class PharmaGuardOrchestrator:
         pdf_filename: str = "prospektus.pdf",
         progress_callback=None,
         openai_compat: Optional[Dict[str, Any]] = None,
+        test_vision_data: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Ana analiz iş akışını çalıştırır.
@@ -1687,7 +1688,11 @@ class PharmaGuardOrchestrator:
         results = {}
 
         # ADIM 1: Görüntü / Metin / PDF Analizi
-        if pdf_bytes is not None:
+        if test_vision_data is not None:
+            # Test veri — geliştirme/test amaçlı
+            _progress(1, f" Test veri kullanılıyor: {test_vision_data.get('ticari_ad', 'Bilinmiyor')}")
+            vision_data = dict(test_vision_data)
+        elif pdf_bytes is not None:
             _progress(1, f"📄 PDF Scanner: '{pdf_filename}' prospektüsü analiz ediliyor...")
             vision_data = self.vision_agent.scan_pdf(pdf_bytes, pdf_filename)
         elif image is not None:
