@@ -89,23 +89,43 @@ _FONT_BOLD    = "Helvetica-Bold"
 _FONT_MONO    = "Courier"
 
 def _register_unicode_fonts() -> None:
-    global _FONT_REGULAR, _FONT_BOLD
+    global _FONT_REGULAR, _FONT_BOLD, _FONT_MONO
+
+    # Adım 1: Sistem font'u bul
     reg_path, bold_path = _find_unicode_ttf()
+
+    # Adım 2: Fallback path'ler (Streamlit Cloud Ubuntu'da daima vardır)
     if reg_path is None:
-        print("[utils] Unicode TTF bulunamadı — Helvetica kullanılıyor (Türkçe bozuk olabilir).")
+        fallback_paths = [
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        ]
+        for fb_path in fallback_paths:
+            if os.path.exists(fb_path):
+                reg_path = fb_path
+                bold_path = fb_path.replace("Regular", "Bold").replace("DejaVuSans", "DejaVuSans-Bold")
+                if not os.path.exists(bold_path):
+                    bold_path = fb_path
+                break
+
+    # Adım 3: Font registration
+    if reg_path is None:
+        print("[utils] Font bulunamadı (Helvetica Türkçe desteklemez — çıktı bozuk olacak).")
         return
+
     try:
+        print(f"[utils] Font kayıt ediliyor: {reg_path}")
         if "PGUnicode" not in pdfmetrics.getRegisteredFontNames():
-            pdfmetrics.registerFont(TTFont("PGUnicode",     reg_path))
+            pdfmetrics.registerFont(TTFont("PGUnicode", reg_path))
             pdfmetrics.registerFont(TTFont("PGUnicodeBold", bold_path))
-            from reportlab.lib.fonts import addMapping
-            addMapping("PGUnicode", 0, 0, "PGUnicode")
-            addMapping("PGUnicode", 1, 0, "PGUnicodeBold")
-        _FONT_REGULAR = "PGUnicode"
-        _FONT_BOLD    = "PGUnicodeBold"
-        print(f"[utils] Unicode font kayıt edildi: {os.path.basename(reg_path)}")
+            _FONT_REGULAR = "PGUnicode"
+            _FONT_BOLD = "PGUnicodeBold"
+            print(f"[utils] ✓ Font başarıyla kayıt edildi: {os.path.basename(reg_path)}")
+        else:
+            _FONT_REGULAR = "PGUnicode"
+            _FONT_BOLD = "PGUnicodeBold"
     except Exception as e:
-        print(f"[utils] Font kayıt hatası: {e} — Helvetica kullanılıyor.")
+        print(f"[utils] Font kayıt hatası: {e}")
 
 
 _register_unicode_fonts()
@@ -192,6 +212,16 @@ ALARM_COLOR_MAP = {
 
 def _build_styles():
     """PDF için özel stil seti oluşturur."""
+    # Font adını kontrol et — global variable'ı oku
+    font_regular = _FONT_REGULAR if _FONT_REGULAR != "Helvetica" else "Liberation"
+    font_bold = _FONT_BOLD if _FONT_BOLD != "Helvetica-Bold" else "Liberation-Bold"
+    font_mono = _FONT_MONO
+
+    # Fallback: kurulum hatası case'i
+    if font_regular not in pdfmetrics.getRegisteredFontNames() and font_regular != "Helvetica":
+        font_regular = "Helvetica"
+        font_bold = "Helvetica-Bold"
+
     base = getSampleStyleSheet()
 
     styles = {
@@ -201,7 +231,7 @@ def _build_styles():
             fontSize=22,
             textColor=COLOR_PRIMARY,
             spaceAfter=6,
-            fontName=_FONT_BOLD,
+            fontName=font_bold,
             alignment=TA_CENTER,
         ),
         "subtitle": ParagraphStyle(
@@ -210,7 +240,7 @@ def _build_styles():
             fontSize=11,
             textColor=COLOR_ACCENT,
             spaceAfter=4,
-            fontName=_FONT_REGULAR,
+            fontName=font_regular,
             alignment=TA_CENTER,
         ),
         "h1": ParagraphStyle(
@@ -220,7 +250,7 @@ def _build_styles():
             textColor=COLOR_PRIMARY,
             spaceBefore=14,
             spaceAfter=4,
-            fontName=_FONT_BOLD,
+            fontName=font_bold,
             borderPad=4,
         ),
         "h2": ParagraphStyle(
@@ -230,7 +260,7 @@ def _build_styles():
             textColor=COLOR_ACCENT,
             spaceBefore=10,
             spaceAfter=3,
-            fontName=_FONT_BOLD,
+            fontName=font_bold,
         ),
         "body": ParagraphStyle(
             "PGBody",
@@ -239,7 +269,7 @@ def _build_styles():
             textColor=COLOR_TEXT,
             spaceAfter=6,
             leading=16,
-            fontName=_FONT_REGULAR,
+            fontName=font_regular,
         ),
         "bullet": ParagraphStyle(
             "PGBullet",
@@ -250,14 +280,14 @@ def _build_styles():
             leftIndent=16,
             bulletIndent=0,
             leading=14,
-            fontName=_FONT_REGULAR,
+            fontName=font_regular,
         ),
         "warning": ParagraphStyle(
             "PGWarning",
             parent=base["Normal"],
             fontSize=10,
             textColor=COLOR_RED,
-            fontName=_FONT_BOLD,
+            fontName=font_bold,
             spaceAfter=6,
         ),
         "footer": ParagraphStyle(
@@ -265,7 +295,7 @@ def _build_styles():
             parent=base["Normal"],
             fontSize=8,
             textColor=colors.grey,
-            fontName=_FONT_REGULAR,
+            fontName=font_regular,
             alignment=TA_CENTER,
         ),
         "code": ParagraphStyle(
@@ -273,7 +303,7 @@ def _build_styles():
             parent=base["Code"],
             fontSize=9,
             textColor=COLOR_TEXT,
-            fontName=_FONT_MONO,
+            fontName=font_mono,
             backColor=COLOR_LIGHT_BG,
             spaceAfter=6,
         ),
@@ -286,6 +316,7 @@ def _markdown_to_flowables(md_text: str, styles: dict) -> list:
     Markdown metnini ReportLab Flowable listesine dönüştürür.
     Başlıkları, madde işaretlerini ve paragrafları tanır.
     """
+    mono_font = styles.get("code", type('obj', (object,), {'fontName': "Courier"})()).fontName
     flowables = []
     lines = md_text.split("\n")
     i = 0
@@ -320,7 +351,7 @@ def _markdown_to_flowables(md_text: str, styles: dict) -> list:
         # Madde işareti: - veya * ile başlayan
         if re.match(r"^[-*]\s+", line):
             text = re.sub(r"^[-*]\s+", "", line)
-            text = _format_inline(text)
+            text = _format_inline(text, mono_font)
             flowables.append(Paragraph(f"• {text}", styles["bullet"]))
             i += 1
             continue
@@ -328,7 +359,7 @@ def _markdown_to_flowables(md_text: str, styles: dict) -> list:
         # Numaralı liste
         if re.match(r"^\d+\.\s+", line):
             text = re.sub(r"^\d+\.\s+", "", line)
-            text = _format_inline(text)
+            text = _format_inline(text, mono_font)
             flowables.append(Paragraph(text, styles["bullet"]))
             i += 1
             continue
@@ -336,13 +367,13 @@ def _markdown_to_flowables(md_text: str, styles: dict) -> list:
         # Uyarı satırı (> ile başlayan blockquote)
         if line.startswith("> "):
             text = line[2:].strip()
-            text = _format_inline(text)
+            text = _format_inline(text, mono_font)
             flowables.append(Paragraph(text, styles["warning"]))
             i += 1
             continue
 
         # Normal paragraf
-        text = _format_inline(line)
+        text = _format_inline(line, mono_font)
         flowables.append(Paragraph(text, styles["body"]))
         i += 1
 
@@ -365,7 +396,7 @@ def _strip_emoji(text: str) -> str:
     return text
 
 
-def _format_inline(text: str) -> str:
+def _format_inline(text: str, mono_font: str = "Courier") -> str:
     """Satır içi Markdown formatlamayı ReportLab XML'e çevirir."""
     # & < > escape
     text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
@@ -376,7 +407,7 @@ def _format_inline(text: str) -> str:
     text = re.sub(r"\*(.*?)\*", r"<i>\1</i>", text)
     text = re.sub(r"_(.*?)_", r"<i>\1</i>", text)
     # Inline code: `text`
-    text = re.sub(r"`([^`]+)`", rf"<font name='{_FONT_MONO}'>\1</font>", text)
+    text = re.sub(r"`([^`]+)`", rf"<font name='{mono_font}'>\1</font>", text)
     return text
 
 
@@ -393,6 +424,9 @@ def generate_pdf_report(
     Returns:
         PDF dosyasının bytes içeriği (Streamlit download_button için).
     """
+    # Font registration'ı ensure et
+    _register_unicode_fonts()
+
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -428,8 +462,8 @@ def generate_pdf_report(
         TableStyle([
             ("BACKGROUND", (0, 0), (0, -1), COLOR_LIGHT_BG),
             ("TEXTCOLOR", (0, 0), (0, -1), COLOR_PRIMARY),
-            ("FONTNAME", (0, 0), (0, -1), _FONT_BOLD),
-            ("FONTNAME", (1, 0), (1, -1), _FONT_REGULAR),
+            ("FONTNAME", (0, 0), (0, -1), styles["title"].fontName),
+            ("FONTNAME", (1, 0), (1, -1), styles["body"].fontName),
             ("FONTSIZE", (0, 0), (-1, -1), 10),
             ("GRID", (0, 0), (-1, -1), 0.5, COLOR_BORDER),
             ("ROWBACKGROUNDS", (0, 0), (-1, -1), [colors.white, COLOR_LIGHT_BG]),
