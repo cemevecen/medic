@@ -527,7 +527,18 @@ with st.sidebar:
                         if real_drug:
                             st.session_state["test_drug_data"] = real_drug
                             st.success(f" Gerçek veri bulundu!")
-                            st.json(real_drug, expanded=False)
+                            # Verilen bilgileri açık tablo şeklinde göster
+                            drug_display = {
+                                "İlaç Adı": real_drug.get("ticari_ad", "—"),
+                                "Etken Madde": real_drug.get("etken_madde", "—"),
+                                "Dozaj": real_drug.get("dozaj", "—"),
+                                "Form": real_drug.get("form", "—"),
+                                "Üretici": real_drug.get("uretici", "—"),
+                                "Barkod": real_drug.get("barkod", "—"),
+                                "Kaynak": real_drug.get("kaynak", "—"),
+                            }
+                            for key, value in drug_display.items():
+                                st.caption(f"**{key}:** {value}")
                         else:
                             st.warning(f" '{drug_search}' için veri bulunamadı. Başka adla dene.")
                     except ImportError:
