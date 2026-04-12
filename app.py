@@ -1477,10 +1477,14 @@ with tab_pharmacy:
     st.markdown("---")
     st.markdown("""
     <div class="pg-about-card">
-      <strong>ℹ️ Bilgi</strong><br><br>
-      Bu sistem Türk eczanelerinden ilaç fiyatlarını karşılaştırır.
-      Konumunuzu belirtirseniz yakın eczaneleri gösterir.
-      Fiyatlar örnek veriler içermektedir. Gerçek fiyatlar eczana göre değişebilir.
+      <strong>ℹ️ Veri Kaynakları</strong><br><br>
+      <strong>✅ Gerçek Veriler:</strong><br>
+      • İl ve İlçe listesi: TÜİK (Türkiye İstatistik Kurumu) 2024 resmi verileri<br>
+      • Toplam: 81 il, tüm ilçeleri ile<br><br>
+      <strong>❌ Sentetik (Demo) Veriler:</strong><br>
+      • Eczane adları, lokasyonları, fiyatları<br>
+      • Stok durumları ve teslimat süreleri<br><br>
+      <em>Not: Bu sistem örnek veriler üzerinde çalışmaktadır. Gerçek sistem, TİTCK onaylı eczaneler ile bağlantı kurabilir.</em>
     </div>
     """, unsafe_allow_html=True)
 
