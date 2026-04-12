@@ -170,9 +170,19 @@ st.markdown("""
 
 /* Sidebar expander içindeki metin input'ları */
 [data-testid="stSidebar"] .stTextInput input {
-  background: rgba(255,255,255,.05) !important;
-  color: #e2e8f0 !important;
-  border-color: rgba(255,255,255,.15) !important;
+  background: rgba(255,255,255,.1) !important;
+  color: #1e293b !important;
+  border-color: rgba(15,118,110,.3) !important;
+}
+
+[data-testid="stSidebar"] .stTextInput input::placeholder {
+  color: #94a3b8 !important;
+}
+
+[data-testid="stSidebar"] .stTextInput input:focus {
+  background: rgba(255,255,255,.15) !important;
+  color: #0f172a !important;
+  border-color: #0d9488 !important;
 }
 
 /* ── Sekmeler — hap/pill stili ───────────────── */
