@@ -490,31 +490,9 @@ with st.sidebar:
     oa_lbl = "aktif (.env veya kenar çubuğu)" if (openai_env or oa_sess) else "opsiyonel"
     st.markdown(
         f'<div class="pg-status-pill {g_cls}">{"●" if gemini_key else "○"} Gemini API — {"aktif" if gemini_key else "eksik"}</div><br>'
-        f'<div class="pg-status-pill {gr_cls}">{"●" if groq_key else "○"} Groq — {"aktif" if groq_key else "eksik"}</div><br>'
-        f'<div class="pg-status-pill {oa_cls}">{"●" if (openai_env or oa_sess) else "○"} İkinci LLM (OpenAI-uyumlu) — {oa_lbl}</div>',
+        f'<div class="pg-status-pill {gr_cls}">{"●" if groq_key else "○"} Groq — {"aktif" if groq_key else "eksik"}</div>',
         unsafe_allow_html=True,
     )
-    with st.expander("İsteğe bağlı: İkinci LLM API (OpenAI uyumlu)", expanded=False):
-        st.caption(
-            "PDF prospektüsünde sıra: Groq → bu API → Gemini. OpenAI, OpenRouter, Together vb. "
-            "Anahtarı burada girebilir veya `.env` içinde `OPENAI_API_KEY` tanımlayabilirsiniz."
-        )
-        st.text_input(
-            "API anahtarı",
-            type="password",
-            key="pg_alt_api_key",
-            placeholder="sk-… veya OpenRouter anahtarı",
-        )
-        st.text_input(
-            "Base URL (boş = OpenAI varsayılan)",
-            key="pg_alt_base_url",
-            placeholder="https://api.openai.com/v1 veya https://openrouter.ai/api/v1",
-        )
-        st.text_input(
-            "Model adı (boş = gpt-4o-mini)",
-            key="pg_alt_model",
-            placeholder="gpt-4o-mini, openai/gpt-4o-mini, …",
-        )
     st.markdown("---")
 
     # GERÇEKLİ İLAÇ VERİSİ YÜKLEME (Wikidata + OpenFDA)
@@ -1156,6 +1134,32 @@ with tab_about:
       </table>
     </div>
     """, unsafe_allow_html=True)
+
+    st.markdown("")
+    with st.expander("⚙️ İsteğe bağlı: OpenAI-uyumlu API (PDF analiz için yedek)", expanded=False):
+        st.caption(
+            "PDF prospektüsü analiz sırası: **Groq → OpenAI-uyumlu API → Gemini**\n\n"
+            "OpenAI, OpenRouter, Together AI vb. OpenAI-uyumlu API'ler kullanabilirsiniz."
+        )
+        st.text_input(
+            "API anahtarı",
+            type="password",
+            key="pg_alt_api_key",
+            placeholder="sk-… veya OpenRouter anahtarı",
+            help="Gerekli değil; boş bırakılırsa Groq ve Gemini kullanılır."
+        )
+        st.text_input(
+            "Base URL (opsiyonel)",
+            key="pg_alt_base_url",
+            placeholder="https://api.openai.com/v1 (varsayılan) veya https://openrouter.ai/api/v1",
+            help="Boş bırakılırsa OpenAI varsayılanı kullanılır."
+        )
+        st.text_input(
+            "Model adı (opsiyonel)",
+            key="pg_alt_model",
+            placeholder="gpt-4o-mini (varsayılan)",
+            help="Boş bırakılırsa gpt-4o-mini kullanılır."
+        )
 
     st.markdown("")
     st.markdown(
