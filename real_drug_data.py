@@ -1,6 +1,7 @@
 """
 Gerçek ilaç verilerini çeken veri kaynağı
 Wikidata, OpenFDA ve açık veritabanlarından gerçek bilgiler
+Turkish translation support through Groq API
 """
 
 import requests
@@ -8,6 +9,11 @@ import json
 from typing import Optional, Dict, Any
 import logging
 import re
+import os
+from dotenv import load_dotenv
+from groq import Groq
+
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -209,15 +215,91 @@ def fetch_drug_from_openfda(drug_name: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def _translate_to_turkish(text: str) -> str:
+    """
+    Groq API kullanarak İngilizce metni Türkçeye çevir.
+
+    Args:
+        text: Çevrilecek İngilizce metin
+
+    Returns:
+        Türkçe çevrilmiş metin
+    """
+    if not text or not text.strip():
+        return text
+
+    try:
+        api_key = os.getenv("GROQ_API_KEY")
+        if not api_key:
+            logger.warning("GROQ_API_KEY bulunamadı, çeviri yapılamayacak")
+            return text
+
+        client = Groq(api_key=api_key)
+
+        message = client.messages.create(
+            model="mixtral-8x7b-32768",
+            max_tokens=500,
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"Bu tıbbi İngilizce metni kısaca ve doğru bir şekilde Türkçeye çevir. Sadece çeviriyi yaz, ek açıklama yapma:\n\n{text}"
+                }
+            ]
+        )
+
+        translated = message.content[0].text.strip()
+        logger.info(f"✓ Çeviri tamamlandı: {text[:50]}... → {translated[:50]}...")
+        return translated
+
+    except Exception as e:
+        logger.warning(f"Çeviri hatası: {e}")
+        return text
+
+
+def _translate_drug_data(drug_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    İlaç verilerini Türkçeye çevir.
+    Eğer kaynak zaten Türkçe ise (Wikidata gibi), çevirme.
+
+    Args:
+        drug_data: İlaç bilgileri
+
+    Returns:
+        Türkçeye çevrilmiş ilaç bilgileri
+    """
+    if not drug_data:
+        return drug_data
+
+    # Eğer kaynak zaten Türkçe ise (örn: Wikidata), çevirme
+    kaynak = drug_data.get("kaynak", "").lower()
+    if "wikidata" in kaynak or "türkçe" in kaynak:
+        logger.info("Kaynak zaten Türkçe, çeviri atlanıyor")
+        return drug_data
+
+    translated = dict(drug_data)
+
+    # Çevrilecek alanlar
+    fields_to_translate = ["etken_madde", "dozaj", "form", "uretici"]
+
+    for field in fields_to_translate:
+        if field in translated and translated[field] != "Bilgi mevcut değil":
+            original = translated[field]
+            translated[field] = _translate_to_turkish(original)
+
+    logger.info(f"✓ İlaç verisi Türkçeye çevrildi: {drug_data.get('ticari_ad')}")
+    return translated
+
+
 def fetch_drug_info(drug_name: str) -> Optional[Dict[str, Any]]:
     """
     Gerçek ilaç bilgisi çeker. Birden fazla kaynaktan dener.
+    Sonuçları Türkçeye çevir.
 
     Args:
         drug_name: İlaç adı (örn: "augmentin 1000mg", "parol")
 
     Returns:
-        İlaç bilgileri veya None
+        Türkçeye çevrilmiş ilaç bilgileri veya None
     """
     if not drug_name or not drug_name.strip():
         return None
@@ -228,13 +310,13 @@ def fetch_drug_info(drug_name: str) -> Optional[Dict[str, Any]]:
     result = fetch_drug_from_wikidata(drug_name)
     if result and result.get("ticari_ad"):
         logger.info(f"✓ Wikidata'dan bulundu: {result['ticari_ad']}")
-        return result
+        return _translate_drug_data(result)
 
     # OpenFDA'dan dene (İngilizce)
     result = fetch_drug_from_openfda(drug_name)
     if result and result.get("ticari_ad"):
         logger.info(f"✓ OpenFDA'dan bulundu: {result['ticari_ad']}")
-        return result
+        return _translate_drug_data(result)
 
     logger.warning(f"✗ Gerçek veri bulunamadı: {drug_name}")
     return None
