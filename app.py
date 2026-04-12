@@ -1307,10 +1307,14 @@ with tab_nobetci:
     col_city, col_district, col_btn = st.columns([2, 2, 1], gap="small")
 
     with col_city:
-        selected_city_nobetci = st.text_input(
-            "İl Adını Yazın",
-            placeholder="örn: Ankara, İstanbul…",
-            key="nobetci_city_input"
+        from nobetci_eczane import get_cities_list
+
+        cities_list = get_cities_list()
+        selected_city_nobetci = st.selectbox(
+            "İl Seçin",
+            options=cities_list,
+            index=0,
+            key="nobetci_city_select"
         )
 
     with col_district:
