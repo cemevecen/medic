@@ -303,6 +303,9 @@ div[data-testid="stVerticalBlock"] .stTabs [data-baseweb="tab-list"] {
   border-color: var(--pg-line) !important;
   background: var(--pg-surface) !important;
   color: var(--pg-ink) !important;
+  min-height: 2.75rem !important;
+  padding: .625rem 1rem !important;
+  font-size: 1rem !important;
 }
 .stTextInput input::placeholder {
   color: var(--pg-sidebar-muted) !important;
@@ -312,6 +315,15 @@ div[data-testid="stVerticalBlock"] .stTabs [data-baseweb="tab-list"] {
   box-shadow: 0 0 0 2px rgba(15,118,110,.1) !important;
 }
 .stTextInput label { color: var(--pg-ink) !important; font-weight: 500 !important; }
+
+/* Button ve Input alignment */
+.stButton > button {
+  min-height: 2.75rem !important;
+  padding: .625rem 1rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
 .stRadio label     { color: var(--pg-ink) !important; }
 
 .stFileUploader section {
@@ -1081,7 +1093,6 @@ with tab_fda:
         )
 
     with col2:
-        st.write("")  # Boşluk ekle alignment için
         fetch_clicked = st.button(" Arşiv'de Ara", use_container_width=True, key="fetch_real_data_btn")
 
     if fetch_clicked or drug_search:
