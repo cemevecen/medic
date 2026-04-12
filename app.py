@@ -1331,7 +1331,12 @@ with tab_nobetci:
     if search_nobetci_btn and selected_city_nobetci:
         with st.spinner(f"'{selected_city_nobetci}' ilinde nöbetçi eczaneler aranıyor…"):
             try:
-                from nobetci_eczane import get_nobetci_eczaneler, format_pharmacy_result
+                from nobetci_eczane import get_nobetci_eczaneler, format_pharmacy_result, init_nobetci_api
+
+                # Session state'ten API key'i al (varsa)
+                api_key = st.session_state.get("collectapi_api_key")
+                if api_key:
+                    init_nobetci_api(api_key=api_key, source="collectapi")
 
                 result = get_nobetci_eczaneler(
                     il=selected_city_nobetci.strip(),
@@ -1396,7 +1401,13 @@ with tab_its:
     if search_its_btn and drug_search_its:
         with st.spinner(f"'{drug_search_its}' için ilaç bilgileri aranıyor…"):
             try:
-                from its_api import get_demo_medicines
+                from its_api import get_demo_medicines, init_its_api
+
+                # Session state'ten API key'i al (varsa)
+                its_api_key = st.session_state.get("its_api_key")
+                if its_api_key:
+                    init_its_api(api_key=its_api_key)
+                    # Gelecekte gerçek API'ye geçecek
 
                 # Şu anda demo verisi kullanıyoruz (API key yapılandırıldığında canlı API'ye geçer)
                 result = get_demo_medicines(drug_search_its)
@@ -1648,6 +1659,51 @@ with tab_about:
     """, unsafe_allow_html=True)
 
     st.markdown("")
+    st.markdown("### ⚙️ API Ayarları")
+
+    # ─────────────────────────────────────────────
+    # NÖBETÇİ ECZANE API
+    # ─────────────────────────────────────────────
+    with st.expander("🏪 Nöbetçi Eczane API (CollectAPI)", expanded=False):
+        st.caption(
+            "Türkiye'deki nöbetçi eczaneleri bulmak için.\n\n"
+            "**Kaynak:** https://collectapi.com/tr/api/health/nobetci-eczane-api"
+        )
+
+        collectapi_key = st.text_input(
+            "CollectAPI Key",
+            type="password",
+            key="collectapi_key",
+            placeholder="apikey abc123...",
+            help="API key'inizi https://collectapi.com 'den alın"
+        )
+
+        if collectapi_key:
+            st.session_state["collectapi_api_key"] = collectapi_key
+            st.success("✓ CollectAPI key kaydedildi")
+
+    # ─────────────────────────────────────────────
+    # ITS (İLAÇ TAKIP SİSTEMİ) API
+    # ─────────────────────────────────────────────
+    with st.expander("💊 ITS API - İlaç Takip Sistemi", expanded=False):
+        st.caption(
+            "Sağlık Bakanlığı'nın resmi İlaç Takip Sistemi.\n\n"
+            "**Kaynak:** https://its.gov.tr/\n\n"
+            "Gerçek ilaç fiyatları, onay durumları ve uyarı listeleri."
+        )
+
+        its_key = st.text_input(
+            "ITS API Key",
+            type="password",
+            key="its_api_key",
+            placeholder="ITS anahtarı…",
+            help="Sağlık Bakanlığı'ndan temin edilir"
+        )
+
+        if its_key:
+            st.session_state["its_api_key"] = its_key
+            st.success("✓ ITS API key kaydedildi")
+
     with st.expander("⚙️ İsteğe bağlı: OpenAI-uyumlu API (PDF analiz için yedek)", expanded=False):
         st.caption(
             "PDF prospektüsü analiz sırası: **Groq → OpenAI-uyumlu API → Gemini**\n\n"
