@@ -360,7 +360,17 @@ with st.sidebar:
     st.markdown("**Ajanlar**")
     st.caption("Vision · RAG · Fact-check · Safety · Corporate · Rapor — orkestrasyon otomatik.")
     st.markdown("---")
-    st.caption("Bilgilendirme amaçlıdır; tıbbi karar için hekime danışın.")
+    # Versiyon + manuel cache temizleme
+    try:
+        from agents import PHARMA_GUARD_VERSION as _pgv
+    except Exception:
+        _pgv = "?"
+    st.caption(f"v{_pgv} · Bilgilendirme amaçlıdır; tıbbi karar için hekime danışın.")
+    if st.button("🔄 Önbelleği Temizle", use_container_width=True, key="clear_cache_btn"):
+        for k in ("orchestrator", "pg_version", "analysis_result", "report_pdf"):
+            st.session_state.pop(k, None)
+        st.success("✅ Temizlendi — bir sonraki analizde yeniden başlatılır.")
+        st.rerun()
 
 # ─────────────────────────────────────────────
 # HERO BANNER
@@ -449,10 +459,15 @@ with tab_analyze:
                 )
 
             try:
-                from agents import PharmaGuardOrchestrator
-                if "orchestrator" not in st.session_state:
+                from agents import PharmaGuardOrchestrator, PHARMA_GUARD_VERSION
+                # Versiyon değişince eski orchestrator'ı zorla yeniden başlat
+                if (
+                    "orchestrator" not in st.session_state
+                    or st.session_state.get("pg_version") != PHARMA_GUARD_VERSION
+                ):
                     with st.spinner("Ajanlar başlatılıyor…"):
                         st.session_state.orchestrator = PharmaGuardOrchestrator()
+                        st.session_state.pg_version = PHARMA_GUARD_VERSION
 
                 result = st.session_state.orchestrator.run(
                     image=image_obj,

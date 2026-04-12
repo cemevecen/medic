@@ -3,6 +3,10 @@ PHARMA-GUARD AI — Çoklu Ajan Sistemi
 agents.py: Tüm ajan sınıfları ve ana orkestratör bu dosyada tanımlanmıştır.
 """
 
+# Versiyon numarası — app.py session_state cache invalidation için kullanılır.
+# Fact-Checker / parser / orchestrator davranışı değiştiğinde artırın.
+PHARMA_GUARD_VERSION = "1.3"
+
 import os
 import json
 import base64
