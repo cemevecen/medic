@@ -26,16 +26,19 @@ def _clean_drug_name(name: str) -> str:
 
     cleaned = name.lower().strip()
 
-    # Ortak Türkçe ilaç adı varyasyonları
+    # Ortak Türkçe ve uluslararası ilaç adı varyasyonları
     variations = {
         "dikloron": "diclofenac",
         "diklofenak": "diclofenac",
         "voltaren": "diclofenac",
         "aspirin": "aspirin",
         "ibuprofen": "ibuprofen",
-        "parol": "paracetamol",
-        "parasetamol": "paracetamol",
+        "parol": "acetaminophen",  # Türkçe paracetamol → US acetaminophen
+        "parasetamol": "acetaminophen",
+        "paracetamol": "acetaminophen",
         "augmentin": "amoxicillin",
+        "amoksisilin": "amoxicillin",
+        "penisilin": "penicillin",
     }
 
     # Eğer bilinen varyasyon varsa yönlendir
@@ -380,17 +383,26 @@ def fetch_drug_info(drug_name: str) -> Optional[Dict[str, Any]]:
 
     logger.info(f"Gerçek ilaç verisi aranıyor: '{drug_name}'")
 
-    # Wikidata'dan dene
+    # Wikidata'dan dene (Türkçe ve uluslararası kaynaklar)
     result = fetch_drug_from_wikidata(drug_name)
     if result and result.get("ticari_ad"):
         logger.info(f"✓ Wikidata'dan bulundu: {result['ticari_ad']}")
         return _translate_drug_data(result)
 
-    # OpenFDA'dan dene (İngilizce)
+    # OpenFDA'dan dene (ABD FDA veritabanı)
     result = fetch_drug_from_openfda(drug_name)
     if result and result.get("ticari_ad"):
         logger.info(f"✓ OpenFDA'dan bulundu: {result['ticari_ad']}")
         return _translate_drug_data(result)
+
+    # Türkçe ilaç adı varyasyonu varsa, canonical form ile yeniden dene
+    clean_name = _clean_drug_name(drug_name)
+    if clean_name != drug_name.lower().strip() and clean_name not in drug_name.lower():
+        logger.info(f"Canonical form ile yeniden aranıyor: {clean_name}")
+        result = fetch_drug_from_openfda(clean_name)
+        if result and result.get("ticari_ad"):
+            logger.info(f"✓ OpenFDA'dan canonical form ile bulundu: {result['ticari_ad']}")
+            return _translate_drug_data(result)
 
     logger.warning(f"✗ Gerçek veri bulunamadı: {drug_name}")
     return None
