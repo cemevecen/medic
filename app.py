@@ -1419,13 +1419,12 @@ with tab_pharmacy:
             user_lon = 28.9784
 
             # Show note
-            with st.info():
-                st.markdown("""
-                **📍 Konum İzni Gerekli:**
-                1. Tarayıcı konumu sorduğunda "İzin Ver" seçin
-                2. Sistem konumunuzu otomatik algılayacak
-                3. Yakın eczaneler listelenecek
-                """)
+            st.info("""
+📍 **Konum İzni Gerekli:**
+1. Tarayıcı konumu sorduğunda "İzin Ver" seçin
+2. Sistem konumunuzu otomatik algılayacak
+3. Yakın eczaneler listelenecek
+            """)
 
         else:
             with col_manual:
