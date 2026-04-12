@@ -27,13 +27,27 @@ from utils import (
 )
 
 
-def _vision_ui_legacy_spam(vision: Optional[dict]) -> bool:
+def _vision_for_display(res: dict) -> dict:
+    """Ham vision oturum verisini kullanıcıya göstermeden önce eski şablonları süzer."""
+    raw = res.get("vision") or {}
     try:
-        from agents import vision_output_has_legacy_user_facing_copy
+        from agents import vision_dict_for_ui
 
-        return vision_output_has_legacy_user_facing_copy(vision)
+        return vision_dict_for_ui(raw)
     except Exception:
-        return False
+        out = dict(raw)
+        for k in list(out.keys()):
+            if isinstance(k, str) and k.strip().casefold() in (
+                "notlar",
+                "notes",
+                "note",
+                "kaynak",
+                "source",
+                "hata",
+                "error",
+            ):
+                out.pop(k, None)
+        return out
 
 
 def _sanitize_gorsel_user_message(msg: Optional[str]) -> str:
@@ -714,7 +728,7 @@ with tab_analyze:
                          "\n".join(f"- {s}" for s in fc.get("sorunlar", [])))
             st.markdown("")
 
-            vsum = res.get("vision") or {}
+            vsum = _vision_for_display(res)
             bd = vsum.get("barkod_detay")
             if isinstance(bd, dict):
                 if bd.get("tespit_edildi"):
@@ -744,7 +758,17 @@ with tab_analyze:
                 msg_show = _sanitize_gorsel_user_message(str(ga.get("message") or ""))
                 sts = ga.get("image_analysis_status")
                 if sts == "failed":
-                    st.warning(msg_show)
+                    if any(
+                        x in msg_show
+                        for x in (
+                            "otomatik güvenilir",
+                            "eski bir sürüm",
+                            "Önbelleği Temizle",
+                        )
+                    ):
+                        st.info(msg_show)
+                    else:
+                        st.warning(msg_show)
                 elif sts == "ocr_recovered":
                     st.success(msg_show)
                 elif sts == "partial_success":
@@ -775,16 +799,33 @@ with tab_analyze:
                                        use_container_width=True)
 
             with rt2:
-                v = res.get("vision", {})
+                v_raw = res.get("vision") or {}
+                v = _vision_for_display(res)
+                try:
+                    from agents import vision_output_has_legacy_user_facing_copy
+
+                    if vision_output_has_legacy_user_facing_copy(v_raw):
+                        st.caption(
+                            "Önceki uygulama sürümünden kalan şablon satırları gizlendi. "
+                            "Tam tutarlı sonuç için **Önbelleği Temizle** → **Analizi Başlat**."
+                        )
+                except Exception:
+                    pass
                 pv = v.get("pharma_guard_scan_version")
                 if pv:
                     st.caption(f"Görsel pipeline sürümü: `{pv}`")
-                legacy_ui = _vision_ui_legacy_spam(v)
-                if legacy_ui:
-                    st.warning(
-                        "Bu sekmedeki **Notlar / Kaynak** alanları eski sürüm metni içeriyordu; "
-                        "ham satırlar gizlendi. **Önbelleği Temizle** ve **Analizi Başlat** ile güncel sonucu alın."
-                    )
+                ga_tab = v.get("gorsel_analiz")
+                if isinstance(ga_tab, dict) and str(ga_tab.get("message") or "").strip():
+                    st.markdown("**Durum özeti**")
+                    st.markdown(str(_sanitize_gorsel_user_message(str(ga_tab.get("message") or ""))))
+                n_extra = str(v.get("notlar") or "").strip()
+                k_extra = str(v.get("kaynak") or "").strip()
+                if n_extra or k_extra:
+                    with st.expander("Ek model notları (isteğe bağlı)", expanded=False):
+                        if n_extra:
+                            st.markdown(f"**Notlar:** {n_extra}")
+                        if k_extra:
+                            st.markdown(f"**Kaynak:** {k_extra}")
                 for label, key in [
                     ("Ticari Ad", "ticari_ad"),
                     ("Etken Madde", "etken_madde"),
@@ -792,15 +833,7 @@ with tab_analyze:
                     ("Form", "form"),
                     ("Barkod", "barkod"),
                     ("Üretici", "uretici"),
-                    ("Notlar", "notlar"),
-                    ("Kaynak", "kaynak"),
                 ]:
-                    if key in ("notlar", "kaynak") and legacy_ui:
-                        continue
-                    if key in ("notlar", "kaynak") and _sanitize_gorsel_user_message(
-                        str(v.get(key) or "")
-                    ) != str(v.get(key) or ""):
-                        continue
                     val = v.get(key)
                     if val:
                         st.markdown(f"**{label}:** {val}")
@@ -818,18 +851,18 @@ with tab_analyze:
                     st.warning(_sanitize_gorsel_user_message(err_v))
                 gax = v.get("gorsel_analiz")
                 if isinstance(gax, dict):
-                    st.markdown("**Görsel analiz durumu**")
-                    st.json(_gorsel_analiz_for_display_json(gax))
+                    with st.expander("Görsel analiz teknik özeti (JSON)", expanded=False):
+                        st.json(_gorsel_analiz_for_display_json(gax))
                 bdet = v.get("barkod_detay")
                 if isinstance(bdet, dict):
-                    st.markdown("**Barkod taraması (makine)**")
-                    st.json(bdet)
+                    with st.expander("Barkod taraması (makine)", expanded=False):
+                        st.json(bdet)
                     if v.get("barkod_gorsel_okuma"):
                         st.caption(f"Görsel model barkod okuması: {v['barkod_gorsel_okuma']}")
                 qdet = v.get("qr_kod_detay")
                 if isinstance(qdet, dict):
-                    st.markdown("**QR kod taraması (makine)**")
-                    st.json(qdet)
+                    with st.expander("QR kod taraması (makine)", expanded=False):
+                        st.json(qdet)
                 st.markdown("---")
                 st.markdown("**RAG eşleşmeleri**")
                 for i, r in enumerate(res.get("rag_results", []), 1):

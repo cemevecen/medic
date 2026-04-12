@@ -5,7 +5,7 @@ agents.py: Tüm ajan sınıfları ve ana orkestratör bu dosyada tanımlanmışt
 
 # Versiyon numarası — app.py session_state cache invalidation için kullanılır.
 # Fact-Checker / parser / orchestrator davranışı değiştiğinde artırın.
-PHARMA_GUARD_VERSION = "1.15"
+PHARMA_GUARD_VERSION = "1.17"
 
 import logging
 import os
@@ -13,6 +13,7 @@ import json
 import base64
 import time
 import re
+import unicodedata
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import BytesIO
 from pathlib import Path
@@ -28,6 +29,85 @@ load_dotenv()
 _log_vision = logging.getLogger("pharma_guard.vision")
 
 
+def _legacy_noise_in_text(t: Any) -> bool:
+    """Eski şablon / hatalı model cümleleri (Türkçe karakter varyantları dahil)."""
+    if t is None:
+        return False
+    s = str(t).strip()
+    if not s:
+        return False
+    s = unicodedata.normalize("NFKC", s)
+    cf = s.casefold()
+    loose = (
+        cf.replace("ğ", "g")
+        .replace("ü", "u")
+        .replace("ş", "s")
+        .replace("ı", "i")
+        .replace("i̇", "i")
+        .replace("ö", "o")
+        .replace("ç", "c")
+        .replace("â", "a")
+        .replace("—", " ")
+        .replace("–", " ")
+    )
+    if "groq" in loose and "fallback" in loose:
+        return True
+    needles = (
+        "groq fallback",
+        "llava ve groq",
+        "llava ile groq",
+        "llava ve groq ile",
+        "görsel işlenemiyor",
+        "gorsel islenemiyor",
+        "görsel analizi llava",
+        "gorsel analizi llava",
+        "metin girişi tercih",
+        "metin girisi tercih",
+        "metin girişi kullanarak",
+        "metin girisi kullanarak",
+        "metin girişi ile devam",
+        "metin girişi tercih edilir",
+        "metin girisi tercih edilir",
+    )
+    for n in needles:
+        ncf = n.casefold()
+        if ncf in cf or ncf in loose:
+            return True
+    # "Görsel işlenemiyor" ASCII yazım (i/ı karışık)
+    if "islenemiyor" in loose and ("gorsel" in loose or "görsel" in cf):
+        if "yeterli bilgi" not in loose and "analiz tamamland" not in loose:
+            return True
+    return False
+
+
+def _vision_merge_case_insensitive_keys(vision: Dict[str, Any]) -> Dict[str, Any]:
+    """Model JSON'unda Notes/Source/error gibi anahtarları notlar/kaynak/hata ile birleştirir."""
+    out = dict(vision)
+
+    def _pull(canonical: str, *match_names: str) -> None:
+        names_cf = {m.casefold() for m in match_names}
+        for k in list(out.keys()):
+            if not isinstance(k, str):
+                continue
+            if k.strip().casefold() not in names_cf:
+                continue
+            if k == canonical:
+                continue
+            val = out.pop(k, None)
+            if val is None or (isinstance(val, str) and not str(val).strip()):
+                continue
+            cur = out.get(canonical)
+            if cur is None or (isinstance(cur, str) and not str(cur).strip()):
+                out[canonical] = val
+            elif str(val) not in str(cur):
+                out[canonical] = f"{cur} {val}".strip()
+
+    _pull("notlar", "notlar", "notes", "note")
+    _pull("kaynak", "kaynak", "source", "origin")
+    _pull("hata", "hata", "error", "err")
+    return out
+
+
 def vision_output_has_legacy_user_facing_copy(vision: Optional[Dict[str, Any]]) -> bool:
     """
     Eski sürümdeki / önbellekteki 'Groq Fallback' + 'Görsel işlenemiyor' metinlerini tespit eder.
@@ -35,15 +115,38 @@ def vision_output_has_legacy_user_facing_copy(vision: Optional[Dict[str, Any]]) 
     """
     if not isinstance(vision, dict):
         return False
-    k = str(vision.get("kaynak") or "").lower()
-    n = str(vision.get("notlar") or "").lower()
-    if "groq fallback" in k:
-        return True
-    if "görsel işlenemiyor" in n or "gorsel islenemiyor" in n:
-        return True
-    if "llava ve groq" in n or "metin girişi tercih edilir" in n:
+    v = _vision_merge_case_insensitive_keys(dict(vision))
+    for key in ("kaynak", "notlar", "hata"):
+        if _legacy_noise_in_text(v.get(key)):
+            return True
+    ga = v.get("gorsel_analiz")
+    if isinstance(ga, dict) and _legacy_noise_in_text(ga.get("message")):
         return True
     return False
+
+
+def vision_dict_for_ui(vision: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Streamlit vb. arayüzde gösterilecek vision kopyası: eski şablon not/hata satırlarını çıkarır,
+    gorsel_analiz.message alanını nötr bir metne çevirir (session_state içindeki ham dict'i değiştirmez).
+    """
+    if not isinstance(vision, dict):
+        return {}
+    out = _vision_merge_case_insensitive_keys(dict(vision))
+    for k in ("notlar", "kaynak", "hata"):
+        if _legacy_noise_in_text(out.get(k)):
+            out.pop(k, None)
+    ga = out.get("gorsel_analiz")
+    if isinstance(ga, dict) and _legacy_noise_in_text(ga.get("message")):
+        out["gorsel_analiz"] = {
+            **ga,
+            "message": (
+                "Görselden otomatik güvenilir sonuç çıkarılamadı. Daha net, aydınlık ve yakın "
+                "çekilmiş bir kutu fotoğrafı deneyin veya ilaç adını metin kutusuna yazıp "
+                "yeniden analiz başlatın."
+            ),
+        }
+    return out
 
 
 from gemini_models import (
@@ -284,20 +387,18 @@ class VisionScannerAgent:
     @staticmethod
     def _finalize_scan_vision_output(d: Dict[str, Any]) -> Dict[str, Any]:
         """Sürüm etiketi + nadiren görülen eski/yanıltıcı model metinlerini düzeltir."""
-        out = dict(d)
+        out = _vision_merge_case_insensitive_keys(dict(d))
         out["pharma_guard_scan_version"] = PHARMA_GUARD_VERSION
-        kn = (out.get("kaynak") or "").strip().lower()
-        if kn == "groq fallback" or kn.endswith("groq fallback"):
+        if _legacy_noise_in_text(out.get("kaynak")):
             out["kaynak"] = "Groq görüntü + OCR pipeline"
         note = str(out.get("notlar") or "")
-        low = note.lower()
-        if (
-            "görsel işlenemiyor" in low
-            or "metin girişi tercih edilir" in low
-            or "llava ve groq" in low
-        ):
+        if _legacy_noise_in_text(note):
             ga = out.get("gorsel_analiz")
-            if isinstance(ga, dict) and ga.get("message"):
+            if (
+                isinstance(ga, dict)
+                and ga.get("message")
+                and not _legacy_noise_in_text(ga.get("message"))
+            ):
                 out["notlar"] = str(ga["message"])
             else:
                 out["notlar"] = (
@@ -305,6 +406,17 @@ class VisionScannerAgent:
                     "bir fotoğraf deneyin (kutu ön yüzü, yazılar, mümkünse barkod alanı). "
                     "Alternatif olarak ilaç adını metin olarak girebilirsiniz."
                 )
+        if _legacy_noise_in_text(out.get("hata")):
+            out.pop("hata", None)
+        ga = out.get("gorsel_analiz")
+        if isinstance(ga, dict) and _legacy_noise_in_text(ga.get("message")):
+            out["gorsel_analiz"] = {
+                **ga,
+                "message": (
+                    "Görselden otomatik güvenilir sonuç çıkarılamadı. Daha net fotoğraf "
+                    "veya ilaç adını metin kutusundan girip yeniden analiz deneyin."
+                ),
+            }
         return out
 
     @staticmethod
@@ -320,7 +432,7 @@ class VisionScannerAgent:
             "metin girisi",
             "groq fallback",
             "llava ve groq",
-            "llava",
+            "llava ile groq",
             "metin girişi kullan",
             "metin girisi kullan",
             "kullanıcıdan metin",
@@ -534,8 +646,8 @@ class VisionScannerAgent:
                 identified_medicine=(gm.get("ticari_ad") or "")[:500],
                 dosage=(gm.get("dozaj") or "")[:120],
                 message=(
-                    "Groq görüntü modelleri sonuç vermedi veya kota/model sınırına takıldı; "
-                    "aynı kutu görseli Gemini ile analiz edildi (Groq’ta LLaVA artık sunulmuyor)."
+                    "Groq görüntü zinciri sonuç vermedi veya erişim sınırına takıldı; "
+                    "aynı kutu görseli Gemini çok modlu model ile analiz edildi."
                 ),
                 error_code=None,
             )
@@ -867,8 +979,8 @@ PROSPEKTÜS METNİ:
             data = json.loads(cleaned)
             if isinstance(data, dict):
                 data.pop("kaynak", None)
-            data["kaynak"] = source
-            return data
+                data["kaynak"] = source
+                return _vision_merge_case_insensitive_keys(data)
         except json.JSONDecodeError:
             pass
         # 3) Metin içindeki ilk { ... } bloğunu regex ile bul
@@ -878,8 +990,8 @@ PROSPEKTÜS METNİ:
                 data = json.loads(m.group())
                 if isinstance(data, dict):
                     data.pop("kaynak", None)
-                data["kaynak"] = source
-                return data
+                    data["kaynak"] = source
+                    return _vision_merge_case_insensitive_keys(data)
             except json.JSONDecodeError:
                 pass
         # 4) Ham metni sakla; ticari_ad'ı tahmin etmeye çalış
@@ -894,7 +1006,7 @@ PROSPEKTÜS METNİ:
             hit = re.search(pat, cleaned, re.IGNORECASE)
             if hit:
                 guessed[key] = hit.group(1)
-        return guessed
+        return _vision_merge_case_insensitive_keys(guessed)
 
 
 # ---------------------------------------------------------------------------
@@ -1532,10 +1644,12 @@ class PharmaGuardOrchestrator:
             vision_data = self.vision_agent.scan_pdf(pdf_bytes, pdf_filename)
         elif image is not None:
             _progress(1, "👁️ Vision Scanner: Görsel analiz ediliyor...")
-            vision_data = self.vision_agent.scan(image)
+            vision_data = vision_dict_for_ui(self.vision_agent.scan(image))
         else:
             _progress(1, "✏️ Metin girişi işleniyor...")
-            vision_data = self.vision_agent.scan_text_input(drug_name_text or "")
+            vision_data = vision_dict_for_ui(self.vision_agent.scan_text_input(drug_name_text or ""))
+        if pdf_bytes is not None:
+            vision_data = vision_dict_for_ui(vision_data)
         results["vision"] = vision_data
 
         from similar_medicines import build_similar_drugs_bundle
