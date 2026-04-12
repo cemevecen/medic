@@ -271,20 +271,22 @@ div[data-testid="stVerticalBlock"] .stTabs [data-baseweb="tab-list"] {
   border-color: rgba(13,148,136,.6) !important;
   color: #d1faf4 !important;
 }
-/* Varsayılan (secondary olmayan) butonlar — tema uyumlu */
+/* Varsayılan (secondary olmayan) butonlar — belirgin teal renk */
 .stButton > button:not([kind="primary"]):not([kind="secondary"]) {
-  background: linear-gradient(135deg, rgba(13,148,136,.15), rgba(15,118,110,.15)) !important;
-  color: #5eead4 !important;
-  border: 1px solid rgba(13,148,136,.3) !important;
+  background: linear-gradient(135deg, #0f766e, #0d9488) !important;
+  color: #ffffff !important;
+  border: none !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 14px rgba(15,118,110,.3) !important;
 }
 .stButton > button:not([kind="primary"]):not([kind="secondary"]):hover {
-  background: linear-gradient(135deg, rgba(13,148,136,.25), rgba(15,118,110,.25)) !important;
-  border-color: rgba(13,148,136,.6) !important;
-  color: #d1faf4 !important;
-  box-shadow: 0 4px 12px rgba(13,148,136,.15) !important;
+  background: linear-gradient(135deg, #0d7a71, #0fa489) !important;
+  border-color: transparent !important;
+  color: #ffffff !important;
+  box-shadow: 0 6px 20px rgba(15,118,110,.4) !important;
 }
 .stButton > button:not([kind="primary"]):not([kind="secondary"]):active {
-  background: linear-gradient(135deg, rgba(13,148,136,.35), rgba(15,118,110,.35)) !important;
+  background: linear-gradient(135deg, #0d7a71, #0fa489) !important;
 }
 .stButton > button:disabled { opacity: .45 !important; }
 
@@ -311,6 +313,7 @@ div[data-testid="stVerticalBlock"] .stTabs [data-baseweb="tab-list"] {
 }
 .stTextInput label { color: var(--pg-ink) !important; font-weight: 500 !important; }
 .stRadio label     { color: var(--pg-ink) !important; }
+
 .stFileUploader section {
   border-radius: 14px !important;
   border: 2px dashed var(--pg-line) !important;
@@ -1067,7 +1070,7 @@ with tab_fda:
     )
     st.caption("Wikidata ve OpenFDA veritabanlarından gerçek ilaç bilgilerini çeker. Tüm veriler Türkçeye çevrilir.")
 
-    col1, col2 = st.columns([2, 1], gap="medium")
+    col1, col2 = st.columns([3, 1], gap="small")
 
     with col1:
         drug_search = st.text_input(
@@ -1078,6 +1081,7 @@ with tab_fda:
         )
 
     with col2:
+        st.write("")  # Boşluk ekle alignment için
         fetch_clicked = st.button(" Arşiv'de Ara", use_container_width=True, key="fetch_real_data_btn")
 
     if fetch_clicked or drug_search:
