@@ -5,7 +5,7 @@ agents.py: Tüm ajan sınıfları ve ana orkestratör bu dosyada tanımlanmışt
 
 # Versiyon numarası — app.py session_state cache invalidation için kullanılır.
 # Fact-Checker / parser / orchestrator davranışı değiştiğinde artırın.
-PHARMA_GUARD_VERSION = "1.18"
+PHARMA_GUARD_VERSION = "1.19"
 
 import logging
 import os
@@ -123,6 +123,33 @@ def vision_output_has_legacy_user_facing_copy(vision: Optional[Dict[str, Any]]) 
     if isinstance(ga, dict) and _legacy_noise_in_text(ga.get("message")):
         return True
     return False
+
+
+_STRINGY_VISION_KEYS = (
+    "ticari_ad",
+    "etken_madde",
+    "dozaj",
+    "form",
+    "uretici",
+    "barkod",
+    "notlar",
+    "kaynak",
+    "hata",
+)
+
+
+def _vision_normalize_null_strings(vision: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Vision çıktısında JSON null / Python None olan metin alanlarını '' yapar.
+    Eski .get('etken_madde', '').strip() kalıbı (anahtar varken değer None) ile uyumluluk.
+    """
+    if not isinstance(vision, dict):
+        return {}
+    out = dict(vision)
+    for k in _STRINGY_VISION_KEYS:
+        if k in out and out[k] is None:
+            out[k] = ""
+    return out
 
 
 def _vision_field_str(
@@ -788,11 +815,11 @@ class VisionScannerAgent:
         return self._finalize_scan_vision_output(
             {
                 "ticari_ad": drug_name,
-                "etken_madde": None,
-                "dozaj": None,
-                "form": None,
-                "barkod": None,
-                "uretici": None,
+                "etken_madde": "",
+                "dozaj": "",
+                "form": "",
+                "barkod": "",
+                "uretici": "",
                 "okunabilirlik_skoru": 10,
                 "notlar": "Metin girişi ile sağlandı, görsel analiz yapılmadı.",
                 "kaynak": "Metin Girişi",
@@ -1120,6 +1147,8 @@ class RAGSpecialistAgent:
         Bu sayede Fact-Check'in karşılaştıracak verileri olur.
         """
         self._ensure_rag_index()
+        if isinstance(vision_data, dict):
+            vision_data = _vision_normalize_null_strings(vision_data)
         if not self.corpus_loaded or self.vectorstore is None:
             # Corpus boş — vision bilgisinden mock sonuçlar oluştur
             if vision_data:
@@ -1669,6 +1698,7 @@ class PharmaGuardOrchestrator:
             vision_data = vision_dict_for_ui(self.vision_agent.scan_text_input(drug_name_text or ""))
         if pdf_bytes is not None:
             vision_data = vision_dict_for_ui(vision_data)
+        vision_data = _vision_normalize_null_strings(vision_data)
         results["vision"] = vision_data
 
         from similar_medicines import build_similar_drugs_bundle
