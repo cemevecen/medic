@@ -21,7 +21,7 @@ def _clean_drug_name(name: str) -> str:
 
 def fetch_drug_from_wikidata(drug_name: str) -> Optional[Dict[str, Any]]:
     """
-    Wikidata'dan gerçek ilaç bilgilerini çeker (geliştiriş versiyon).
+    Wikidata'dan gerçek ilaç bilgilerini çeker.
 
     Args:
         drug_name: İlaç adı
@@ -32,7 +32,7 @@ def fetch_drug_from_wikidata(drug_name: str) -> Optional[Dict[str, Any]]:
     try:
         clean_name = _clean_drug_name(drug_name)
 
-        # Wikidata Search API — arama-tabanlı (SPARQL yerine)
+        # Wikidata Search API
         search_url = "https://www.wikidata.org/w/api.php"
         search_params = {
             "action": "wbsearchentities",
@@ -50,7 +50,6 @@ def fetch_drug_from_wikidata(drug_name: str) -> Optional[Dict[str, Any]]:
             logger.info(f"Wikidata'da '{clean_name}' bulunamadı")
             return None
 
-        # İlk sonuç — ilaç olup olmadığını kontrol et
         item_id = search_results["search"][0]["id"]
         label = search_results["search"][0]["label"]
 
@@ -89,6 +88,7 @@ def fetch_drug_from_wikidata(drug_name: str) -> Optional[Dict[str, Any]]:
             "ticari_ad": label,
             "etken_madde": etken_madde or "Bilgi mevcut değil",
             "dozaj": "Bilgi mevcut değil",
+            "form": "Bilgi mevcut değil",
             "uretici": uretici or "Bilgi mevcut değil",
             "barkod": "Bilgi mevcut değil",
             "kaynak": "Wikidata",
@@ -107,7 +107,7 @@ def fetch_drug_from_wikidata(drug_name: str) -> Optional[Dict[str, Any]]:
 
 def fetch_drug_from_openfda(drug_name: str) -> Optional[Dict[str, Any]]:
     """
-    OpenFDA API'sinden gerçek ilaç bilgileri çeker.
+    OpenFDA API'sinden gerçek ilaç bilgileri çeker (geliştirilmiş parser).
     """
     try:
         clean_name = _clean_drug_name(drug_name)
@@ -129,35 +129,64 @@ def fetch_drug_from_openfda(drug_name: str) -> Optional[Dict[str, Any]]:
             return None
 
         drug = results["results"][0]
+        openfda_data = drug.get("openfda", {})
 
-        # Aktif madde (Active Ingredient)
+        # ============ ETKEN MADDE ============
+        # OpenFDA'da "active_ingredient" çoğu zaman liste şeklinde:
+        # ["ingredient1 strength1", "ingredient2 strength2"] veya
+        # [{"name": "...", "strength": "..."}, ...]
         active_ingredient = ""
         if "active_ingredient" in drug:
-            # "acetaminophen 500 mg" formatında gelir
             ingredients = []
-            for ing in drug.get("active_ingredient", [])[:3]:
+            for ing in drug.get("active_ingredient", []):
                 if isinstance(ing, str):
+                    # "Amoxicillin trihydrate 500 mg" formatı
                     ingredients.append(ing)
-                elif isinstance(ing, dict) and "name" in ing:
-                    ingredients.append(ing["name"])
-            active_ingredient = "; ".join(ingredients)
+                elif isinstance(ing, dict):
+                    # {"name": "...", "strength": "..."} formatı
+                    if "name" in ing:
+                        name = ing["name"]
+                        strength = ing.get("strength", "")
+                        ingredients.append(f"{name}{' ' + strength if strength else ''}")
+            active_ingredient = " + ".join(ingredients)
 
-        # Dozaj / Form
+        # ============ DOZAJ ============
+        # Dosage_and_administration genellikle uzun metin; ilk cümleyi al
         dosage = "Bilgi mevcut değil"
         if "dosage_and_administration" in drug:
-            dosage = drug["dosage_and_administration"][0][:100] if drug["dosage_and_administration"] else dosage
+            dos_list = drug.get("dosage_and_administration", [])
+            if dos_list:
+                full_text = dos_list[0]
+                # İlk cümleyi bul (nokta, ünlem veya soru işareti kadar)
+                sentences = re.split(r'[.!?]', full_text)
+                if sentences:
+                    dosage = sentences[0].strip()[:150]  # İlk 150 char
+                    if not dosage:
+                        dosage = full_text[:150]
 
-        form = ", ".join(drug.get("route", [])) if drug.get("route") else "Bilgi mevcut değil"
+        # ============ FORM ============
+        form = ", ".join(openfda_data.get("route", [])) if openfda_data.get("route") else "Bilgi mevcut değil"
 
-        # Üretici
+        # ============ ÜRETICI ============
         uretici = ""
-        if "openfda" in drug and "manufacturer_name" in drug["openfda"]:
-            uretici = drug["openfda"]["manufacturer_name"][0]
+        if "manufacturer_name" in openfda_data:
+            manu_list = openfda_data.get("manufacturer_name", [])
+            if manu_list:
+                # GSK, Pfizer vb. ana üreticileri al
+                uretici = manu_list[0]
 
-        # Brand name
+        # ============ BARKOD ============
+        barkod = "Bilgi mevcut değil"
+        # OpenFDA'da barkod bilgisi nadiren vardır; UPC alanında olabilir
+        if "upc" in openfda_data:
+            barkod = openfda_data["upc"][0] if openfda_data["upc"] else barkod
+
+        # ============ BRAND NAME ============
         brand_name = ""
-        if "openfda" in drug and "brand_name" in drug["openfda"]:
-            brand_name = drug["openfda"]["brand_name"][0]
+        if "brand_name" in openfda_data:
+            bn_list = openfda_data.get("brand_name", [])
+            if bn_list:
+                brand_name = bn_list[0]
 
         drug_data = {
             "ticari_ad": brand_name or clean_name.upper(),
@@ -165,11 +194,11 @@ def fetch_drug_from_openfda(drug_name: str) -> Optional[Dict[str, Any]]:
             "dozaj": dosage,
             "form": form,
             "uretici": uretici or "Bilgi mevcut değil",
-            "barkod": "Bilgi mevcut değil",
+            "barkod": barkod,
             "kaynak": "OpenFDA (FDA)",
         }
 
-        logger.info(f"OpenFDA'da bulundu: {brand_name}")
+        logger.info(f"✓ OpenFDA'dan bulundu: {brand_name}")
         return drug_data
 
     except requests.exceptions.Timeout:
@@ -213,7 +242,7 @@ def fetch_drug_info(drug_name: str) -> Optional[Dict[str, Any]]:
 
 if __name__ == "__main__":
     # Test
-    for test_drug in ["augmentin", "augmentin 1000mg", "parol", "aspirin"]:
+    for test_drug in ["augmentin", "amoxil", "parol"]:
         print(f"\nTest: {test_drug}")
         data = fetch_drug_info(test_drug)
         if data:
