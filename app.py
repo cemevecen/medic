@@ -1666,10 +1666,11 @@ with tab_about:
     # ─────────────────────────────────────────────
     st.subheader("🏪 Nöbetçi Eczane API (CollectAPI)")
 
+    # Session state'e doğrudan kaydet (Nöbetçi Eczaneler tab'ta kullanılan key ile aynı)
     collectapi_key_input = st.text_input(
         "API Key",
         type="password",
-        key="collectapi_key_input",
+        key="collectapi_api_key",
         placeholder="Sadece kod kısmını yapıştır (örn: abc123xyz...)"
     )
 
