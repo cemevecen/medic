@@ -36,6 +36,40 @@ from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
 # UNICODE FONT KURULUMU (Türkçe karakter desteği)
 # ---------------------------------------------------------------------------
 
+def _search_fonts_in_directory(directory: str, font_names: list) -> Optional[str]:
+    """
+    Verilen dizinde arama yaparak belirtilen isimlerden biriyle eşleşen font dosyasını bulur.
+    macOS'ta /Library/Fonts/ içinde font araması için.
+    """
+    if not os.path.isdir(directory):
+        return None
+
+    try:
+        for filename in os.listdir(directory):
+            # Normalize dosya adı
+            name_lower = filename.lower()
+
+            # Font uzantıları: .ttf, .otf, .dfont, .ttc
+            if not any(name_lower.endswith(ext) for ext in ['.ttf', '.otf', '.dfont', '.ttc']):
+                continue
+
+            # Font adlarında arama
+            for font_name in font_names:
+                if font_name.lower() in name_lower:
+                    full_path = os.path.join(directory, filename)
+                    try:
+                        # Dosyanın okunabilir olup olmadığını kontrol et
+                        with open(full_path, 'rb') as f:
+                            f.read(4)  # İlk 4 byte oku
+                        return full_path
+                    except:
+                        continue
+    except:
+        pass
+
+    return None
+
+
 def _find_unicode_ttf() -> tuple:
     """
     Sistemde Unicode destekli bir TTF font çifti (regular + bold) arar.
@@ -43,7 +77,6 @@ def _find_unicode_ttf() -> tuple:
     Returns: (regular_path, bold_path) — bulunamazsa (None, None)
     """
     candidates = [
-        # matplotlib DejaVu (numpy/scipy bağımlılığıyla gelebilir) — ÖNCELİKLİ
         # Ubuntu / Debian (Streamlit Cloud)
         ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
          "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
@@ -57,39 +90,59 @@ def _find_unicode_ttf() -> tuple:
         # Liberation Sans — Ubuntu
         ("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
          "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"),
-        # macOS — Helvetica yerine Courier New (Unicode desteği daha iyi)
-        ("/Library/Fonts/Courier New.ttf",
-         "/Library/Fonts/Courier New Bold.ttf"),
-        ("/System/Library/Fonts/Courier.dfont",
-         "/System/Library/Fonts/Courier.dfont"),
-        # macOS — Times New Roman (Sistem varsayılanı)
-        ("/Library/Fonts/Times New Roman.ttf",
-         "/Library/Fonts/Times New Roman Bold.ttf"),
-        # macOS Arial (varsa)
-        ("/Library/Fonts/Arial.ttf",
-         "/Library/Fonts/Arial Bold.ttf"),
         # Windows
         ("C:/Windows/Fonts/arial.ttf", "C:/Windows/Fonts/arialbd.ttf"),
         ("C:/Windows/Fonts/tahoma.ttf", "C:/Windows/Fonts/tahomabd.ttf"),
     ]
 
-    # matplotlib DejaVu (numpy/scipy bağımlılığıyla gelebilir) — EN YÜKSEK ÖNCELİK
+    # 1. matplotlib DejaVu (EN YÜKSEK ÖNCELİK — her zaman Unicode destekli)
     try:
         import matplotlib
         mpl_dir = os.path.join(matplotlib.get_data_path(), "fonts", "ttf")
         reg = os.path.join(mpl_dir, "DejaVuSans.ttf")
         bold = os.path.join(mpl_dir, "DejaVuSans-Bold.ttf")
         if os.path.exists(reg) and os.path.exists(bold):
-            candidates.insert(0, (reg, bold))
-    except Exception:
-        pass
+            print(f"[utils] ✓ matplotlib DejaVuSans bulundu (EN YÜKSEK ÖNCELİK)")
+            return reg, bold
+    except Exception as e:
+        print(f"[utils] matplotlib font kontrolü: {e}")
 
+    # 2. Verilen path'lerde ara
     for reg, bold in candidates:
         if os.path.exists(reg):
-            # Bold font mutlaka var olmalı, yoksa regular'ı tekrar kullan
             bold_path = bold if os.path.exists(bold) else reg
-            print(f"[utils] Font bulundu: {os.path.basename(reg)} (bold: {os.path.basename(bold_path)})")
+            print(f"[utils] ✓ Font bulundu: {os.path.basename(reg)}")
             return reg, bold_path
+
+    # 3. macOS — /Library/Fonts/ dizininde Unicode font ara
+    library_fonts_dir = "/Library/Fonts"
+    if os.path.isdir(library_fonts_dir):
+        print(f"[utils] Araştırılıyor: {library_fonts_dir}")
+        # Öncelik sırası: DejaVu > Noto > Arial > Courier > Times > Helvetica
+        for font_names in [
+            ["dejavu"],           # DejaVu (mükemmel Türkçe desteği)
+            ["notosans", "noto"], # Noto Sans (çok iyi Türkçe desteği)
+            ["arial"],            # Arial (iyi Türkçe desteği)
+            ["courier"],          # Courier (temel Türkçe desteği)
+            ["times"],            # Times (temel Türkçe desteği)
+        ]:
+            found = _search_fonts_in_directory(library_fonts_dir, font_names)
+            if found:
+                # Bold variant ara
+                bold_names = [name + "bold" for name in font_names] + font_names
+                bold_found = _search_fonts_in_directory(library_fonts_dir, bold_names)
+                print(f"[utils] ✓ macOS font bulundu: {os.path.basename(found)}")
+                return found, bold_found if bold_found else found
+
+    # 4. macOS — /System/Library/Fonts/ dizininde ara
+    system_fonts_dir = "/System/Library/Fonts"
+    if os.path.isdir(system_fonts_dir):
+        print(f"[utils] Araştırılıyor: {system_fonts_dir}")
+        for font_names in [["times"], ["courier"], ["helvetica"]]:
+            found = _search_fonts_in_directory(system_fonts_dir, font_names)
+            if found:
+                print(f"[utils] ✓ Sistem font bulundu: {os.path.basename(found)}")
+                return found, found
 
     return None, None
 
