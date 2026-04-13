@@ -1393,7 +1393,7 @@ if _pg_nav == "İlaç Analizi":
                     f'{conf:.1f}<span style="font-size:.9rem;font-weight:400">/10</span></h3>'
                     f'<p>Güven Puanı</p>'
                     f'<p style="margin:.35rem 0 0;font-size:0.82rem;color:#64748b;line-height:1.35">'
-                    f"{html.escape(conf_band)} güven bandı — rapor ve ajan çıktılarının birleşik özeti."
+                    f"{html.escape(conf_band)} güven bandı."
                     f"</p></div>",
                     unsafe_allow_html=True,
                 )
@@ -1619,7 +1619,7 @@ if _pg_nav == "İlaç Analizi":
                     for it in (s.get("ozel_uyarilar") or []):
                         st.markdown(f"- {it}")
 
-            with rt4:
+            with rt3:
                 c = res.get("corporate", {})
                 if c:
                     if "hata" in c: st.warning(c["hata"])

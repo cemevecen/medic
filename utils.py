@@ -604,12 +604,9 @@ def generate_pdf_report(
         story.append(
             Paragraph(escape(str(similar_drugs_bundle.get("uyari", ""))), styles["footer"])
         )
-        story.append(
-            Paragraph(
-                escape(str(similar_drugs_bundle.get("fiyat_entegrasyonu_notu", ""))),
-                styles["footer"],
-            )
-        )
+        _fen = str(similar_drugs_bundle.get("fiyat_entegrasyonu_notu") or "").strip()
+        if _fen:
+            story.append(Paragraph(escape(_fen), styles["footer"]))
         story.append(Spacer(1, 0.15 * cm))
         for row in similar_drugs_bundle.get("oneriler") or []:
             if not isinstance(row, dict):

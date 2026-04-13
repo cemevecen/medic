@@ -5,7 +5,7 @@ agents.py: Tüm ajan sınıfları ve ana orkestratör bu dosyada tanımlanmışt
 
 # Versiyon numarası — app.py session_state cache invalidation için kullanılır.
 # Fact-Checker / parser / orchestrator davranışı değiştiğinde artırın.
-PHARMA_GUARD_VERSION = "1.20"
+PHARMA_GUARD_VERSION = "1.21"
 
 import logging
 import os
@@ -1803,7 +1803,7 @@ class PharmaGuardOrchestrator:
                 "\n\n---\n"
                 "## VERİ UYUŞMAZLIĞI ALARI\n"
                 + "\n".join(f"- {s}" for s in fact_check["sorunlar"])
-                + "\n\n**Bu rapor bloklanmıştır. Bir eczacı veya hekime danışın.**\n---\n"
+                + "\n---\n"
             )
             report_text = block + report_text
 

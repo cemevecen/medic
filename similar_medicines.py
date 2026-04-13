@@ -278,10 +278,7 @@ def build_similar_drugs_bundle(
     return {
         "oneriler": merged,
         "bos_aciklama": bos,
-        "fiyat_entegrasyonu_notu": (
-            "Güncel satış fiyatı, indirim veya geri ödeme bilgisi bu sürümde entegre değildir; "
-            "resmi fiyat ve ödeme koşulları için eczane, SGK veya ilaç firması kaynakları kullanılmalıdır."
-        ),
+        "fiyat_entegrasyonu_notu": "",
         "uyari": (
             "Benzer / muadil seçimi tedavi güvenliği açısından eczacı veya hekim onayı gerektirir; "
             "bu liste bilgilendirme amaçlıdır."
