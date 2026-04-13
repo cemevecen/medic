@@ -7,6 +7,8 @@ import os
 import json
 import html
 from pathlib import Path
+from urllib.parse import urlencode
+
 import streamlit as st
 from PIL import Image
 from dotenv import load_dotenv
@@ -1310,13 +1312,54 @@ with tab_analyze:
 
     st.markdown("---")
     st.markdown(
-        '<div class="pg-eczane-widget-block" style="max-width:400px;width:100%;">'
         '<p class="pg-section" style="margin-bottom:0.35rem"><span class="pg-section-icon">🏪</span>'
-        "Nöbetçi eczaneler</p>"
-        '<p style="margin:0 0 0.75rem;font-size:0.85rem;color:#64748b;line-height:1.45">'
-        'Canlı liste <a href="https://eczaneapi.com/sitene-ekle" target="_blank" rel="noopener noreferrer">'
-        "EczaneAPI</a> resmi widget’ıdır; varsayılan olarak Ankara nöbetçileri açılır. Veri eczaneapi.com’dan gelir.</p>"
-        '<iframe src="https://eczaneapi.com/widget?city=ankara" width="100%" height="400" '
+        "Nöbetçi eczaneler</p>",
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "İl ve ilçe seçin; iframe adresi güncellenir. Veri [EczaneAPI](https://eczaneapi.com/sitene-ekle) "
+        "widget’ından gelir. İl/ilçe adları MIT (enisbt/turkey-cities) listesiyle eşlenir; slug’lar API ile uyumludur."
+    )
+
+    from eczane_widget_geo import load_turkey_geo_rows, pretty_label, slug_tr
+
+    _geo_rows = load_turkey_geo_rows()
+    _city_slugs = [r[1] for r in _geo_rows]
+    _city_label = {r[1]: r[0] for r in _geo_rows}
+    _city_counties = {r[1]: r[2] for r in _geo_rows}
+    _ci0 = _city_slugs.index("ankara") if "ankara" in _city_slugs else 0
+
+    _c1, _c2 = st.columns(2)
+    with _c1:
+        _w_city = st.selectbox(
+            "İl seçin",
+            options=_city_slugs,
+            index=_ci0,
+            format_func=lambda s: _city_label.get(s, s),
+            key="eczane_widget_city",
+        )
+    _counties_raw = _city_counties.get(_w_city) or []
+    _dist_slugs = [""] + [slug_tr(co) for co in _counties_raw]
+    _dist_label: dict[str, str] = {"": "Tüm ilçeler"}
+    for _co in _counties_raw:
+        _dist_label[slug_tr(_co)] = pretty_label(_co)
+    with _c2:
+        _w_dist = st.selectbox(
+            "İlçe seçin",
+            options=_dist_slugs,
+            index=0,
+            format_func=lambda s: _dist_label.get(s, s),
+            key=f"eczane_widget_district__{_w_city}",
+        )
+
+    _params: dict[str, str] = {"city": str(_w_city).strip().lower()}
+    if str(_w_dist or "").strip():
+        _params["district"] = str(_w_dist).strip().lower()
+    _widget_src = "https://eczaneapi.com/widget?" + urlencode(_params)
+
+    st.markdown(
+        '<div class="pg-eczane-widget-block" style="max-width:400px;width:100%;margin-top:0.5rem;">'
+        f'<iframe src="{html.escape(_widget_src)}" width="100%" height="400" '
         'frameborder="0" style="border:none; border-radius:12px; max-width: 400px; '
         'margin: 0 auto; display: block;" title="Nöbetçi Eczaneler"></iframe>'
         "</div>",
