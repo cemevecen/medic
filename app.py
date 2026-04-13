@@ -1532,7 +1532,7 @@ with tab_fda:
     )
     st.caption("Wikidata ve OpenFDA veritabanlarından gerçek ilaç bilgilerini çeker. Tüm veriler Türkçeye çevrilir.")
 
-    col1, col2 = st.columns([3, 2], gap="small")
+    col1, col2 = st.columns([3, 2], gap="small", vertical_alignment="bottom")
 
     with col1:
         drug_search = st.text_input(
