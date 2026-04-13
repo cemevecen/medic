@@ -669,7 +669,7 @@ div[data-testid="stVerticalBlock"] .stTabs [data-baseweb="tab-list"] {
 /* ── Adım satırı ────────────────────────────── */
 .pg-step-line {
   font-size:.9rem; color:var(--pg-muted);
-  padding:.25rem 0 .35rem;
+  padding:.25rem 0 .35rem; margin-top:-0.6rem;
 }
 .pg-step-num { display:inline-block; min-width:2.75rem; font-weight:700; color:var(--pg-accent); }
 
