@@ -497,6 +497,7 @@ def generate_pdf_report(
     avg_confidence: float,
     vision_data: Optional[Dict] = None,
     similar_drugs_bundle: Optional[Dict] = None,
+    fiyat_liste: Optional[Dict[str, Any]] = None,
 ) -> bytes:
     """
     Analiz raporunu profesyonel PDF formatında oluşturur.
@@ -601,9 +602,9 @@ def generate_pdf_report(
 
     if similar_drugs_bundle and isinstance(similar_drugs_bundle, dict):
         story.append(Paragraph("<b>Benzer İlaçlar / Muadil Alternatifler (özet)</b>", styles["subtitle"]))
-        story.append(
-            Paragraph(escape(str(similar_drugs_bundle.get("uyari", ""))), styles["footer"])
-        )
+        _sim_uy = str(similar_drugs_bundle.get("uyari") or "").strip()
+        if _sim_uy:
+            story.append(Paragraph(escape(_sim_uy), styles["footer"]))
         _fen = str(similar_drugs_bundle.get("fiyat_entegrasyonu_notu") or "").strip()
         if _fen:
             story.append(Paragraph(escape(_fen), styles["footer"]))
@@ -625,6 +626,48 @@ def generate_pdf_report(
             story.append(Paragraph(line, styles["body"]))
             story.append(Spacer(1, 0.12 * cm))
         story.append(Spacer(1, 0.2 * cm))
+
+    if fiyat_liste and isinstance(fiyat_liste, dict) and fiyat_liste.get("eslesti"):
+        _frows = fiyat_liste.get("satirlar") or []
+        if _frows:
+            story.append(Paragraph("<b>Liste fiyatı eşleşmesi</b>", styles["subtitle"]))
+            story.append(Spacer(1, 0.08 * cm))
+            _hdr = ["İlaç adı", "Firma", "Liste fiyatı (₺)", "GKF (€)", "Barkod", "Liste tarihi"]
+            _data: list[list[str]] = [[escape(c) for c in _hdr]]
+            for _r in _frows:
+                if not isinstance(_r, dict):
+                    continue
+                _lf = _r.get("Liste fiyatı (₺)")
+                _gk = _r.get("GKF (€)")
+                _lf_s = f"{_lf:.2f}" if isinstance(_lf, (int, float)) else "—"
+                _gk_s = f"{_gk:.4f}" if isinstance(_gk, (int, float)) else "—"
+                _data.append(
+                    [
+                        escape(str(_r.get("İlaç adı") or "—")),
+                        escape(str(_r.get("Firma") or "—")),
+                        escape(_lf_s),
+                        escape(_gk_s),
+                        escape(str(_r.get("Barkod") or "—")),
+                        escape(str(_r.get("Liste tarihi") or "—")),
+                    ]
+                )
+            _ft = Table(_data, colWidths=[3.2 * cm, 2.8 * cm, 2.2 * cm, 1.8 * cm, 2.4 * cm, 2.2 * cm])
+            _ft.setStyle(
+                TableStyle(
+                    [
+                        ("BACKGROUND", (0, 0), (-1, 0), COLOR_LIGHT_BG),
+                        ("TEXTCOLOR", (0, 0), (-1, 0), COLOR_PRIMARY),
+                        ("FONTNAME", (0, 0), (-1, 0), styles["title"].fontName),
+                        ("FONTSIZE", (0, 0), (-1, -1), 8),
+                        ("GRID", (0, 0), (-1, -1), 0.35, COLOR_BORDER),
+                        ("TOPPADDING", (0, 0), (-1, -1), 4),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ]
+                )
+            )
+            story.append(_ft)
+            story.append(Spacer(1, 0.25 * cm))
 
     # ── RAPOR İÇERİĞİ ─────────────────────────────────────────────────────
     story.append(HRFlowable(width="100%", thickness=0.5, color=COLOR_BORDER))

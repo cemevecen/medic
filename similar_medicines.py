@@ -261,7 +261,7 @@ def build_similar_drugs_bundle(
         if not (_norm(vis.get("ticari_ad")) or _norm(vis.get("etken_madde"))):
             bos = (
                 "İlaç **ticari adı** veya **etken maddesi** çıkarılamadığı için benzer ürün araması "
-                "yapılamadı. Daha net bir kutu fotoğrafı veya **İlaç Adı ile** giriş deneyin."
+                "yapılamadı. Daha net bir kutu fotoğrafı veya **ilaç adı** girişi deneyin."
             )
         elif not catalog:
             bos = (
@@ -279,8 +279,5 @@ def build_similar_drugs_bundle(
         "oneriler": merged,
         "bos_aciklama": bos,
         "fiyat_entegrasyonu_notu": "",
-        "uyari": (
-            "Benzer / muadil seçimi tedavi güvenliği açısından eczacı veya hekim onayı gerektirir; "
-            "bu liste bilgilendirme amaçlıdır."
-        ),
+        "uyari": "",
     }

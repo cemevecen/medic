@@ -5,7 +5,7 @@ agents.py: Tüm ajan sınıfları ve ana orkestratör bu dosyada tanımlanmışt
 
 # Versiyon numarası — app.py session_state cache invalidation için kullanılır.
 # Fact-Checker / parser / orchestrator davranışı değiştiğinde artırın.
-PHARMA_GUARD_VERSION = "1.21"
+PHARMA_GUARD_VERSION = "1.24"
 
 import logging
 import os
@@ -271,8 +271,8 @@ sıfır hata toleransı ile analiz etmektir.
 
 OPERASYONEL PROTOKOLLER VE KISITLAMALAR:
 - GÜVEN PUANI (Confidence Score): Her bilgi parçası için 1-10 arası bir puan ver.
-  Eğer ortalama güven 8'in altındaysa raporun başına "DİKKAT: Bilgiler %100 doğrulanamadı,
-  profesyonel yardım alın" uyarısı ekle.
+  Ortalama güven için uyarı kutusu uygulama tarafından otomatik eklenir; sen rapora
+  "uyarı eklendi", "güven X'in altında" gibi meta açıklama veya ek DİKKAT başlığı yazma.
 - HALÜSİNASYON ENGELİ: Eğer ilacın etken maddesi ile prospektüs bilgisi eşleşmiyorsa,
   süreci durdurup 'VERİ UYUŞMAZLIĞI' hata mesajı ver.
 - DİL VE ÜSLUP: Rapor tamamen Türkçe, tıbbi terimleri parantez içinde açıklayan,
@@ -383,12 +383,12 @@ RAG KAYNAKÇASI:
 
 KURALLAR:
 1. Tamamen Türkçe yaz; tıbbi terimleri parantez içinde açıkla.
-2. Güven < 8 ise raporun başına "DİKKAT" uyarısı ekle.
+2. Ortalama güven / DİKKAT callout'u uygulama tarafından eklenir; raporda "güven puanı
+   nedeniyle başa uyarı eklendi" veya eşik (7, 8 vb.) hakkında meta cümle yazma.
 3. PDF dosya adı ile çıkarılan bilgi arasındaki farkı "not" olarak belirt — raporu bloklama.
 4. Eksik veya belirsiz alanları "Bilgi mevcut değil" olarak işaretle, uydurma.
 5. Fiyat, ucuzluk veya eczane kampanyası iddiası yapma; fiyat için ayrı entegrasyon gerekir de.
-6. Benzer ilaçlar bölümünde eczacı/hekim onayı gerektiğini vurgula.
-7. Aşağıdaki Markdown bölüm başlıklarını kullan:
+6. Aşağıdaki Markdown bölüm başlıklarını kullan:
 
 ## 1. İlaç Kimlik Özeti
 ## 2. Kullanım Amacı (Endikasyonlar)
@@ -1423,6 +1423,22 @@ class CorporateAnalystAgent:
 # AJAN 5: Report Synthesizer
 # ---------------------------------------------------------------------------
 
+
+def _synthesis_json_str(data: Any, max_chars: int) -> str:
+    """Çok büyük JSON gövdeleri Groq/Gemini zaman aşımına ve yavaşlamaya yol açmasın."""
+    raw = json.dumps(data, ensure_ascii=False, indent=2)
+    if len(raw) <= max_chars:
+        return raw
+    return raw[: max_chars - 140] + "\n\n/* … bağlam uzunluk sınırı nedeniyle kısaltıldı … */\n"
+
+
+def _synthesis_text_clip(s: str, max_chars: int) -> str:
+    s = (s or "").strip()
+    if len(s) <= max_chars:
+        return s
+    return s[: max_chars - 100] + "\n\n/* … kısaltıldı … */\n"
+
+
 class ReportSynthesizerAgent:
     """
     Tüm ajan çıktılarını birleştirip kapsamlı Türkçe rapor üreten nihai sentez ajanı.
@@ -1456,13 +1472,20 @@ class ReportSynthesizerAgent:
             f"- {r['kaynak']} (s.{r['sayfa']}): {r['metin'][:120]}..."
             for r in rag_sources
         ) or "Prospektüs kaynağı bulunamadı."
+        rag_kaynakca = _synthesis_text_clip(rag_kaynakca, 8000)
+        bc_block = barcode_context or "(Görsel barkod taraması yok veya uygulanmadı.)"
+        bc_block = _synthesis_text_clip(bc_block, 6000)
+        sim_block = _synthesis_text_clip(
+            similar_drugs_context or "(Benzer ilaç önerisi üretilmedi.)",
+            16000,
+        )
 
         prompt = SYNTHESIS_PROMPT_TEMPLATE.format(
-            vision_data=json.dumps(vision_data, ensure_ascii=False, indent=2),
-            barcode_block=barcode_context or "(Görsel barkod taraması yok veya uygulanmadı.)",
-            similar_drugs_block=similar_drugs_context or "(Benzer ilaç önerisi üretilmedi.)",
-            safety_data=json.dumps(safety_data, ensure_ascii=False, indent=2),
-            corporate_data=json.dumps(corporate_data, ensure_ascii=False, indent=2),
+            vision_data=_synthesis_json_str(vision_data, 14000),
+            barcode_block=bc_block,
+            similar_drugs_block=sim_block,
+            safety_data=_synthesis_json_str(safety_data, 12000),
+            corporate_data=_synthesis_json_str(corporate_data, 12000),
             rag_sources=rag_kaynakca,
         )
 
@@ -1489,6 +1512,7 @@ class ReportSynthesizerAgent:
                     ],
                     max_tokens=4096,
                     temperature=0.3,
+                    timeout=150.0,
                 )
                 report_text = response.choices[0].message.content or ""
                 if report_text.strip():
@@ -1519,6 +1543,7 @@ class ReportSynthesizerAgent:
                         temperature=0.3,
                         max_output_tokens=4096,
                     ),
+                    request_options={"timeout": 180.0},
                 )
                 report_text = response.text
                 if report_text.strip():
@@ -1616,6 +1641,69 @@ class FactChecker:
         return {"uyusmazlik": False, "sorunlar": [], "mesaj": "Fact-Check geçti.", "corpus_bos": False}
 
 
+def _strip_confidence_meta_junk(report_text: str) -> str:
+    """
+    Modelin hatalı ürettiği 'güven 7/8 eşiği + rapora DİKKAT eklendi' meta metnini kaldırır.
+    Ortalama güven uyarısı yalnızca orchestrator tarafından (avg_confidence < 8) eklenir.
+    """
+    if not report_text:
+        return report_text
+    t = report_text
+    # **DİKKAT** + **Raporun Başına Uyarı** + hatalı cümle (yaygın yanlış şablon)
+    t = re.sub(
+        r"(?ms)(?:^|\n)\s*\*{2}\s*DİKKAT\s*\*{2}\s*\n\s*\*{2}\s*Raporun\s+Başına\s+Uyarı\s*\*{2}\s*\n\s*[^\n]*7[\u2019'’]den\s+düşük[^\n]*",
+        "\n",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"(?ms)(?:^|\n)\s*#{1,6}\s+DİKKAT\s*\n\s*#{1,6}\s+Raporun\s+Başına\s+Uyarı\s*\n\s*[^\n]*7[\u2019'’]den\s+düşük[^\n]*",
+        "\n",
+        t,
+        flags=re.IGNORECASE,
+    )
+    # Tek satır / gömülü: "Güven puanı 7'den düşük ... eklenmiştir."
+    t = re.sub(
+        r"(?i)Güven\s+puanı\s+7[\u2019'’]den\s+düşük\s+olduğu\s+için\s+raporun\s+başına\s+"
+        r'["“”]?\s*DİKKAT\s*["“”]?\s+uyarısı\s+eklenmiştir\.?',
+        "",
+        t,
+    )
+    t = re.sub(r"\n{3,}", "\n\n", t)
+    return t
+
+
+def _fiyat_liste_markdown_append(fl: Optional[Dict[str, Any]]) -> str:
+    """Birleşik fiyat listesi eşleşmesini rapora deterministik ekler (LLM dışı)."""
+    if not fl or not fl.get("eslesti") or not fl.get("satirlar"):
+        return ""
+    lines = [
+        "",
+        "---",
+        "## Liste fiyatı (yerel birleşik tablo)",
+        "",
+        "İlaç Fiyatları sekmesindeki liste ile **barkod veya ürün adı** eşleşen kayıt(lar):",
+        "",
+    ]
+    for i, row in enumerate(fl["satirlar"], 1):
+        ad = row.get("İlaç adı") or "—"
+        firma = row.get("Firma") or "—"
+        lf = row.get("Liste fiyatı (₺)")
+        gkf = row.get("GKF (€)")
+        bc = row.get("Barkod")
+        lt = row.get("Liste tarihi")
+        lf_s = f"{lf:.2f} ₺" if isinstance(lf, (int, float)) else "—"
+        gkf_s = f"{gkf:.4f} €" if isinstance(gkf, (int, float)) else "—"
+        bc_s = str(bc) if bc else "—"
+        lt_s = str(lt) if lt else "—"
+        lines.append(f"- **{i}.** {ad}")
+        lines.append(
+            f"  - Firma: {firma} · Liste fiyatı: {lf_s} · GKF: {gkf_s} · Barkod: {bc_s} · Liste tarihi: {lt_s}"
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
 # ---------------------------------------------------------------------------
 # ANA ORKESTRATÖR
 # ---------------------------------------------------------------------------
@@ -1670,6 +1758,7 @@ class PharmaGuardOrchestrator:
                 "report": "Markdown rapor metni",
                 "avg_confidence": float,
                 "alarm": "YEŞİL/SARI/KIRMIZI",
+                "fiyat_liste": {"eslesti": bool, "satirlar": [...], "aciklama": str},
             }
         """
 
@@ -1735,6 +1824,20 @@ class PharmaGuardOrchestrator:
         if isinstance(qr, dict) and qr.get("tespit_edildi") and qr.get("deger"):
             qr_snip = str(qr["deger"])[:120]
         query = f"{ticari_ad} {etken} {barkod_extra} {qr_snip}".strip()
+
+        try:
+            from referans_ilac_fiyat import lookup_fiyat_liste_for_vision
+
+            results["fiyat_liste"] = lookup_fiyat_liste_for_vision(
+                vision_data,
+                ticari_ad=ticari_ad,
+                drug_name_text=(drug_name_text or "").strip(),
+                max_rows=8,
+            )
+        except Exception as _e:
+            print(f"[Orchestrator] Fiyat listesi eşlemesi atlandı: {_e!s}")
+            results["fiyat_liste"] = {"eslesti": False, "satirlar": [], "aciklama": str(_e)}
+
         rag_results = self.rag_agent.search(query, k=5, vision_data=vision_data)
         results["rag_results"] = rag_results
 
@@ -1807,6 +1910,8 @@ class PharmaGuardOrchestrator:
             )
             report_text = block + report_text
 
+        report_text = report_text + _fiyat_liste_markdown_append(results.get("fiyat_liste"))
+        report_text = _strip_confidence_meta_junk(report_text)
         results["report"] = report_text
         results["avg_confidence"] = avg_confidence
         results["alarm"] = safety_data.get("alarm_seviyesi", "BİLİNMİYOR")

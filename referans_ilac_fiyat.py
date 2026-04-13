@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -361,3 +361,92 @@ def load_referans_fiyat_df() -> Optional[pd.DataFrame]:
         return None
     sub = full[full["GKF (€)"].notna()].copy()
     return sub[["İlaç adı", "Firma", "GKF (€)"]].reset_index(drop=True)
+
+
+def _serialize_fiyat_tablo_row(row: pd.Series) -> Dict[str, Any]:
+    """JSON / UI için tek satır (NaN → None)."""
+    out: Dict[str, Any] = {}
+    for col in ("İlaç adı", "Firma", "GKF (€)", "Liste fiyatı (₺)", "Barkod", "Liste tarihi"):
+        if col not in row.index:
+            continue
+        v = row[col]
+        if pd.isna(v):
+            out[col] = None
+        elif col in ("GKF (€)", "Liste fiyatı (₺)"):
+            try:
+                fv = float(v)
+                if fv != fv:  # NaN
+                    out[col] = None
+                elif col == "GKF (€)":
+                    out[col] = round(fv, 4)
+                else:
+                    out[col] = round(fv, 2)
+            except (TypeError, ValueError):
+                out[col] = str(v).strip() or None
+        else:
+            s = str(v).strip()
+            out[col] = s if s and s.casefold() not in ("nan", "none", "<na>") else None
+    return out
+
+
+def lookup_fiyat_liste_for_vision(
+    vision_data: Dict[str, Any],
+    ticari_ad: str = "",
+    drug_name_text: str = "",
+    max_rows: int = 8,
+) -> Dict[str, Any]:
+    """
+    Analiz çıktısındaki ilaç ile `load_birlesik_ilac_fiyat_df` (İlaç Fiyatları sekmesi) eşlemesi.
+
+    Öncelik: barkod (≥8 hane) — yoksa ticari_ad / metin girişi ile gevşek veya tam ad eşleşmesi.
+    """
+    df = load_birlesik_ilac_fiyat_df()
+    if df is None or df.empty:
+        return {"eslesti": False, "satirlar": [], "aciklama": "Fiyat tablosu yok veya boş."}
+
+    barcode_hits: set[Any] = set()
+    bd = vision_data.get("barkod_detay") or {}
+    b_digits = ""
+    if isinstance(bd, dict) and bd.get("tespit_edildi"):
+        raw = bd.get("deger_normalize") or bd.get("deger") or ""
+        b_digits = re.sub(r"\D", "", str(raw))
+    if b_digits and len(b_digits) >= 8 and "Barkod" in df.columns:
+
+        def _norm_bc(x: object) -> str:
+            if pd.isna(x):
+                return ""
+            return re.sub(r"\D", "", str(x))
+
+        norm_bc = df["Barkod"].map(_norm_bc)
+        m_bc = norm_bc == b_digits
+        barcode_hits.update(df.index[m_bc].tolist())
+
+    names: List[str] = []
+    for s in (ticari_ad, drug_name_text):
+        s = (s or "").strip()
+        if s and all(x.casefold() != s.casefold() for x in names):
+            names.append(s)
+
+    name_hits: set[Any] = set()
+    loose_series = df["İlaç adı"].map(_norm_key_loose)
+    cf_series = df["İlaç adı"].astype(str).str.strip()
+
+    for cand in names:
+        lq = _norm_key_loose(cand)
+        if len(lq) >= 3:
+            name_hits.update(df.index[loose_series == lq].tolist())
+        cfc = cand.strip().casefold()
+        if len(cfc) >= 3:
+            name_hits.update(df.index[cf_series.str.casefold() == cfc].tolist())
+        if len(cfc) >= 6:
+            name_hits.update(
+                df.index[cf_series.str.casefold().str.contains(re.escape(cfc), na=False)].tolist()
+            )
+
+    chosen: set[Any] = set(barcode_hits) if barcode_hits else name_hits
+    if not chosen:
+        return {"eslesti": False, "satirlar": [], "aciklama": ""}
+
+    sub = df.loc[sorted(chosen)].head(int(max_rows))
+    satirlar = [_serialize_fiyat_tablo_row(sub.iloc[i]) for i in range(len(sub))]
+    return {"eslesti": True, "satirlar": satirlar, "aciklama": ""}

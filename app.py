@@ -623,6 +623,45 @@ div[data-testid="stVerticalBlock"] .stTabs [data-baseweb="tab-list"] {
 .stTextInput label { color: var(--pg-ink) !important; font-weight: 500 !important; font-size: clamp(0.85rem, 2vw, 1rem) !important; }
 .stRadio label { color: var(--pg-ink) !important; font-size: clamp(0.85rem, 2vw, 1rem) !important; }
 
+/* Analiz sol sütun: giriş / uyarı / buton — st.markdown("---") yerine ince çizgi + sıkı dikey boşluk */
+hr.pg-hr-slim {
+  border: 0;
+  border-top: 1px solid var(--pg-line);
+  margin: 0.15rem 0 0.3rem;
+  opacity: 0.9;
+}
+.st-key-pg_tight_input_run {
+  margin-top: -0.35rem !important;
+  margin-bottom: -0.25rem !important;
+}
+.st-key-pg_tight_input_run [data-testid="stVerticalBlock"] > div[data-testid="element-container"] {
+  margin-top: 0.12rem !important;
+  margin-bottom: 0.12rem !important;
+}
+.st-key-pg_tight_input_run [data-testid="stAlert"] {
+  margin-top: 0.2rem !important;
+  margin-bottom: 0.2rem !important;
+  padding-top: 0.55rem !important;
+  padding-bottom: 0.55rem !important;
+}
+.st-key-pg_tight_input_run [data-testid="stButton"] {
+  margin-top: 0.15rem !important;
+  margin-bottom: 0.05rem !important;
+}
+/* Giriş widget’ı ile altındaki sıkı blok arası */
+[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:first-child
+  [data-testid="element-container"]:has([data-testid="stTextInput"]) {
+  margin-bottom: 0.1rem !important;
+}
+[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:first-child
+  [data-testid="element-container"]:has([data-testid="stFileUploader"]) {
+  margin-bottom: 0.15rem !important;
+}
+[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:first-child
+  [data-testid="element-container"]:has([data-testid="stImage"]) {
+  margin-bottom: 0.12rem !important;
+}
+
 /* Responsive inputs for mobile */
 @media (max-width: 640px) {
   .stTextInput input {
@@ -652,10 +691,33 @@ div[data-testid="stVerticalBlock"] .stTabs [data-baseweb="tab-list"] {
   padding: clamp(0.8rem, 3vw, 1rem) !important;
   font-size: clamp(0.85rem, 1.5vw, 1rem) !important;
 }
-.stProgress > div > div {
-  background: linear-gradient(90deg, #0f766e, #14b8a6) !important;
-  border-radius: 999px !important;
-  height: clamp(0.4rem, 1vw, 0.5rem) !important;
+/*
+ * Analiz adımları: st.progress kullanılmıyor (Base Web çift katman + boş etiket
+ * alanı çift çizgi gibi görünüyordu). Tek parça çubuk: .pg-native-progress
+ */
+.pg-native-progress {
+  width: 100%;
+  margin: 0.1rem 0 0.35rem;
+}
+.pg-native-progress__track {
+  width: 100%;
+  height: clamp(0.45rem, 1.2vw, 0.55rem);
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+.pg-native-progress__fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #0f766e, #14b8a6);
+  transition: width 0.35s ease;
+  min-width: 0;
+}
+[data-theme="dark"] .pg-native-progress__track,
+[data-color-scheme="dark"] .pg-native-progress__track {
+  background: #334155;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25);
 }
 [data-testid="stStatus"] {
   border-radius: 14px !important;
@@ -855,20 +917,124 @@ div[data-testid="stVerticalBlock"] .stTabs [data-baseweb="tab-list"] {
   display:inline-flex; align-items:center; justify-content:center; font-size: clamp(0.9rem, 2vw, 1rem);
 }
 
-/* ── Metrik kartları ────────────────────────── */
+/* ── Metrik kartları (eşit kutu, teal tema, referans ‘elevated card’ hissi) ─ */
 .metric-card {
-  background:var(--pg-surface); border:1px solid var(--pg-line);
-  border-radius:14px; padding: clamp(0.8rem, 3vw, 1.1rem); text-align:center;
-  box-shadow:0 2px 8px rgba(0,0,0,.04);
+  box-sizing: border-box;
+  width: 100%;
+  min-height: clamp(11.25rem, 32vw, 14.25rem);
+  padding: clamp(1rem, 3.2vw, 1.35rem) clamp(0.85rem, 2.8vw, 1.15rem);
+  text-align: center;
+  border-radius: clamp(16px, 2.4vw, 22px);
+  background: linear-gradient(168deg, #ffffff 0%, #f8fafc 48%, #f1f5f9 100%);
+  border: 1px solid rgba(15, 118, 110, 0.14);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.05),
+    0 14px 32px -10px rgba(15, 118, 110, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  position: relative;
+  overflow-x: hidden;
+  overflow-y: visible;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: clamp(0.3rem, 1.2vw, 0.55rem);
 }
-.metric-card h3 { margin:0; font-size: clamp(1.2rem, 4vw, 1.5rem); font-weight:700; color:var(--pg-ink); }
-.metric-card p  { margin:.3rem 0 0; font-size: clamp(0.7rem, 1.5vw, 0.8rem); color:var(--pg-muted); }
-
-/* Responsive metric cards */
-@media (max-width: 768px) {
+.metric-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #0f766e, #14b8a6, #5eead4);
+  opacity: 0.92;
+  pointer-events: none;
+}
+.metric-card__value {
+  margin: 0.2rem 0 0 0;
+  padding: 0 0.15rem;
+  font-size: clamp(1.05rem, 3.8vw, 1.55rem) !important;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--pg-ink);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+.metric-card__suffix {
+  font-size: clamp(0.72rem, 2.4vw, 0.92rem);
+  font-weight: 500;
+  opacity: 0.82;
+}
+.metric-card__label {
+  margin: 0;
+  padding: 0 0.2rem;
+  font-size: clamp(0.68rem, 1.9vw, 0.82rem);
+  font-weight: 600;
+  color: var(--pg-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.3;
+  max-width: 100%;
+}
+.metric-card__detail {
+  margin: 0;
+  padding: 0 0.25rem;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(0.66rem, 1.75vw, 0.84rem);
+  line-height: 1.45;
+  color: var(--pg-muted);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+  max-width: 100%;
+  min-height: 0;
+}
+[data-theme="dark"] .metric-card,
+[data-color-scheme="dark"] .metric-card {
+  background: linear-gradient(168deg, #1e293b 0%, #151f2e 55%, #0f172a 100%);
+  border-color: rgba(45, 212, 191, 0.22);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.35),
+    0 14px 36px -12px rgba(20, 184, 166, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+@media (max-width: 640px) {
   .metric-card {
-    padding: 0.8rem;
+    min-height: clamp(10.5rem, 52vw, 13rem);
+    padding: 0.95rem 0.75rem;
   }
+}
+
+/* Üç metrik satırı: sütunlar aynı yükseklikte, kart sütunu doldurur */
+[data-testid="stHorizontalBlock"]:has(.metric-card) {
+  align-items: stretch !important;
+}
+[data-testid="stHorizontalBlock"]:has(.metric-card) > div[data-testid="stColumn"] {
+  display: flex !important;
+  flex-direction: column !important;
+}
+[data-testid="stHorizontalBlock"]:has(.metric-card) > div[data-testid="stColumn"] > div {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  width: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+[data-testid="stHorizontalBlock"]:has(.metric-card) [data-testid="stVerticalBlock"] {
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+[data-testid="stHorizontalBlock"]:has(.metric-card) .metric-card {
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: clamp(11.25rem, 32vw, 14.25rem);
 }
 
 /* ── Alarm bantları ─────────────────────────── */
@@ -1167,7 +1333,7 @@ if _pg_nav == "İlaç Analizi":
         )
         method = st.radio(
             "yöntem",
-            [" İlaç Adı ile", " Görsel ile", " Prospektüs PDF ile"],
+            ["ilaç adı", "görsel", "prospektüs"],
             horizontal=True,
             label_visibility="collapsed",
         )
@@ -1176,7 +1342,7 @@ if _pg_nav == "İlaç Analizi":
         pdf_bytes_input = None
         pdf_name_input  = "prospektus.pdf"
 
-        if "Görsel" in method:
+        if method == "görsel":
             up = st.file_uploader(
                 "İlaç kutusunun fotoğrafını yükleyin",
                 type=["jpg", "jpeg", "png", "webp", "bmp"],
@@ -1189,7 +1355,7 @@ if _pg_nav == "İlaç Analizi":
                 st.info(" Kutunun ön yüzünü tam karşıdan çekin.\n"
                         "İlaç adı ve mg değeri görünür olmalı.")
 
-        elif "PDF" in method:
+        elif method == "prospektüs":
             up_pdf = st.file_uploader(
                 "İlaç prospektüsünü PDF olarak yükleyin",
                 type=["pdf"],
@@ -1210,20 +1376,34 @@ if _pg_nav == "İlaç Analizi":
                 placeholder="örn: Augmentin 1000 mg, Parol 500 mg…",
             )
 
-        st.markdown("---")
-        if not gemini_key: st.warning(" GEMINI_API_KEY eksik — Streamlit Secrets'a ekleyin.")
-        if not groq_key:   st.warning(" GROQ_API_KEY eksik — Streamlit Secrets'a ekleyin.")
+        with st.container(key="pg_tight_input_run"):
+            st.markdown(
+                '<hr class="pg-hr-slim" aria-hidden="true"/>',
+                unsafe_allow_html=True,
+            )
+            if not gemini_key:
+                st.warning(" GEMINI_API_KEY eksik — Streamlit Secrets'a ekleyin.")
+            if not groq_key:
+                st.warning(" GROQ_API_KEY eksik — Streamlit Secrets'a ekleyin.")
 
-        has_input = (
-            image_obj is not None
-            or (drug_name_input and drug_name_input.strip())
-            or pdf_bytes_input is not None
-        )
-        can_run = bool(has_input and gemini_key and groq_key)
-        run_btn = st.button(" Analizi Başlat", type="primary",
-                            disabled=not can_run, use_container_width=True)
+            has_input = (
+                image_obj is not None
+                or (drug_name_input and drug_name_input.strip())
+                or pdf_bytes_input is not None
+            )
+            can_run = bool(has_input and gemini_key and groq_key)
+            run_btn = st.button(
+                " Analizi Başlat",
+                type="primary",
+                disabled=not can_run,
+                use_container_width=True,
+            )
 
-        st.markdown("---")
+            st.markdown(
+                '<hr class="pg-hr-slim" aria-hidden="true"/>',
+                unsafe_allow_html=True,
+            )
+
         st.markdown(
             '<p class="pg-section" style="margin-bottom:0.35rem">Nöbetçi eczaneler</p>',
             unsafe_allow_html=True,
@@ -1303,12 +1483,27 @@ if _pg_nav == "İlaç Analizi":
             for k in ("analysis_result", "report_pdf"):
                 st.session_state.pop(k, None)
 
-            prog_ph  = st.empty()
-            stat_ph  = st.empty()
-            prog_bar = prog_ph.progress(0)
+            prog_ph = st.empty()
+            stat_ph = st.empty()
+
+            def _pg_render_progress_bar(pct: float) -> None:
+                p = max(0.0, min(1.0, float(pct)))
+                prog_ph.markdown(
+                    (
+                        '<div class="pg-native-progress" role="progressbar" '
+                        'aria-valuemin="0" aria-valuemax="100" '
+                        f'aria-valuenow="{int(round(p * 100))}">'
+                        '<div class="pg-native-progress__track">'
+                        f'<div class="pg-native-progress__fill" style="width:{p * 100:.1f}%"></div>'
+                        "</div></div>"
+                    ),
+                    unsafe_allow_html=True,
+                )
+
+            _pg_render_progress_bar(0.0)
 
             def _prog(step: int, msg: str):
-                prog_bar.progress(step / 7)
+                _pg_render_progress_bar(step / 7.0)
                 stat_ph.markdown(
                     f'<div class="pg-step-line">'
                     f'<span class="pg-step-num">Adım {step}/7</span>{msg}</div>',
@@ -1348,6 +1543,7 @@ if _pg_nav == "İlaç Analizi":
                     avg_confidence=result["avg_confidence"],
                     vision_data=result["vision"],
                     similar_drugs_bundle=result.get("similar_drugs"),
+                    fiyat_liste=result.get("fiyat_liste"),
                 )
             except Exception as e:
                 stat_ph.error(f"Hata: {e}")
@@ -1389,12 +1585,12 @@ if _pg_nav == "İlaç Analizi":
             conf_band = "Yüksek" if conf >= 8 else "Orta" if conf >= 5 else "Düşük"
             with m1:
                 st.markdown(
-                    f'<div class="metric-card"><h3 style="color:{cc}">'
-                    f'{conf:.1f}<span style="font-size:.9rem;font-weight:400">/10</span></h3>'
-                    f'<p>Güven Puanı</p>'
-                    f'<p style="margin:.35rem 0 0;font-size:0.82rem;color:#64748b;line-height:1.35">'
-                    f"{html.escape(conf_band)} güven bandı."
-                    f"</p></div>",
+                    f'<div class="metric-card">'
+                    f'<h3 class="metric-card__value" style="color:{cc}">{conf:.1f}'
+                    f'<span class="metric-card__suffix">/10</span></h3>'
+                    f'<p class="metric-card__label">Güven Puanı</p>'
+                    f'<p class="metric-card__detail">{html.escape(conf_band)} güven bandı.</p>'
+                    f"</div>",
                     unsafe_allow_html=True,
                 )
             with m2:
@@ -1410,10 +1606,11 @@ if _pg_nav == "İlaç Analizi":
                         "Henüz eşleşen parça yok — corpus veya sorgu genişletilebilir."
                     )
                 st.markdown(
-                    f'<div class="metric-card"><h3>{rc}</h3>'
-                    f'<p>RAG kayıt sayısı</p>'
-                    f'<p style="margin:.35rem 0 0;font-size:0.82rem;color:#64748b;line-height:1.35">'
-                    f"{detail_inner}</p></div>",
+                    f'<div class="metric-card">'
+                    f'<h3 class="metric-card__value">{rc}</h3>'
+                    f'<p class="metric-card__label">RAG kayıt sayısı</p>'
+                    f'<p class="metric-card__detail">{detail_inner}</p>'
+                    f"</div>",
                     unsafe_allow_html=True,
                 )
             with m3:
@@ -1424,7 +1621,7 @@ if _pg_nav == "İlaç Analizi":
                 if corpus_bos:
                     main_txt = "Genel mod"
                     fc_col = "#64748b"
-                    detail = (
+                    fc_detail = html.escape(
                         "Yerel prospektüs bulunamadı; görsel/metin ile üretilen özet kaynaklarla "
                         "sınırlı doğrulama."
                     )
@@ -1432,23 +1629,23 @@ if _pg_nav == "İlaç Analizi":
                     n_issues = len(fc.get("sorunlar") or [])
                     main_txt = "Uyumsuzluk" if n_issues else "Dikkat"
                     fc_col = "#dc2626"
-                    detail = (
-                        f"{n_issues} tutarsızlık tespit edildi."
+                    fc_detail = (
+                        html.escape(f"{n_issues} tutarsızlık tespit edildi.")
                         if n_issues
                         else html.escape(str(fc.get("mesaj") or "Fact-check uyarısı.")[:120])
                     )
                 else:
                     main_txt = "Uyumlu"
                     fc_col = "#059669"
-                    detail = html.escape(
+                    fc_detail = html.escape(
                         str(fc.get("mesaj") or "Görsel / RAG özetleri birbiriyle çelişmiyor.")[:140]
                     )
                 st.markdown(
-                    f'<div class="metric-card"><h3 style="color:{fc_col};font-size:1.35rem;font-weight:700">'
-                    f"{html.escape(main_txt)}</h3>"
-                    f'<p style="margin:.15rem 0 0">{html.escape(fc_label)}</p>'
-                    f'<p style="margin:.35rem 0 0;font-size:0.82rem;color:#64748b;line-height:1.4">'
-                    f"{detail}</p></div>",
+                    f'<div class="metric-card">'
+                    f'<h3 class="metric-card__value" style="color:{fc_col}">{html.escape(main_txt)}</h3>'
+                    f'<p class="metric-card__label">{html.escape(fc_label)}</p>'
+                    f'<p class="metric-card__detail">{fc_detail}</p>'
+                    f"</div>",
                     unsafe_allow_html=True,
                 )
 
@@ -1458,6 +1655,29 @@ if _pg_nav == "İlaç Analizi":
             elif not fc_ok:
                 st.error(" **VERİ UYUŞMAZLIĞI**\n\n" +
                          "\n".join(f"- {s}" for s in fc.get("sorunlar", [])))
+
+            _fl = res.get("fiyat_liste") or {}
+            if _fl.get("eslesti") and (_fl.get("satirlar") or []):
+                import pandas as pd
+
+                st.markdown("#### Liste fiyatı (birleşik liste eşleşmesi)")
+                _fdf = pd.DataFrame(_fl["satirlar"])
+                _fdf_kw: dict = dict(use_container_width=True, hide_index=True)
+                _cfg = {}
+                if "Liste fiyatı (₺)" in _fdf.columns:
+                    _cfg["Liste fiyatı (₺)"] = st.column_config.NumberColumn(
+                        "Liste fiyatı (₺)", format="%.2f"
+                    )
+                if "GKF (€)" in _fdf.columns:
+                    _cfg["GKF (€)"] = st.column_config.NumberColumn("GKF (€)", format="%.4f")
+                if _cfg:
+                    _fdf_kw["column_config"] = _cfg
+                st.dataframe(_dataframe_noneish_to_dash(_fdf), **_fdf_kw)
+                st.caption(
+                    "Kaynak: uygulama içi birleşik fiyat listesi (İlaç Fiyatları sekmesi ile aynı veri). "
+                    "Eşleşme barkod veya ilaç adı ile yapılır."
+                )
+
             st.markdown("")
 
             vsum = _vision_for_display(res)
@@ -1521,7 +1741,15 @@ if _pg_nav == "İlaç Analizi":
             )
 
             with rt1:
-                st.markdown(res.get("report", "Rapor oluşturulamadı."))
+                try:
+                    from agents import _strip_confidence_meta_junk
+                except Exception:
+                    _strip_confidence_meta_junk = lambda x: x
+                st.markdown(
+                    _strip_confidence_meta_junk(
+                        res.get("report", "Rapor oluşturulamadı.")
+                    )
+                )
                 if "report_pdf" in st.session_state:
                     dn = (res["vision"].get("ticari_ad") or drug_name_input or "ilac")
                     st.download_button("PDF Raporu İndir",
