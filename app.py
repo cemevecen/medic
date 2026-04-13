@@ -1379,7 +1379,7 @@ with tab_its:
     )
     st.caption("Sağlık Bakanlığı İlaç Takip Sistemi (ITS) üzerinden ilaç fiyatları, onay durumları ve güvenlik uyarılarını görüntüleyin.")
 
-    col_search_its, col_btn_its = st.columns([4, 1], gap="small", vertical_alignment="center")
+    col_search_its, col_btn_its = st.columns([4, 1], gap="small", vertical_alignment="bottom")
 
     with col_search_its:
         drug_search_its = st.text_input(
