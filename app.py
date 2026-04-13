@@ -1123,7 +1123,7 @@ with tab_analyze:
             st.markdown("")
 
             rt1, rt2, rt3, rt4, rt5 = st.tabs(
-                ["📋 Rapor", "🔬 Görsel", " Güvenlik", " Firma", " Benzer / Muadil"]
+                ["📋 Rapor", "🔬 Görsel", " Riskler", " Firma", " Benzer / Muadil"]
             )
 
             with rt1:
