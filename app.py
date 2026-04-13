@@ -108,6 +108,7 @@ def _eczane_iframe_height_px(count: int | None, district_selected: bool) -> int:
 
 from typing import Optional
 
+from eczane_widget_geo import load_turkey_geo_rows, pretty_label, slug_tr
 from utils import (
     preprocess_image,
     load_image_from_upload,
@@ -1012,6 +1013,69 @@ with tab_analyze:
         run_btn = st.button(" Analizi Başlat", type="primary",
                             disabled=not can_run, use_container_width=True)
 
+        st.markdown("---")
+        st.markdown(
+            '<p class="pg-section" style="margin-bottom:0.35rem"><span class="pg-section-icon">🏪</span>'
+            "Nöbetçi eczaneler</p>",
+            unsafe_allow_html=True,
+        )
+
+        _geo_rows = load_turkey_geo_rows()
+        _city_slugs = [r[1] for r in _geo_rows]
+        _city_label = {r[1]: r[0] for r in _geo_rows}
+        _city_counties = {r[1]: r[2] for r in _geo_rows}
+        _ci0 = _city_slugs.index("ankara") if "ankara" in _city_slugs else 0
+
+        _c1, _c2 = st.columns(2)
+        with _c1:
+            _w_city = st.selectbox(
+                "İl seçin",
+                options=_city_slugs,
+                index=_ci0,
+                format_func=lambda s: _city_label.get(s, s),
+                key="eczane_widget_city",
+            )
+        _counties_raw = _city_counties.get(_w_city) or []
+        _dist_slugs = [""] + [slug_tr(co) for co in _counties_raw]
+        _dist_label: dict[str, str] = {"": "Tüm ilçeler"}
+        for _co in _counties_raw:
+            _dist_label[slug_tr(_co)] = pretty_label(_co)
+        with _c2:
+            _w_dist = st.selectbox(
+                "İlçe seçin",
+                options=_dist_slugs,
+                index=0,
+                format_func=lambda s: _dist_label.get(s, s),
+                key=f"eczane_widget_district__{_w_city}",
+            )
+
+        _params: dict[str, str] = {"city": str(_w_city).strip().lower()}
+        if str(_w_dist or "").strip():
+            _params["district"] = str(_w_dist).strip().lower()
+        _widget_src = "https://eczaneapi.com/widget?" + urlencode(_params)
+
+        _dist_sel = bool(str(_w_dist or "").strip())
+        _duty_n = _eczane_on_duty_count(_w_city, str(_w_dist or ""), _eczaneapi_key_optional())
+        _iframe_h = _eczane_iframe_height_px(_duty_n, _dist_sel)
+
+        st.markdown(
+            '<div class="pg-eczane-widget-block" style="max-width:400px;width:100%;margin-top:0.5rem;'
+            'position:relative;border-radius:12px;overflow:hidden;">'
+            f'<iframe src="{html.escape(_widget_src)}" width="100%" height="{_iframe_h}" '
+            'frameborder="0" style="border:none; border-radius:12px; max-width: 400px; '
+            'margin: 0 auto; display: block;" title="Nöbetçi Eczaneler"></iframe>'
+            '<div class="pg-eczane-footer-mask" aria-hidden="true"></div>'
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+        st.markdown("---")
+        if st.button(" Önbelleği Temizle", use_container_width=True, key="clear_cache_btn"):
+            for k in ("orchestrator", "pg_version", "analysis_result", "report_pdf"):
+                st.session_state.pop(k, None)
+            st.success(" Temizlendi — bir sonraki analizde yeniden başlatılır.")
+            st.rerun()
+
     with col_out:
         st.markdown(
             '<p class="pg-section"><span class="pg-section-icon">📊</span>Analiz sonuçları</p>',
@@ -1390,72 +1454,6 @@ with tab_analyze:
                  ardından <strong>Analizi Başlat</strong> ile ajanları çalıştırın.</p>
             </div>
             """, unsafe_allow_html=True)
-
-    # Kontrol paneli — Önbellek temizleme
-    st.markdown("---")
-    if st.button(" Önbelleği Temizle", use_container_width=True, key="clear_cache_btn"):
-        for k in ("orchestrator", "pg_version", "analysis_result", "report_pdf"):
-            st.session_state.pop(k, None)
-        st.success(" Temizlendi — bir sonraki analizde yeniden başlatılır.")
-        st.rerun()
-
-    st.markdown("---")
-    st.markdown(
-        '<p class="pg-section" style="margin-bottom:0.35rem"><span class="pg-section-icon">🏪</span>'
-        "Nöbetçi eczaneler</p>",
-        unsafe_allow_html=True,
-    )
-
-    from eczane_widget_geo import load_turkey_geo_rows, pretty_label, slug_tr
-
-    _geo_rows = load_turkey_geo_rows()
-    _city_slugs = [r[1] for r in _geo_rows]
-    _city_label = {r[1]: r[0] for r in _geo_rows}
-    _city_counties = {r[1]: r[2] for r in _geo_rows}
-    _ci0 = _city_slugs.index("ankara") if "ankara" in _city_slugs else 0
-
-    _c1, _c2 = st.columns(2)
-    with _c1:
-        _w_city = st.selectbox(
-            "İl seçin",
-            options=_city_slugs,
-            index=_ci0,
-            format_func=lambda s: _city_label.get(s, s),
-            key="eczane_widget_city",
-        )
-    _counties_raw = _city_counties.get(_w_city) or []
-    _dist_slugs = [""] + [slug_tr(co) for co in _counties_raw]
-    _dist_label: dict[str, str] = {"": "Tüm ilçeler"}
-    for _co in _counties_raw:
-        _dist_label[slug_tr(_co)] = pretty_label(_co)
-    with _c2:
-        _w_dist = st.selectbox(
-            "İlçe seçin",
-            options=_dist_slugs,
-            index=0,
-            format_func=lambda s: _dist_label.get(s, s),
-            key=f"eczane_widget_district__{_w_city}",
-        )
-
-    _params: dict[str, str] = {"city": str(_w_city).strip().lower()}
-    if str(_w_dist or "").strip():
-        _params["district"] = str(_w_dist).strip().lower()
-    _widget_src = "https://eczaneapi.com/widget?" + urlencode(_params)
-
-    _dist_sel = bool(str(_w_dist or "").strip())
-    _duty_n = _eczane_on_duty_count(_w_city, str(_w_dist or ""), _eczaneapi_key_optional())
-    _iframe_h = _eczane_iframe_height_px(_duty_n, _dist_sel)
-
-    st.markdown(
-        '<div class="pg-eczane-widget-block" style="max-width:400px;width:100%;margin-top:0.5rem;'
-        'position:relative;border-radius:12px;overflow:hidden;">'
-        f'<iframe src="{html.escape(_widget_src)}" width="100%" height="{_iframe_h}" '
-        'frameborder="0" style="border:none; border-radius:12px; max-width: 400px; '
-        'margin: 0 auto; display: block;" title="Nöbetçi Eczaneler"></iframe>'
-        '<div class="pg-eczane-footer-mask" aria-hidden="true"></div>'
-        "</div>",
-        unsafe_allow_html=True,
-    )
 
 # ═════════════════════════════════════════════
 # SEKME 3 — İTS (İLAÇ FİYATLARI VE BİLGİLERİ)
