@@ -1483,16 +1483,12 @@ with tab_analyze:
             """, unsafe_allow_html=True)
 
 # ═════════════════════════════════════════════
-# SEKME 3 — İTS (İLAÇ FİYATLARI VE BİLGİLERİ)
+# SEKME 3 — İLAÇ FİYATLARI (birleşik liste)
 # ═════════════════════════════════════════════
 with tab_its:
     st.markdown(
         '<p class="pg-section"><span class="pg-section-icon">💊</span>İlaç Bilgileri & Fiyatları</p>',
         unsafe_allow_html=True,
-    )
-    st.caption(
-        "Tablo: **referans** GKF (€) + **web** liste (₺) + isteğe bağlı **recete.org** haber tabloları (sayfa veya "
-        "`data/recete_haber_06102004.html` yedeği). İlaç adı normalize edilerek tek satırda birleştirilir. ITS canlı API yok."
     )
 
     from referans_ilac_fiyat import load_birlesik_ilac_fiyat_df
@@ -1505,10 +1501,6 @@ with tab_its:
             "kaydedilmiş sayfa) veya erişilebilir URL."
         )
     else:
-        st.markdown("### Birleşik ilaç fiyat listesi")
-        st.caption(
-            f"**{len(_rf_df)}** tekil kayıt — GKF: referans Excel; ₺: WEBLISTE; Reçete.org: HTML’deki tablolar (varsa, ek sütunlar)."
-        )
         _rf_q = st.text_input(
             "Listede ara (ilaç, firma veya barkod; boş = tümü)",
             placeholder="örn: ABILIFY, PFİZER, 86995…",
@@ -1527,122 +1519,19 @@ with tab_its:
                 if _rc in _rf_show.columns:
                     _m = _m | _rf_show[_rc].astype(str).str.casefold().str.contains(q, na=False)
             _rf_show = _rf_show[_m]
-        st.caption(f"Gösterilen: **{len(_rf_show)}** satır")
-        _col_cfg = {
-            "GKF (€)": st.column_config.NumberColumn("GKF (€)", format="%.2f"),
+        _rf_show = _rf_show.drop(columns=["GKF (€)"], errors="ignore")
+        _col_cfg_all = {
             "Liste fiyatı (₺)": st.column_config.NumberColumn("Liste fiyatı (₺)", format="%.2f"),
             "Reçete.org fiyat (sayı)": st.column_config.NumberColumn("Reçete.org fiyat (sayı)", format="%.4f"),
             "Barkod": st.column_config.TextColumn("Barkod"),
             "Reçete.org fiyat sütunu": st.column_config.TextColumn("Reçete.org fiyat sütunu"),
             "Reçete.org notları": st.column_config.TextColumn("Reçete.org notları", width="large"),
         }
-        st.dataframe(
-            _rf_show,
-            column_config=_col_cfg,
-            use_container_width=True,
-            height=560,
-            hide_index=True,
-        )
-
-    st.markdown("---")
-    st.caption("Aşağıdaki arama kutusu **demo** ITS örneğidir; asıl fiyat tablosu yukarıdaki birleşik listedir.")
-
-    col_search_its, col_btn_its = st.columns([4, 1], gap="small", vertical_alignment="bottom")
-
-    with col_search_its:
-        drug_search_its = st.text_input(
-            "İlaç adı veya etken madde yazın",
-            placeholder="örn: Aspirin, Parasetamol, Amoksisilin…",
-            key="its_search_input",
-        )
-
-    with col_btn_its:
-        search_its_btn = st.button("🔍 Ara", use_container_width=True, key="its_search_btn")
-
-    # Arama yap
-    if search_its_btn and drug_search_its:
-        with st.spinner(f"'{drug_search_its}' için ilaç bilgileri aranıyor…"):
-            try:
-                from its_api import get_demo_medicines, init_its_api
-
-                # Session state'ten API key'i al (varsa)
-                its_api_key = st.session_state.get("its_api_key")
-                if its_api_key:
-                    init_its_api(api_key=its_api_key)
-                    # Gelecekte gerçek API'ye geçecek
-
-                # Şu anda demo verisi kullanıyoruz (API key yapılandırıldığında canlı API'ye geçer)
-                result = get_demo_medicines(drug_search_its)
-
-                if result.get("success"):
-                    st.success(f"✓ {result['total']} ilaç bulundu!")
-
-                    if result.get("data"):
-                        st.markdown("---")
-                        st.markdown("### 💊 Ilaç Bilgileri")
-
-                        for idx, medicine in enumerate(result["data"], 1):
-                            with st.expander(f"**{idx}. {medicine['trade_name']}** — {medicine.get('manufacturer', 'Bilinmeyen')}"):
-                                col_left, col_right = st.columns([1, 1])
-
-                                with col_left:
-                                    st.markdown("**Temel Bilgiler**")
-                                    st.markdown(f"**Etken Madde:** {medicine['active_ingredient']}")
-                                    st.markdown(f"**Doz:** {medicine['dosage']}")
-                                    st.markdown(f"**Form:** {medicine['form']}")
-                                    st.markdown(f"**Üretici:** {medicine.get('manufacturer', '—')}")
-
-                                with col_right:
-                                    st.markdown("**Fiyat & Onay**")
-                                    st.markdown(f"**Fiyat:** ₺{medicine.get('price_tl', '—')}")
-
-                                    status = medicine.get('approval_status', 'Unknown')
-                                    if status == 'Approved':
-                                        st.markdown(f"**Durum:** ✅ Onaylı")
-                                    elif status == 'Warning':
-                                        st.markdown(f"**Durum:** ⚠️ Uyarılı")
-                                    elif status == 'Recalled':
-                                        st.markdown(f"**Durum:** 🚫 Geri Çekildi")
-                                    else:
-                                        st.markdown(f"**Durum:** {status}")
-
-                                if medicine.get('usage'):
-                                    st.markdown(f"**Kullanım:** {medicine['usage']}")
-
-                                if medicine.get('approval_date'):
-                                    st.markdown(f"**Onay Tarihi:** {medicine['approval_date']}")
-
-                        st.divider()
-                        st.info(f"📊 **Veri Kaynağı:** {result.get('source', 'Bilinmeyen')}")
-                        if "DEMO" in result.get('source', ''):
-                            st.warning("⚠️ **Not:** Şu anda demo verisi kullanılıyor. Gerçek ITS API entegrasyonu için Sağlık Bakanlığı API key gereklidir.")
-
-                    else:
-                        st.warning("İlaç verisi alınamadı.")
-
-                else:
-                    st.info(f"❌ '{drug_search_its}' için sonuç bulunamadı.")
-                    st.info("💡 **İpucu:** Ticari adı tam yazın (örn: Aspirin, Parol) veya etken madde adı kullanın (örn: Parasetamol)")
-
-            except ImportError as e:
-                st.error(f"❌ its_api modülü bulunamadı: {str(e)}")
-            except Exception as e:
-                st.error(f"❌ Hata: {str(e)}")
-
-    elif search_its_btn:
-        st.info("Lütfen bir ilaç adı girin")
-
-    st.markdown("---")
-    st.markdown("""
-    <div class="pg-about-card">
-      <strong>ℹ️ İTS (İlaç Takip Sistemi) Hakkında</strong><br><br>
-      Sağlık Bakanlığı'nın resmi sistemidir. Türkiye'ye giren her ilaçı üretimden hasta eline kadar takip eder.
-      <br><br>
-      <strong>Üstteki birleşik tablo</strong> Excel dosyaları (GKF € + liste ₺) ve varsa <strong>recete.org</strong> haber HTML tabloları / <code>data/recete_haber_06102004.html</code> yedeğinden yüklenir; tekil ilaç adı. <strong>Alttaki arama kutusu</strong> canlı ITS yerine örnek/demo veridir.
-      <br><br>
-      <em>Kaynak: <a href="https://its.gov.tr/" target="_blank">its.gov.tr</a></em>
-    </div>
-    """, unsafe_allow_html=True)
+        _col_cfg = {k: v for k, v in _col_cfg_all.items() if k in _rf_show.columns}
+        _df_kw: dict = dict(use_container_width=True, height=900, hide_index=True)
+        if _col_cfg:
+            _df_kw["column_config"] = _col_cfg
+        st.dataframe(_rf_show, **_df_kw)
 
 # ═════════════════════════════════════════════
 # SEKME 5 — PROSPEKTÜS YÖNETİMİ (CORPUS)
