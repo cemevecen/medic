@@ -7,6 +7,7 @@ Katı _k birleşiminden sonra, gevşek isim anahtarı ile aynı ürünün web ve
 from __future__ import annotations
 
 import re
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -17,6 +18,28 @@ import streamlit as st
 REFERANS_PATH = Path(__file__).parent / "data" / "referans_bazli_ilac_fiyat_listesi.xlsx"
 WEB_PATH = Path(__file__).parent / "data" / "ilac_fiyat_web_listesi.xlsx"
 _REFERANS_SKIPROWS = 4
+
+# Ticari ad ↔ liste "İlaç adı" eşlemesi: ~%70–75 benzerlik (SequenceMatcher oranı)
+FIYAT_ISIM_BENZERLIK_ESIK = 0.72
+
+
+def _fiyat_baslik_benzerligi(liste_basligi: object, aday: object) -> float:
+    """Liste satırı başlığı ile analiz adayı arasında 0..1 benzerlik (gevşek anahtar + difflib)."""
+    t_liste = _norm_key_loose(liste_basligi)
+    t_aday = _norm_key_loose(aday)
+    if not t_liste or not t_aday:
+        return 0.0
+    if t_liste == t_aday:
+        return 1.0
+    raw_l = str(liste_basligi or "").strip().casefold()
+    raw_a = str(aday or "").strip().casefold()
+    if raw_l and raw_a and raw_l == raw_a:
+        return 1.0
+    r1 = SequenceMatcher(None, t_liste, t_aday).ratio()
+    if len(raw_l) >= 3 and len(raw_a) >= 3:
+        r2 = SequenceMatcher(None, raw_l, raw_a).ratio()
+        return max(r1, r2)
+    return r1
 
 
 def _norm_key(s: object) -> str:
@@ -398,28 +421,16 @@ def lookup_fiyat_liste_for_vision(
     """
     Analiz çıktısındaki ilaç ile `load_birlesik_ilac_fiyat_df` (İlaç Fiyatları sekmesi) eşlemesi.
 
-    Öncelik: barkod (≥8 hane) — yoksa ticari_ad / metin girişi ile gevşek veya tam ad eşleşmesi.
+    Yalnızca **ticari_ad** (ve metin girişi) ile liste **İlaç adı** karşılaştırılır; barkod eşleştirmede
+    kullanılmaz. Benzerlik oranı en az ~%72 (FIYAT_ISIM_BENZERLIK_ESIK) olan satırlar alınır; en yüksek
+    skor önce. Eşleşen satırda barkod, liste fiyatı ve GKF tablodan ek bilgi olarak gelir.
     """
+    # vision_data: barkod eşleştirmede kullanılmıyor (çağrı imzası uyumluluk için duruyor).
+    _ = vision_data
+
     df = load_birlesik_ilac_fiyat_df()
     if df is None or df.empty:
         return {"eslesti": False, "satirlar": [], "aciklama": "Fiyat tablosu yok veya boş."}
-
-    barcode_hits: set[Any] = set()
-    bd = vision_data.get("barkod_detay") or {}
-    b_digits = ""
-    if isinstance(bd, dict) and bd.get("tespit_edildi"):
-        raw = bd.get("deger_normalize") or bd.get("deger") or ""
-        b_digits = re.sub(r"\D", "", str(raw))
-    if b_digits and len(b_digits) >= 8 and "Barkod" in df.columns:
-
-        def _norm_bc(x: object) -> str:
-            if pd.isna(x):
-                return ""
-            return re.sub(r"\D", "", str(x))
-
-        norm_bc = df["Barkod"].map(_norm_bc)
-        m_bc = norm_bc == b_digits
-        barcode_hits.update(df.index[m_bc].tolist())
 
     names: List[str] = []
     for s in (ticari_ad, drug_name_text):
@@ -427,26 +438,23 @@ def lookup_fiyat_liste_for_vision(
         if s and all(x.casefold() != s.casefold() for x in names):
             names.append(s)
 
-    name_hits: set[Any] = set()
-    loose_series = df["İlaç adı"].map(_norm_key_loose)
-    cf_series = df["İlaç adı"].astype(str).str.strip()
-
-    for cand in names:
-        lq = _norm_key_loose(cand)
-        if len(lq) >= 3:
-            name_hits.update(df.index[loose_series == lq].tolist())
-        cfc = cand.strip().casefold()
-        if len(cfc) >= 3:
-            name_hits.update(df.index[cf_series.str.casefold() == cfc].tolist())
-        if len(cfc) >= 6:
-            name_hits.update(
-                df.index[cf_series.str.casefold().str.contains(re.escape(cfc), na=False)].tolist()
-            )
-
-    chosen: set[Any] = set(barcode_hits) if barcode_hits else name_hits
-    if not chosen:
+    if not names:
         return {"eslesti": False, "satirlar": [], "aciklama": ""}
 
-    sub = df.loc[sorted(chosen)].head(int(max_rows))
+    titles = df["İlaç adı"].astype(str)
+
+    def _best_score(title: str) -> float:
+        return max(_fiyat_baslik_benzerligi(title, n) for n in names)
+
+    best_scores = titles.map(_best_score)
+    mask = best_scores >= FIYAT_ISIM_BENZERLIK_ESIK
+    if not mask.any():
+        return {"eslesti": False, "satirlar": [], "aciklama": ""}
+
+    sub = df.loc[mask].copy()
+    sub["_score"] = best_scores[mask]
+    sub = sub.sort_values("_score", ascending=False).head(int(max_rows))
+    sub = sub.drop(columns=["_score"], errors="ignore")
+
     satirlar = [_serialize_fiyat_tablo_row(sub.iloc[i]) for i in range(len(sub))]
     return {"eslesti": True, "satirlar": satirlar, "aciklama": ""}

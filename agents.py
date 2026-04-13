@@ -5,7 +5,7 @@ agents.py: Tüm ajan sınıfları ve ana orkestratör bu dosyada tanımlanmışt
 
 # Versiyon numarası — app.py session_state cache invalidation için kullanılır.
 # Fact-Checker / parser / orchestrator davranışı değiştiğinde artırın.
-PHARMA_GUARD_VERSION = "1.24"
+PHARMA_GUARD_VERSION = "1.26"
 
 import logging
 import os
@@ -1674,7 +1674,7 @@ def _strip_confidence_meta_junk(report_text: str) -> str:
 
 
 def _fiyat_liste_markdown_append(fl: Optional[Dict[str, Any]]) -> str:
-    """Birleşik fiyat listesi eşleşmesini rapora deterministik ekler (LLM dışı)."""
+    """Birleşik fiyat listesi eşleşmesini rapora deterministik ekler (LLM dışı; isim benzerliği)."""
     if not fl or not fl.get("eslesti") or not fl.get("satirlar"):
         return ""
     lines = [
@@ -1682,7 +1682,9 @@ def _fiyat_liste_markdown_append(fl: Optional[Dict[str, Any]]) -> str:
         "---",
         "## Liste fiyatı (yerel birleşik tablo)",
         "",
-        "İlaç Fiyatları sekmesindeki liste ile **barkod veya ürün adı** eşleşen kayıt(lar):",
+        "İlaç Fiyatları sekmesindeki **İlaç adı** ile analizdeki ticari ad / metin girişi arasında "
+        "yaklaşık **%70–75** benzerlik eşiği uygulanır; barkod eşleştirmede kullanılmaz. "
+        "Ürün eşleştikten sonra **liste fiyatı**, **GKF** ve tablodaki **barkod** ek bilgi olarak verilir:",
         "",
     ]
     for i, row in enumerate(fl["satirlar"], 1):

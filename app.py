@@ -1675,7 +1675,8 @@ if _pg_nav == "İlaç Analizi":
                 st.dataframe(_dataframe_noneish_to_dash(_fdf), **_fdf_kw)
                 st.caption(
                     "Kaynak: uygulama içi birleşik fiyat listesi (İlaç Fiyatları sekmesi ile aynı veri). "
-                    "Eşleşme barkod veya ilaç adı ile yapılır."
+                    "Eşleşme yalnızca **ticari ad / metin girişi** ile liste başlığı benzerliği (≈%70–75); "
+                    "barkod eşleştirmede kullanılmaz. Barkod, fiyat ve GKF tablodan ek bilgidir."
                 )
 
             st.markdown("")
