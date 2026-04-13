@@ -14,6 +14,41 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# ═════════════════════════════════════════════
+# API Bilgilerini Kalıcı Olarak Kaydet/Yükle
+# ═════════════════════════════════════════════
+CONFIG_API_PATH = Path(__file__).parent / "config_api.json"
+
+def load_api_config():
+    """API bilgilerini config dosyasından yükle"""
+    if CONFIG_API_PATH.exists():
+        try:
+            with open(CONFIG_API_PATH, "r") as f:
+                config = json.load(f)
+                for key, value in config.items():
+                    if value and f"st_session_{key}" not in st.session_state:
+                        st.session_state[key] = value
+        except Exception:
+            pass
+
+def save_api_config():
+    """API bilgilerini config dosyasına kaydet"""
+    config = {
+        "rapidapi_endpoint_1": st.session_state.get("rapidapi_endpoint_1", ""),
+        "rapidapi_key_1": st.session_state.get("rapidapi_key_1", ""),
+        "rapidapi_endpoint_2": st.session_state.get("rapidapi_endpoint_2", ""),
+        "rapidapi_key_2": st.session_state.get("rapidapi_key_2", ""),
+        "collectapi_api_key": st.session_state.get("collectapi_api_key", "")
+    }
+    try:
+        with open(CONFIG_API_PATH, "w") as f:
+            json.dump(config, f, indent=2)
+    except Exception:
+        pass
+
+# Uygulamayı başlatırken yapılandırmayı yükle
+load_api_config()
+
 from typing import Optional
 
 from utils import (
@@ -1685,6 +1720,7 @@ with tab_about:
         # Gerçek API verisini kontrol et (demo değil)
         if test_result.get("source") == "CollectAPI":
             st.success(f"✓ API çalışıyor! {test_result.get('total')} eczane bulundu (Kaynak: CollectAPI)")
+            save_api_config()
         else:
             error_msg = test_result.get("error", "Bilinmeyen hata")
             st.error(f"❌ API hatası: {error_msg}")
@@ -1700,43 +1736,41 @@ with tab_about:
 
         # First RapidAPI endpoint
         st.markdown("**API 1: Nöbetçi Eczaneler - Türkiye**")
-        rapidapi_endpoint_1 = st.text_input(
+        st.text_input(
             "Endpoint URL (örn: https://nobetci-eczaneler-turkiye1.p.rapidapi.com/pharmacies)",
             key="rapidapi_endpoint_1",
             placeholder="https://..."
         )
-        rapidapi_key_1 = st.text_input(
+        st.text_input(
             "API Key",
             type="password",
             key="rapidapi_key_1",
             placeholder="RapidAPI anahtarı…"
         )
 
-        if rapidapi_endpoint_1 and rapidapi_key_1:
-            st.session_state["rapidapi_endpoint_1"] = rapidapi_endpoint_1
-            st.session_state["rapidapi_key_1"] = rapidapi_key_1
-            st.info("✓ API 1 ayarları kaydedildi")
+        if st.session_state.get("rapidapi_endpoint_1") and st.session_state.get("rapidapi_key_1"):
+            st.success("✓ API 1 kaydedildi")
+            save_api_config()
 
         st.markdown("---")
 
         # Second RapidAPI endpoint
         st.markdown("**API 2: Nöbetçi Eczane Listesi**")
-        rapidapi_endpoint_2 = st.text_input(
+        st.text_input(
             "Endpoint URL (örn: https://nobetci-eczane-listesi-api-her-saat-otomatik-guncellenir.p.rapidapi.com/pharmacies/{city}/{district})",
             key="rapidapi_endpoint_2",
             placeholder="https://..."
         )
-        rapidapi_key_2 = st.text_input(
+        st.text_input(
             "API Key",
             type="password",
             key="rapidapi_key_2",
             placeholder="RapidAPI anahtarı…"
         )
 
-        if rapidapi_endpoint_2 and rapidapi_key_2:
-            st.session_state["rapidapi_endpoint_2"] = rapidapi_endpoint_2
-            st.session_state["rapidapi_key_2"] = rapidapi_key_2
-            st.info("✓ API 2 ayarları kaydedildi")
+        if st.session_state.get("rapidapi_endpoint_2") and st.session_state.get("rapidapi_key_2"):
+            st.success("✓ API 2 kaydedildi")
+            save_api_config()
 
     # ─────────────────────────────────────────────
     # ITS (İLAÇ TAKIP SİSTEMİ) API
