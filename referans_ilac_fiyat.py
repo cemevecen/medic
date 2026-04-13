@@ -1,11 +1,12 @@
 """
 Birleşik ilaç fiyat tabloları: referans GKF (€) xlsx + web liste (₺) xlsx + recete.org haber HTML tabloları.
 Ortak alanlar: ilaç adı, firma, fiyat (farklı para birimleri ayrı sütunlarda).
-Tekrarlayan ilaç adları (normalize edilmiş) tek satırda birleştirilir.
+Katı _k birleşiminden sonra, gevşek isim anahtarı ile aynı ürünün web verisi olmayan kopya satırları silinir.
 """
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -23,6 +24,138 @@ def _norm_key(s: object) -> str:
         return ""
     t = str(s).strip()
     return " ".join(t.casefold().split())
+
+
+def _norm_key_loose(s: object) -> str:
+    """
+    Aynı ürünün farklı yazımlarını (TABLET / TB., SOLUSYON / SOL. vb.) tek anahtarda toplar.
+    """
+    if s is None or (isinstance(s, float) and pd.isna(s)):
+        return ""
+    t = str(s).strip().casefold()
+    t = re.sub(
+        r"\btablet\s*\(\s*(\d+)\s*(?:film\s+kapli\s+)?tablet\s*\)",
+        r" \1 tablet ",
+        t,
+        flags=re.I,
+    )
+    t = re.sub(
+        r"\(\s*(\d+)\s*(?:film\s+kapli\s+)?(?:tablet|tb\.?|film\s+tablet|film\s+kapli\s+tablet)\s*\)",
+        r" \1 tablet ",
+        t,
+        flags=re.I,
+    )
+    t = re.sub(
+        r"\(\s*(\d+)\s*(?:film\s+kapli\s+)?kapsul\s*\)",
+        r" \1 kapsul ",
+        t,
+        flags=re.I,
+    )
+    t = re.sub(r"\([^)]{0,200}\)", " ", t)
+    t = re.sub(r"[\[\]]", " ", t)
+    t = t.replace("/", " ")
+    t = re.sub(r"\.", " ", t)
+    t = re.sub(r"[,;]", " ", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    repls = (
+        (r"\bfilm\s+kapli\b", " "),
+        (r"\bfilm\s+tablet\b", " tablet "),
+        (r"\bftb\b", " tablet "),
+        (r"\bfkb\b", " tablet "),
+        (r"\btablet\b", " tablet "),
+        (r"\btb\b", " tablet "),
+        (r"\bkapsul\b", " kapsul "),
+        (r"\bkaps\b", " kapsul "),
+        (r"\bkap\b", " kapsul "),
+        (r"\bsolusyon\b", " solusyon "),
+        (r"\bsolasyon\b", " solusyon "),
+        (r"\bsol\b", " solusyon "),
+        (r"\boral\b", " oral "),
+        (r"\binj\b", " injeksiyon "),
+        (r"\binjeksiyon\b", " injeksiyon "),
+        (r"\bdraje\b", " draje "),
+        (r"\bsprey\b", " sprey "),
+        (r"\bflk\b", " flakon "),
+        (r"\bflakon\b", " flakon "),
+    )
+    for pat, rep in repls:
+        t = re.sub(pat, rep, t, flags=re.I)
+    t = re.sub(r"(tablet\s*)+", " tablet ", t)
+    t = re.sub(r"(kapsul\s*)+", " kapsul ", t)
+    t = re.sub(r"(solusyon\s*)+", " solusyon ", t)
+    t = re.sub(r"(oral\s*)+", " oral ", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    return t
+
+
+def _row_has_web_signal(row: pd.Series) -> bool:
+    """Web listesinden liste fiyatı veya barkod (gerçek satır) var mı."""
+    if "Liste fiyatı (₺)" in row.index:
+        v = row["Liste fiyatı (₺)"]
+        if pd.notna(v):
+            try:
+                if float(v) != 0.0:
+                    return True
+            except (TypeError, ValueError):
+                if str(v).strip():
+                    return True
+    if "Barkod" in row.index:
+        b = row["Barkod"]
+        if pd.notna(b):
+            bs = str(b).strip().lower()
+            if bs and bs not in ("none", "nan", "-", "nat", "<na>"):
+                return True
+    return False
+
+
+def _row_has_any_price_signal(row: pd.Series) -> bool:
+    """GKF, liste fiyatı veya barkod — web yoksa referans satırını tutmak için."""
+    for col in ("GKF (€)", "Liste fiyatı (₺)"):
+        if col not in row.index:
+            continue
+        v = row[col]
+        if pd.isna(v):
+            continue
+        try:
+            if float(v) != 0.0:
+                return True
+        except (TypeError, ValueError):
+            if str(v).strip():
+                return True
+    if "Barkod" in row.index:
+        b = row["Barkod"]
+        if pd.notna(b):
+            bs = str(b).strip().lower()
+            if bs and bs not in ("none", "nan", "-", "nat", "<na>"):
+                return True
+    return False
+
+
+def _drop_loose_dupes_unpriced(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Gevşek ada göre gruplar.
+    Grupta en az birinde web (liste ₺ / barkod) varsa, web verisi olmayan kopyaları siler.
+    Aksi halde GKF vb. herhangi bir fiyat sinyali varsa ona göre; yoksa tek satır bırakır.
+    """
+    if df is None or len(df) < 2:
+        return df
+    work = df.copy()
+    work["_nk_loose"] = work["İlaç adı"].map(_norm_key_loose)
+    drop_idx: list[object] = []
+    for key, grp in work.groupby("_nk_loose", sort=False):
+        if not key or len(grp) < 2:
+            continue
+        web_f = grp.apply(_row_has_web_signal, axis=1)
+        if web_f.any():
+            drop_idx.extend(grp.index[~web_f].tolist())
+            continue
+        any_f = grp.apply(_row_has_any_price_signal, axis=1)
+        if any_f.any():
+            drop_idx.extend(grp.index[~any_f].tolist())
+        else:
+            drop_idx.extend(list(grp.index[1:]))
+    out = work.drop(index=drop_idx, errors="ignore")
+    return out.drop(columns=["_nk_loose"], errors="ignore")
 
 
 def _join_unique_firms(s: pd.Series) -> str:
@@ -206,6 +339,7 @@ def load_birlesik_ilac_fiyat_df() -> Optional[pd.DataFrame]:
         )
 
     out = merge_recete_into(base, recete)
+    out = _drop_loose_dupes_unpriced(out)
     return _ensure_unique_norm(out)
 
 
