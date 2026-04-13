@@ -829,15 +829,24 @@ div[data-testid="stVerticalBlock"] .stTabs [data-baseweb="tab-list"] {
   }
 }
 
-/* ── Status pill (sidebar — her zaman açık bg) */
+/* ── Status pill (Hakkında / Sistem Durumu — primary buton ile aynı teal ton) */
 .pg-status-pill {
-  display:inline-flex; align-items:center; gap:.4rem;
-  font-size:.84rem; padding:.4rem .75rem; border-radius:10px; margin-bottom:.3rem;
-  background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.12);
-  color:#e2e8f0 !important;
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  font-size: 0.84rem; font-weight: 600; padding: 0.42rem 0.9rem; border-radius: 12px; margin-bottom: 0.35rem;
+  color: #ffffff !important;
+  border: 1px solid transparent;
 }
-.pg-status-pill.ok  { border-color:rgba(45,212,191,.4) !important; background:rgba(45,212,191,.12) !important; }
-.pg-status-pill.bad { border-color:rgba(248,113,113,.4) !important; background:rgba(248,113,113,.1) !important; }
+.pg-status-pill.ok {
+  background: linear-gradient(135deg, #0f766e, #0d9488) !important;
+  border-color: rgba(13, 148, 136, 0.55) !important;
+  box-shadow: 0 4px 14px rgba(15, 118, 110, 0.28) !important;
+}
+.pg-status-pill.bad {
+  background: linear-gradient(135deg, #991b1b, #dc2626) !important;
+  border-color: rgba(248, 113, 113, 0.55) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(220, 38, 38, 0.22) !important;
+}
 
 /* ── Adım satırı ────────────────────────────── */
 .pg-step-line {
