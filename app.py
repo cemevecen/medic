@@ -699,8 +699,9 @@ div[data-testid="stVerticalBlock"] .stTabs [data-baseweb="tab-list"] {
   }
 }
 
-/* ── Masthead (WikiPharma + sekmeler — tek yeşil şerit) ─────────────── */
-section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) {
+/* ── Masthead: st.container(horizontal, key=pg_masthead) → sınıf st-key-pg_masthead (Streamlit ≥1.33) ─ */
+[data-testid="stMain"] .st-key-pg_masthead,
+.st-key-pg_masthead {
   position: relative;
   overflow: hidden;
   border-radius: 20px;
@@ -708,10 +709,16 @@ section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) {
   padding: clamp(1.1rem, 4vw, 1.65rem) clamp(1rem, 3vw, 1.5rem) !important;
   background: linear-gradient(135deg, #0f172a 0%, #134e4a 55%, #0f766e 100%) !important;
   box-shadow: 0 20px 50px -12px rgba(15,23,42,.35);
+  display: flex !important;
+  flex-direction: row !important;
   align-items: center !important;
   gap: 0.75rem 1.25rem !important;
+  flex-wrap: wrap !important;
+  width: 100%;
+  box-sizing: border-box;
 }
-section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root)::after {
+[data-testid="stMain"] .st-key-pg_masthead::after,
+.st-key-pg_masthead::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -719,12 +726,16 @@ section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root)::after {
   background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
   border-radius: 20px;
 }
-section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) > div {
+[data-testid="stMain"] .st-key-pg_masthead > div,
+.st-key-pg_masthead > div {
   position: relative;
   z-index: 1;
   background: transparent !important;
 }
-section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) h1 {
+[data-testid="stMain"] .st-key-pg_masthead h1,
+[data-testid="stMain"] .st-key-pg_masthead [data-testid="stMarkdownContainer"] h1,
+.st-key-pg_masthead h1,
+.st-key-pg_masthead [data-testid="stMarkdownContainer"] h1 {
   margin: 0 !important;
   font-size: clamp(1.35rem, 4vw, 2rem) !important;
   font-weight: 700 !important;
@@ -733,50 +744,71 @@ section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) h1 {
   border: none !important;
   padding: 0 !important;
 }
-section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) label p,
-section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) [data-testid="stWidgetLabel"] p {
+[data-testid="stMain"] .st-key-pg_masthead label p,
+[data-testid="stMain"] .st-key-pg_masthead [data-testid="stWidgetLabel"] p,
+.st-key-pg_masthead label p,
+.st-key-pg_masthead [data-testid="stWidgetLabel"] p {
   color: rgba(248, 250, 252, 0.95) !important;
 }
-section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) div[role="radiogroup"] {
+[data-testid="stMain"] .st-key-pg_masthead div[role="radiogroup"],
+.st-key-pg_masthead div[role="radiogroup"] {
   flex-wrap: wrap !important;
   justify-content: flex-end !important;
   gap: 0.35rem 0.5rem !important;
 }
-section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) label[data-baseweb="radio"] {
+[data-testid="stMain"] .st-key-pg_masthead label[data-baseweb="radio"],
+.st-key-pg_masthead label[data-baseweb="radio"] {
   margin: 0 !important;
   padding: 0.35rem 0.85rem !important;
   border-radius: 999px !important;
   border: 1px solid rgba(255, 255, 255, 0.22) !important;
   background: rgba(255, 255, 255, 0.08) !important;
 }
-section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) label[data-baseweb="radio"]:has(input:checked) {
+[data-testid="stMain"] .st-key-pg_masthead label[data-baseweb="radio"]:has(input:checked),
+.st-key-pg_masthead label[data-baseweb="radio"]:has(input:checked) {
   background: rgba(255, 255, 255, 0.95) !important;
   border-color: rgba(255, 255, 255, 0.95) !important;
 }
-section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) label[data-baseweb="radio"]:has(input:checked) p {
+[data-testid="stMain"] .st-key-pg_masthead label[data-baseweb="radio"]:has(input:checked) p,
+.st-key-pg_masthead label[data-baseweb="radio"]:has(input:checked) p {
   color: #0f766e !important;
   font-weight: 600 !important;
 }
 @media (max-width: 640px) {
-  section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) {
+  [data-testid="stMain"] .st-key-pg_masthead,
+  .st-key-pg_masthead {
     padding: 1rem 0.85rem !important;
     margin-bottom: 1.25rem;
   }
-  section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) div[role="radiogroup"] {
+  [data-testid="stMain"] .st-key-pg_masthead div[role="radiogroup"],
+  .st-key-pg_masthead div[role="radiogroup"] {
     justify-content: flex-start !important;
   }
 }
-/* Streamlit sürümleri: baseweb olmayan yatay radio */
-section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) .stRadio label {
+[data-testid="stMain"] .st-key-pg_masthead .stRadio label,
+.st-key-pg_masthead .stRadio label {
   color: rgba(248, 250, 252, 0.95) !important;
 }
-section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) .stRadio label:has(input:checked),
-section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) label:has(input:checked) {
+[data-testid="stMain"] .st-key-pg_masthead .stRadio label:has(input:checked),
+[data-testid="stMain"] .st-key-pg_masthead label:has(input:checked),
+.st-key-pg_masthead .stRadio label:has(input:checked),
+.st-key-pg_masthead label:has(input:checked) {
   background: rgba(255, 255, 255, 0.95) !important;
   border-radius: 999px !important;
 }
-section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) .stRadio label:has(input:checked) p,
-section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) label:has(input:checked) p {
+[data-testid="stMain"] .st-key-pg_masthead .stRadio label:has(input:checked) p,
+[data-testid="stMain"] .st-key-pg_masthead label:has(input:checked) p,
+.st-key-pg_masthead .stRadio label:has(input:checked) p,
+.st-key-pg_masthead label:has(input:checked) p {
+  color: #0f766e !important;
+  font-weight: 600 !important;
+}
+[data-testid="stMain"] .st-key-pg_masthead .stRadio [data-testid="stMarkdownContainer"] p,
+.st-key-pg_masthead .stRadio [data-testid="stMarkdownContainer"] p {
+  color: rgba(248, 250, 252, 0.95) !important;
+}
+[data-testid="stMain"] .st-key-pg_masthead .stRadio label:has(input:checked) [data-testid="stMarkdownContainer"] p,
+.st-key-pg_masthead .stRadio label:has(input:checked) [data-testid="stMarkdownContainer"] p {
   color: #0f766e !important;
   font-weight: 600 !important;
 }
@@ -1070,14 +1102,14 @@ _PG_TAB_LABELS = (
     "Prospektüs Yönetimi",
     "Hakkında",
 )
-_mh_left, _mh_right = st.columns([2, 5], gap="small", vertical_alignment="center")
-with _mh_left:
-    st.markdown(
-        '<span id="pg-masthead-root" aria-hidden="true"></span>'
-        "<h1>WikiPharma</h1>",
-        unsafe_allow_html=True,
-    )
-with _mh_right:
+with st.container(
+    horizontal=True,
+    horizontal_alignment="distribute",
+    gap="medium",
+    vertical_alignment="center",
+    key="pg_masthead",
+):
+    st.markdown("<h1>WikiPharma</h1>", unsafe_allow_html=True)
     st.radio(
         "Bölüm",
         _PG_TAB_LABELS,
