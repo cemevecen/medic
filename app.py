@@ -806,6 +806,22 @@ div[data-testid="stVerticalBlock"] .stTabs [data-baseweb="tab-list"] {
 .pg-empty .pg-empty-icon { font-size: clamp(2rem, 6vw, 2.75rem); line-height:1; margin-bottom:1rem; }
 .pg-empty p { margin:0; font-size: clamp(0.9rem, 2vw, 1rem); line-height:1.6; color:var(--pg-muted) !important; }
 
+/* İlaç fiyat tablosu — kaydırılabilir liste ipucu (emoji yok) */
+.pg-df-scroll-hint {
+  display: flex; align-items: center; justify-content: center; gap: 0.55rem;
+  margin-top: 0.15rem; margin-bottom: 0.35rem;
+  font-size: clamp(0.78rem, 1.8vw, 0.88rem); color: var(--pg-muted); line-height: 1.4; text-align: center;
+}
+.pg-df-scroll-hint-chevron {
+  flex-shrink: 0;
+  width: 0; height: 0;
+  border-left: 7px solid transparent; border-right: 7px solid transparent; border-top: 9px solid var(--pg-muted);
+  opacity: 0.88;
+}
+.pg-df-scroll-hint-dots {
+  letter-spacing: 0.12em; opacity: 0.75; user-select: none;
+}
+
 /* Responsive empty state */
 @media (max-width: 640px) {
   .pg-empty {
@@ -1561,10 +1577,27 @@ with tab_its:
             "Barkod": st.column_config.TextColumn("Barkod"),
         }
         _col_cfg = {k: v for k, v in _col_cfg_all.items() if k in _rf_show.columns}
-        _df_kw: dict = dict(use_container_width=True, height=900, hide_index=True)
+        _gorunur_satir = 150
+        _satir_px = 34
+        _baslik_pad = 52
+        _df_h = min(len(_rf_show) * _satir_px + _baslik_pad, _gorunur_satir * _satir_px + _baslik_pad)
+        _df_h = int(max(_df_h, 120))
+        _df_kw: dict = dict(use_container_width=True, height=_df_h, hide_index=True)
         if _col_cfg:
             _df_kw["column_config"] = _col_cfg
         st.dataframe(_rf_show, **_df_kw)
+        _n_satir = len(_rf_show)
+        if _n_satir > _gorunur_satir:
+            st.markdown(
+                f'<div class="pg-df-scroll-hint" title="Tabloda dikey kaydırma">'
+                f'<span class="pg-df-scroll-hint-chevron"></span>'
+                f'<span>Toplam <strong>{_n_satir}</strong> satır; liste aşağıda devam eder'
+                f'<span class="pg-df-scroll-hint-dots"> ···</span></span>'
+                f'<span class="pg-df-scroll-hint-chevron"></span></div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.caption(f"Toplam {_n_satir} satır.")
 
 # ═════════════════════════════════════════════
 # SEKME 5 — PROSPEKTÜS YÖNETİMİ (CORPUS)
