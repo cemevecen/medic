@@ -307,7 +307,6 @@ def _ozellikli_sheet_to_markdown(df, name_col: str | None, max_rows: int) -> str
     return "\n".join(lines)
 
 
-@st.fragment
 def _pg_fragment_ozellikli_ilaclar():
     st.markdown(
         '<p class="pg-section">Özellikli ilaçlar</p>',
@@ -563,6 +562,14 @@ def _eczane_on_duty_count(city_slug: str, district_slug: str, api_key: str) -> i
         return None
     except Exception:
         return None
+
+
+def _pg_today_istanbul_dmy() -> str:
+    """TR yerel gösterim için bugünün tarihi (API çağrısı yok)."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    return datetime.now(ZoneInfo("Europe/Istanbul")).strftime("%d.%m.%Y")
 
 
 def _eczane_iframe_height_px(count: int | None, district_selected: bool) -> int:
@@ -1797,6 +1804,7 @@ _PG_TAB_LABELS = (
     "İlaç Analizi",
     "FDA Arşivi",
     "İlaç Fiyatları",
+    "Özellikli ilaçlar",
     "Fihrist",
     "Prospektüs Yönetimi",
     "Hakkında",
@@ -1822,14 +1830,19 @@ if _pg_nav not in _PG_TAB_LABELS:
     _pg_nav = _PG_TAB_LABELS[0]
     st.session_state.pg_main_nav = _pg_nav
 
+# İlaç Analizi dışından bu sekmeye dönünce nöbetçi widget'ı tekrar dropdown seçimine bağlansın.
+_pg_prev = st.session_state.get("_pg_nav_prev_stamp")
+if _pg_nav == "İlaç Analizi" and _pg_prev not in (None, "İlaç Analizi"):
+    st.session_state["pg_eczane_load_widget"] = False
+st.session_state["_pg_nav_prev_stamp"] = _pg_nav
+
 # ═════════════════════════════════════════════
 # SEKME 1 — ANALİZ
 # ═════════════════════════════════════════════
 if _pg_nav == "İlaç Analizi":
-    _pg_fragment_ozellikli_ilaclar()
-    col_in, col_out = st.columns([1, 1.5], gap="large")
+    col_results, col_inputs = st.columns([1.55, 1], gap="large")
 
-    with col_in:
+    with col_inputs:
         st.markdown(
             '<p class="pg-section">Giriş yöntemi</p>',
             unsafe_allow_html=True,
@@ -1978,10 +1991,17 @@ if _pg_nav == "İlaç Analizi":
                 unsafe_allow_html=True,
             )
 
+        _ecz_today = _pg_today_istanbul_dmy()
         st.markdown(
-            '<p class="pg-section" style="margin-bottom:0.35rem">Nöbetçi eczaneler</p>',
+            '<p class="pg-section" style="margin-bottom:0.35rem">Nöbetçi eczaneler '
+            f'<span style="font-weight:500;color:#64748b;font-size:0.92em">· {_ecz_today}</span></p>',
             unsafe_allow_html=True,
         )
+
+        def _pg_eczane_on_dropdown_change() -> None:
+            st.session_state["pg_eczane_load_widget"] = True
+
+        st.session_state.setdefault("pg_eczane_load_widget", False)
 
         _geo_rows = load_turkey_geo_rows()
         _city_slugs = [r[1] for r in _geo_rows]
@@ -1997,6 +2017,7 @@ if _pg_nav == "İlaç Analizi":
                 index=_ci0,
                 format_func=lambda s: _city_label.get(s, s),
                 key="eczane_widget_city",
+                on_change=_pg_eczane_on_dropdown_change,
             )
         _counties_raw = _city_counties.get(_w_city) or []
         _dist_slugs = [""] + [slug_tr(co) for co in _counties_raw]
@@ -2010,30 +2031,39 @@ if _pg_nav == "İlaç Analizi":
                 index=0,
                 format_func=lambda s: _dist_label.get(s, s),
                 key=f"eczane_widget_district__{_w_city}",
+                on_change=_pg_eczane_on_dropdown_change,
             )
 
-        _params: dict[str, str] = {"city": str(_w_city).strip().lower()}
-        if str(_w_dist or "").strip():
-            _params["district"] = str(_w_dist).strip().lower()
-        _widget_src = "https://eczaneapi.com/widget?" + urlencode(_params)
+        if not st.session_state.get("pg_eczane_load_widget"):
+            st.caption(
+                f"Liste ve harita yalnızca il veya ilçe seçimini değiştirdiğinizde yüklenir "
+                f"(bugün: **{_ecz_today}**)."
+            )
+        else:
+            _params: dict[str, str] = {"city": str(_w_city).strip().lower()}
+            if str(_w_dist or "").strip():
+                _params["district"] = str(_w_dist).strip().lower()
+            _widget_src = "https://eczaneapi.com/widget?" + urlencode(_params)
 
-        _dist_sel = bool(str(_w_dist or "").strip())
-        _duty_n = _eczane_on_duty_count(_w_city, str(_w_dist or ""), _eczaneapi_key_optional())
-        _iframe_h = _eczane_iframe_height_px(_duty_n, _dist_sel)
-        # iframe üstünde HTML maskesi güvenilir değil; alt bilgi satırını görünür alanın dışına taşı
-        _ft = 34 if _duty_n == 1 else 48
-        _iframe_vis = max(210, _iframe_h - _ft)
+            _dist_sel = bool(str(_w_dist or "").strip())
+            _duty_n = _eczane_on_duty_count(
+                _w_city, str(_w_dist or ""), _eczaneapi_key_optional()
+            )
+            _iframe_h = _eczane_iframe_height_px(_duty_n, _dist_sel)
+            # iframe üstünde HTML maskesi güvenilir değil; alt bilgi satırını görünür alanın dışına taşı
+            _ft = 34 if _duty_n == 1 else 48
+            _iframe_vis = max(210, _iframe_h - _ft)
 
-        st.markdown(
-            '<div class="pg-eczane-widget-block" style="margin-top:0.5rem;position:relative;'
-            'border-radius:12px;overflow:hidden;">'
-            f'<iframe src="{html.escape(_widget_src)}" width="100%" height="{_iframe_vis}" '
-            'frameborder="0" style="border:none;border-radius:12px;" '
-            'title="Nöbetçi Eczaneler"></iframe>'
-            '<div class="pg-eczane-footer-mask" aria-hidden="true"></div>'
-            "</div>",
-            unsafe_allow_html=True,
-        )
+            st.markdown(
+                '<div class="pg-eczane-widget-block" style="margin-top:0.5rem;position:relative;'
+                'border-radius:12px;overflow:hidden;">'
+                f'<iframe src="{html.escape(_widget_src)}" width="100%" height="{_iframe_vis}" '
+                'frameborder="0" style="border:none;border-radius:12px;" '
+                'title="Nöbetçi Eczaneler"></iframe>'
+                '<div class="pg-eczane-footer-mask" aria-hidden="true"></div>'
+                "</div>",
+                unsafe_allow_html=True,
+            )
 
         st.markdown("---")
         if st.button(
@@ -2044,10 +2074,11 @@ if _pg_nav == "İlaç Analizi":
         ):
             for k in ("orchestrator", "pg_version", "analysis_result", "report_pdf"):
                 st.session_state.pop(k, None)
+            st.session_state["pg_eczane_load_widget"] = False
             st.success(" Temizlendi — bir sonraki analizde yeniden başlatılır.")
             st.rerun()
 
-    with col_out:
+    with col_results:
         st.markdown(
             '<p class="pg-section">Analiz sonuçları</p>',
             unsafe_allow_html=True,
@@ -2489,7 +2520,7 @@ if _pg_nav == "İlaç Analizi":
             </div>
             """, unsafe_allow_html=True)
 
-# ═════════════════════════════════════════════
+
 # SEKME 2 — FDA ARŞİVİ (Gerçek İlaç Verisi)
 # ═════════════════════════════════════════════
 elif _pg_nav == "FDA Arşivi":
@@ -2568,6 +2599,12 @@ elif _pg_nav == "FDA Arşivi":
 # ═════════════════════════════════════════════
 elif _pg_nav == "İlaç Fiyatları":
     _pg_fragment_ilac_fiyatlari()
+
+# ═════════════════════════════════════════════
+# SEKME 3a — ÖZELLİKLİ İLAÇ LİSTELERİ (yerel XLSX)
+# ═════════════════════════════════════════════
+elif _pg_nav == "Özellikli ilaçlar":
+    _pg_fragment_ozellikli_ilaclar()
 
 # ═════════════════════════════════════════════
 # SEKME 3b — İLAÇ FİHRİST (yerel XLSX)

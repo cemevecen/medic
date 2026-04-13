@@ -23,9 +23,10 @@ WikiPharma; ilaç kutusu fotoğrafı, prospektüs PDF’i veya ilaç adı ile **
 
 | Sekme | İçerik |
 |--------|--------|
-| **İlaç Analizi** | Üstte **Özellikli ilaçlar**: `ilacrehberi_ilac_listeleri.xlsx` sheet’leri (Masaüstü veya `data/`) alt liste olarak; görsel / PDF / metin → `PharmaGuardOrchestrator`, Markdown rapor ve indirilebilir PDF. |
+| **İlaç Analizi** | Görsel / PDF / metin girişi → `PharmaGuardOrchestrator`, Markdown rapor ve indirilebilir PDF; nöbetçi eczane alanı (il/ilçe seçimi sonrası widget). |
 | **FDA Arşivi** | OpenFDA + Wikidata tabanlı gerçek kayıt sorgusu; özetler Groq ile Türkçeleştirilir. Onayı olmayan ürünler arşivde görünmeyebilir. |
 | **İlaç Fiyatları** | Birleştirilmiş referans fiyat listesi (`referans_ilac_fiyat.py`, `data/*.xlsx`). Filtrelenmiş tüm satırlar tabloda gösterilir; uzun listelerde kaydırma tablo kutusunun içindedir. |
+| **Özellikli ilaçlar** | Yerel `ilacrehberi_ilac_listeleri.xlsx` (Masaüstü veya `data/`) sheet’leri; reçete renkleri ve geri çekilenler listeleri. Referans Google Sheets ile aynı kaynak mantığı. |
 | **Fihrist** | Yerel `ilacrehberi_fihrist.xlsx` ile A–Z ilaç listesi; KT/KUB ve ilaç adı bağlantıları Google aramasına gider. Uygulama içi kaynak satırında [referans Google Sheets](https://docs.google.com/spreadsheets/d/13Hd8k4zVylcRSGB9FJpTpFqBUJ7FGnytKxvAV-TIWaY/edit?gid=0#gid=0) ve [ilacrehberi.com fihrist](https://www.ilacrehberi.com/ilac-fihrist/) verilir. |
 | **Prospektüs Yönetimi** | PDF yükleme; dosyalar üzerine yazılmadan kaydedilir, yalnızca kullanıcı **Sil** ile kaldırılır. **İndeksi yenile** yalnızca Chroma vektör veritabanını günceller, PDF’leri silmez. |
 | **Hakkında** | Güncel model zincirleri, API durumu, sürüm (`PHARMA_GUARD_VERSION`), RAG dosya sayısı. |
