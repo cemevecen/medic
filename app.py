@@ -1672,7 +1672,7 @@ with tab_fda:
         unsafe_allow_html=True,
     )
     st.caption(
-        "Bilgi edinmek istediğiniz ilacı Amerikan Gıda ve İlaç Dairesi arşivinde sorgulayarak bilgi edinin. "
+        "Bilgi edinmek istediğiniz ilacı Amerikan Gıda ve İlaç Dairesi arşivinde sorgulayabilirsiniz. "
         "Onayı bulunmayan ilaçlar arşiv sonuçlarında yer bulamayabilir."
     )
 
