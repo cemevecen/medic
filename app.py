@@ -1340,23 +1340,43 @@ with tab_nobetci:
     st.markdown("---")
     st.markdown("### 📍 Bugünün Nöbetçi Eczaneleri")
     with st.expander("🎯 Widget ile göz at", expanded=True):
+        from nobetci_eczane import get_cities_list, get_districts_for_city
+
+        cities_list = get_cities_list()
+        # Normalize city names for widget (lowercase, Turkish chars)
+        cities_slugs = {
+            city.lower().replace("İ", "i").replace("Ş", "s").replace("Ç", "c")
+                       .replace("Ğ", "g").replace("Ü", "u").replace("Ö", "o"): city
+            for city in cities_list
+        }
+
         col_widget_city, col_widget_district = st.columns(2)
         with col_widget_city:
-            widget_city = st.selectbox(
+            widget_city_display = st.selectbox(
                 "Widget İçin İl Seçin",
-                options=["ankara", "istanbul", "izmir", "bursa", "antalya"],
+                options=cities_list,
+                index=0 if "Ankara" in cities_list else 0,
                 key="widget_city_select"
             )
-        with col_widget_district:
-            widget_district = st.text_input(
-                "Widget İçin İlçe Seçin (İsteğe Bağlı)",
-                placeholder="Örn: çankaya",
-                key="widget_district_input"
-            )
+            # Convert display name to slug for widget URL
+            widget_city_slug = widget_city_display.lower().replace("İ", "i").replace("Ş", "s").replace("Ç", "c").replace("Ğ", "g").replace("Ü", "u").replace("Ö", "o")
 
-        widget_url = f"https://eczaneapi.com/widget?city={widget_city}"
-        if widget_district:
-            widget_url += f"&district={widget_district}"
+        with col_widget_district:
+            districts_list = get_districts_for_city(widget_city_display)
+            if districts_list:
+                widget_district_display = st.selectbox(
+                    "Widget İçin İlçe Seçin (İsteğe Bağlı)",
+                    options=[""] + districts_list,
+                    key="widget_district_select"
+                )
+                widget_district_slug = widget_district_display.lower().replace("İ", "i").replace("Ş", "s").replace("Ç", "c").replace("Ğ", "g").replace("Ü", "u").replace("Ö", "o") if widget_district_display else ""
+            else:
+                st.info("Bu şehir için ilçe verisi bulunamadı")
+                widget_district_slug = ""
+
+        widget_url = f"https://eczaneapi.com/widget?city={widget_city_slug}"
+        if widget_district_slug:
+            widget_url += f"&district={widget_district_slug}"
 
         st.markdown(
             f'<iframe src="{widget_url}" width="100%" height="400" frameborder="0" style="border:none; border-radius:12px; max-width: 500px; margin: 0 auto; display: block;" title="Nöbetçi Eczaneler"></iframe>',
