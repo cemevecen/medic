@@ -1315,11 +1315,10 @@ with tab_analyze:
         "Nöbetçi eczaneler</p>"
         '<p style="margin:0 0 0.75rem;font-size:0.85rem;color:#64748b;line-height:1.45">'
         'Canlı liste <a href="https://eczaneapi.com/sitene-ekle" target="_blank" rel="noopener noreferrer">'
-        "EczaneAPI</a> resmi widget’ıdır; veri doğrudan eczaneapi.com’dan gelir.</p>"
-        '<iframe src="https://eczaneapi.com/widget" width="100%" height="400" '
-        'frameborder="0" style="border:none;border-radius:12px;display:block;width:100%;'
-        'min-height:400px;background:#fff;box-shadow:0 1px 3px rgba(15,23,42,0.08)" '
-        'title="Nöbetçi Eczaneler"></iframe>'
+        "EczaneAPI</a> resmi widget’ıdır; varsayılan olarak Ankara nöbetçileri açılır. Veri eczaneapi.com’dan gelir.</p>"
+        '<iframe src="https://eczaneapi.com/widget?city=ankara" width="100%" height="400" '
+        'frameborder="0" style="border:none; border-radius:12px; max-width: 400px; '
+        'margin: 0 auto; display: block;" title="Nöbetçi Eczaneler"></iframe>'
         "</div>",
         unsafe_allow_html=True,
     )
