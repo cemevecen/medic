@@ -1458,10 +1458,35 @@ with tab_nobetci:
     )
     st.caption("Türkiye'nin herhangi bir yerindeki nöbetçi (açık) eczaneleri bulun.")
 
-    # EczaneAPI Widget — Canlı Veriler (Cache'lendi)
+    # EczaneAPI resmi widget — iframe verisi yalnızca eczaneapi.com (CollectAPI ile karışmaz)
     st.markdown("---")
-    st.markdown("### 📍 Bugünün Nöbetçi Eczaneleri")
-    with st.expander("🎯 Widget ile göz at", expanded=True):
+    st.markdown("### Resmi EczaneAPI widget")
+    st.markdown(
+        "Bu kutu **[eczaneapi.com/sitene-ekle](https://eczaneapi.com/sitene-ekle)** ile aynı kaynaktır: "
+        "liste ve güncelleme **doğrudan EczaneAPI** sunucusundan gelir; uygulamanın CollectAPI / RapidAPI "
+        "nöbetçi eczane entegrasyonları **bu iframe için devreye girmez**."
+    )
+    st.link_button(
+        "Sitene ekle — widget kodu üret (eczaneapi.com)",
+        url="https://eczaneapi.com/sitene-ekle",
+        use_container_width=False,
+    )
+
+    widget_mode = st.radio(
+        "Widget adresi",
+        options=("resmi", "slug"),
+        format_func=lambda x: (
+            "Resmi adres (önerilen): eczaneapi.com/widget — il/ilçe widget içinde"
+            if x == "resmi"
+            else "Slug ile sabitle: aşağıdan il/ilçe seç (REST anahtarı gerekir)"
+        ),
+        horizontal=True,
+        key="eczane_widget_mode",
+    )
+
+    if widget_mode == "resmi":
+        widget_url = "https://eczaneapi.com/widget"
+    else:
         api_key_w = _eczaneapi_key_merged()
         cities_pack = eczaneapi_list_cities(api_key_w)
         city_slugs = list(cities_pack.get("slugs") or [])
@@ -1469,22 +1494,18 @@ with tab_nobetci:
         widget_cities_ok = bool(city_slugs)
 
         if not api_key_w.strip():
-            st.warning(
-                "**eczaneapi_api_key** tanımlı değil. Streamlit Cloud’da `config_api.json` genelde yoktur; "
-                "anahtarı aşağıya yapıştırıp **Kaydet ve yenile** deyin veya "
-                "Cloud **Secrets** içine `ECZANEAPI_API_KEY` ekleyin. "
-                "İl listesi EczaneAPI `GET /api/v1/cities` ile gelir (resmi 81+ il)."
+            st.info(
+                "Slug ile sabitleme için **eczaneapi_api_key** gerekir (yalnızca il/ilçe listesi için REST çağrısı). "
+                "Oturum alanına yazın, **Secrets** (`ECZANEAPI_API_KEY`) veya `config_api.json` kullanın; "
+                "**Kaydet ve yenile** deyin. Anahtar olmadan üstteki **Resmi adres** modunu kullanın."
             )
         elif not widget_cities_ok:
-            st.warning(
-                "EczaneAPI il listesi boş döndü (anahtar geçersiz veya ağ hatası). "
-                "Anahtarı kontrol edip **Kaydet ve yenile** deneyin."
-            )
+            st.warning("İl listesi alınamadı; anahtarı kontrol edin veya **Resmi adres** moduna dönün.")
 
         col_key, col_reload = st.columns([3, 1])
         with col_key:
             st.text_input(
-                "EczaneAPI anahtarı (il/ilçe slug listesi; widget iframe verisi eczaneapi.com sunucusundan)",
+                "EczaneAPI anahtarı (yalnızca slug listesi)",
                 type="password",
                 key="eczaneapi_api_key",
                 placeholder="eczane_api_…",
@@ -1498,7 +1519,6 @@ with tab_nobetci:
                 st.rerun()
 
         col_widget_city, col_widget_district = st.columns(2)
-
         cities_list = city_slugs if city_slugs else ["ankara"]
 
         def _fmt_city(slug: str) -> str:
@@ -1507,7 +1527,7 @@ with tab_nobetci:
         with col_widget_city:
             _ci = cities_list.index("ankara") if "ankara" in cities_list else 0
             widget_city = st.selectbox(
-                "Widget İçin İl Seçin",
+                "İl (slug)",
                 options=cities_list,
                 format_func=_fmt_city,
                 index=_ci,
@@ -1526,7 +1546,7 @@ with tab_nobetci:
         with col_widget_district:
             districts_with_empty = [""] + districts
             widget_district = st.selectbox(
-                "Widget İçin İlçe Seçin (İsteğe Bağlı)",
+                "İlçe (slug, isteğe bağlı)",
                 options=districts_with_empty,
                 format_func=_fmt_dist,
                 key="widget_district_select",
@@ -1537,15 +1557,14 @@ with tab_nobetci:
             params["district"] = str(widget_district).strip().lower()
         widget_url = "https://eczaneapi.com/widget?" + urlencode(params)
 
-        st.markdown(
-            f'<iframe src="{html.escape(widget_url)}" width="100%" height="520" frameborder="0" '
-            'style="border:none; border-radius:12px; max-width: 440px; margin: 0 auto; display: block;" '
-            'title="Nöbetçi Eczaneler"></iframe>',
-            unsafe_allow_html=True,
-        )
-        st.caption(
-            f"Örnek URL (slug): `{widget_url}` — [eczaneapi.com/sitene-ekle](https://eczaneapi.com/sitene-ekle) ile aynı parametreler."
-        )
+    st.markdown(
+        f'<iframe src="{html.escape(widget_url)}" width="100%" height="560" frameborder="0" '
+        'style="border:none; border-radius:12px; max-width: 480px; min-height: 480px; margin: 0 auto; display: block;" '
+        'title="Nöbetçi Eczaneler — EczaneAPI"></iframe>',
+        unsafe_allow_html=True,
+    )
+    if widget_mode == "slug":
+        st.caption(f"Özel URL: `{widget_url}`")
 
     st.markdown("---")
     st.markdown("### 🔍 Ayrıntılı Arama")
