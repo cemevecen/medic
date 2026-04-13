@@ -90,20 +90,20 @@ def _eczane_on_duty_count(city_slug: str, district_slug: str, api_key: str) -> i
 
 
 def _eczane_iframe_height_px(count: int | None, district_selected: bool) -> int:
-    """Tek kartta alttaki boşluğu kırpmak için dinamik yükseklik (px)."""
+    """İçerik için hedef yükseklik (px); iframe’de alt bilgi kırpması için dışarıda biraz eklenir."""
     if count == 0:
-        return 260
+        return 288
     if count == 1:
-        return 292
+        return 324
     if count == 2:
-        return 368
+        return 396
     if count == 3:
-        return 436
+        return 464
     if isinstance(count, int) and count > 3:
-        return min(620, 220 + count * 52)
+        return min(668, 252 + count * 52)
     if district_selected:
-        return 300
-    return 400
+        return 332
+    return 432
 
 
 from typing import Optional
@@ -249,21 +249,29 @@ st.markdown("""
   --pg-sidebar-muted: #64748b;
 }
 
-/* EczaneAPI widget iframe — alt bilgi satırını tema zeminiyle maskele */
+/* EczaneAPI widget iframe — alt “EczaneAPI…” satırı iframe içinde; üstünde opak beyaz maske */
+.pg-eczane-widget-block iframe {
+  position: relative;
+  z-index: 0;
+}
 .pg-eczane-footer-mask {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-  height: 42px;
+  height: 64px;
+  z-index: 4;
   pointer-events: none;
   border-bottom-left-radius: 12px;
   border-bottom-right-radius: 12px;
+  /* Widget kartı açık renk; uygulama zemini değil — tam opak beyaza geç */
   background: linear-gradient(
     180deg,
-    rgba(0, 0, 0, 0) 0%,
-    var(--pg-canvas) 52%,
-    var(--pg-canvas) 100%
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0) 14%,
+    rgba(255, 255, 255, 0.88) 38%,
+    #ffffff 62%,
+    #ffffff 100%
   );
 }
 
@@ -1057,11 +1065,14 @@ with tab_analyze:
         _dist_sel = bool(str(_w_dist or "").strip())
         _duty_n = _eczane_on_duty_count(_w_city, str(_w_dist or ""), _eczaneapi_key_optional())
         _iframe_h = _eczane_iframe_height_px(_duty_n, _dist_sel)
+        # iframe üstünde HTML maskesi güvenilir değil; alt bilgi satırını görünür alanın dışına taşı
+        _ft = 34 if _duty_n == 1 else 48
+        _iframe_vis = max(210, _iframe_h - _ft)
 
         st.markdown(
             '<div class="pg-eczane-widget-block" style="max-width:400px;width:100%;margin-top:0.5rem;'
             'position:relative;border-radius:12px;overflow:hidden;">'
-            f'<iframe src="{html.escape(_widget_src)}" width="100%" height="{_iframe_h}" '
+            f'<iframe src="{html.escape(_widget_src)}" width="100%" height="{_iframe_vis}" '
             'frameborder="0" style="border:none; border-radius:12px; max-width: 400px; '
             'margin: 0 auto; display: block;" title="Nöbetçi Eczaneler"></iframe>'
             '<div class="pg-eczane-footer-mask" aria-hidden="true"></div>'
