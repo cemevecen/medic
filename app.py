@@ -431,22 +431,6 @@ def _google_search_url(query: str) -> str:
     return "https://www.google.com/search?q=" + quote_plus(q)
 
 
-def _google_lbl_col_for_linkcolumn(link_col: str, used: set[str] | None = None) -> str:
-    """Streamlit LinkColumn için gizli etiket sütunu adı (çakışmasız)."""
-    import hashlib
-
-    used = used if used is not None else set()
-    base = hashlib.sha256(str(link_col).encode("utf-8")).hexdigest()[:16]
-    lbl = f"_glnk_{base}"
-    out = lbl
-    n = 0
-    while out in used:
-        n += 1
-        out = f"{lbl}_{n}"
-    used.add(out)
-    return out
-
-
 def _ilac_name_columns_for_google_search(df) -> list[str]:
     """Ticari ürün adı sütunları (firma, etken madde, barkod, fiyat, tarih, URL alanları hariç)."""
     if df is None or df.empty or not len(df.columns):
@@ -492,9 +476,17 @@ def _ilac_name_columns_for_google_search(df) -> list[str]:
     return dedup
 
 
+def _google_search_cell_url(v) -> str:
+    t = str(v).strip()
+    if not t or t == "-" or t.casefold() in ("nan", "none", "<na>"):
+        return "https://www.google.com/"
+    return _google_search_url(t)
+
+
 def _prep_df_google_links_for_streamlit(df, link_cols: list[str] | None = None):
     """
-    Fihrist ile aynı mantık: hücre değeri Google arama URL’si; görünen metin gizli *_glnk_* sütununda.
+    İlaç adı sütunları metin olarak kalır; her biri için hemen sağında dar bir link sütunu
+    (Streamlit LinkColumn — display_text yalnızca sabit/ikon/URL-regex; ayrı etiket sütunu desteklenmez).
     Dönüş: (df_yeni, link_column_config, column_order | None).
     """
     if df is None or df.empty:
@@ -504,32 +496,32 @@ def _prep_df_google_links_for_streamlit(df, link_cols: list[str] | None = None):
     if not cols:
         return df, {}, None
     out = df.copy()
-    used_lbl: set[str] = set()
-    lbl_map: dict[str, str] = {}
-    for c in cols:
-        lbl = _google_lbl_col_for_linkcolumn(c, used_lbl)
+    cfg: dict = {}
+    col_to_ucol: dict[str, str] = {}
+    for i, c in enumerate(cols):
         series = out[c].astype(str)
-        out[lbl] = series
-
-        def _cell_url(v):
-            t = str(v).strip()
-            if not t or t == "-" or t.casefold() in ("nan", "none", "<na>"):
-                return "https://www.google.com/"
-            return _google_search_url(t)
-
-        out[c] = series.map(_cell_url)
-        lbl_map[c] = lbl
-    cfg = {
-        str(c): st.column_config.LinkColumn(
-            str(c),
-            display_text=lbl_map[c],
-            help="Google'da ilaç adına göre ara",
+        ucol = f"_google_{i}"
+        while ucol in out.columns:
+            ucol = f"{ucol}_"
+        out[ucol] = series.map(_google_search_cell_url)
+        col_to_ucol[c] = ucol
+        cfg[ucol] = st.column_config.LinkColumn(
+            "↗",
+            width="small",
+            display_text=":material/open_in_new:",
+            help=f"Google'da «{str(c)}» ile ara",
+            validate=r"^https://",
         )
-        for c in lbl_map
-    }
-    hide = frozenset(lbl_map.values())
-    col_order = [x for x in out.columns if x not in hide]
-    return out, cfg, col_order
+    orig = [x for x in df.columns]
+    order: list[str] = []
+    for col in orig:
+        order.append(col)
+        if col in col_to_ucol:
+            order.append(col_to_ucol[col])
+    for col in out.columns:
+        if col not in order:
+            order.append(col)
+    return out, cfg, order
 
 
 def _fihrist_md_link_label(text: str) -> str:
@@ -2738,10 +2730,6 @@ elif _pg_nav == "Prospektüs Yönetimi":
     c1, c2 = st.columns([1, 1])
     with c1:
         st.markdown("#### Prospektüs Ekle")
-        st.caption(
-            "PDF’ler kalıcı corpus dizinine yazılır (varsayılan `data/corpus`; ortamda `MEDIC_CORPUS_DIR` ile başka yol verilebilir). "
-            "**İndir** ile yerel kopya alınır; yalnızca **Sil** ile kaldırılır. İndeks yenileme yalnızca vektör veritabanını günceller, PDF dosyalarını silmez."
-        )
         ups = st.file_uploader("PDF yükle (çoklu seçim)", type=["pdf"],
                                accept_multiple_files=True, key="corpus_uploader")
         if st.button(
