@@ -756,13 +756,44 @@ div[data-testid="stVerticalBlock"] .stTabs [data-baseweb="tab-list"] {
   justify-content: flex-end !important;
   gap: 0.35rem 0.5rem !important;
 }
+/* Chip içinde yalnızca metin — daire / native radio görünmez; tıklama label ile */
+[data-testid="stMain"] .st-key-pg_masthead .stRadio label input[type="radio"],
+.st-key-pg_masthead .stRadio label input[type="radio"] {
+  position: absolute !important;
+  opacity: 0 !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+  pointer-events: none !important;
+}
+[data-testid="stMain"] .st-key-pg_masthead label[data-baseweb="radio"] > div:first-of-type,
+.st-key-pg_masthead label[data-baseweb="radio"] > div:first-of-type {
+  display: none !important;
+}
+[data-testid="stMain"] .st-key-pg_masthead .stRadio label svg,
+.st-key-pg_masthead .stRadio label svg {
+  display: none !important;
+}
 [data-testid="stMain"] .st-key-pg_masthead label[data-baseweb="radio"],
 .st-key-pg_masthead label[data-baseweb="radio"] {
   margin: 0 !important;
-  padding: 0.35rem 0.85rem !important;
+  padding: 0.4rem 1rem !important;
   border-radius: 999px !important;
   border: 1px solid rgba(255, 255, 255, 0.22) !important;
   background: rgba(255, 255, 255, 0.08) !important;
+  gap: 0 !important;
+  align-items: center !important;
+}
+[data-testid="stMain"] .st-key-pg_masthead .stRadio [data-testid="stMarkdownContainer"],
+.st-key-pg_masthead .stRadio [data-testid="stMarkdownContainer"] {
+  margin: 0 !important;
+  padding: 0 !important;
 }
 [data-testid="stMain"] .st-key-pg_masthead label[data-baseweb="radio"]:has(input:checked),
 .st-key-pg_masthead label[data-baseweb="radio"]:has(input:checked) {
