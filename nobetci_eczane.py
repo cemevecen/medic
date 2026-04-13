@@ -100,6 +100,7 @@ class NobetciEczaneAPI:
     COLLECTAPI_BASE = "https://api.collectapi.com/health"
 
     def __init__(self, api_key: Optional[str] = None, source: str = "collectapi",
+                 eczaneapi_key: Optional[str] = None,
                  rapidapi_endpoint_1: Optional[str] = None, rapidapi_key_1: Optional[str] = None,
                  rapidapi_endpoint_2: Optional[str] = None, rapidapi_key_2: Optional[str] = None,
                  rapidapi_endpoint_3: Optional[str] = None, rapidapi_key_3: Optional[str] = None):
@@ -107,6 +108,7 @@ class NobetciEczaneAPI:
         Args:
             api_key: API anahtarı (CollectAPI için)
             source: Veri kaynağı ("collectapi")
+            eczaneapi_key: EczaneAPI key
             rapidapi_endpoint_1: RapidAPI 1 endpoint URL
             rapidapi_key_1: RapidAPI 1 API key
             rapidapi_endpoint_2: RapidAPI 2 endpoint URL
@@ -114,6 +116,7 @@ class NobetciEczaneAPI:
         """
         self.api_key = api_key
         self.source = source
+        self.eczaneapi_key = eczaneapi_key
         self.rapidapi_endpoint_1 = rapidapi_endpoint_1
         self.rapidapi_key_1 = rapidapi_key_1
         self.rapidapi_endpoint_2 = rapidapi_endpoint_2
@@ -140,7 +143,12 @@ class NobetciEczaneAPI:
             }
         """
         try:
-            # Öncelik sırası: CollectAPI (Çalışıyor!) → RapidAPI 1 → RapidAPI 3 → RapidAPI 2
+            # Öncelik sırası: EczaneAPI (Çalışıyor + koordinatlar!) → CollectAPI → RapidAPI 1 → RapidAPI 3 → RapidAPI 2
+
+            if self.eczaneapi_key:
+                result = self._get_eczaneapi(il, ilce)
+                if result.get("success"):
+                    return result
 
             if self.api_key:
                 result = self._get_collectapi(il, ilce)
@@ -383,11 +391,69 @@ class NobetciEczaneAPI:
         except requests.exceptions.RequestException as e:
             return {"success": False, "error": f"Bağlantı hatası: {str(e)}"}
 
+    def _get_eczaneapi(self, il: str, ilce: Optional[str] = None) -> Dict:
+        """EczaneAPI üzerinden nöbetçi eczaneler (Koordinatlar dahil)"""
+        try:
+            from datetime import date
+
+            url = "https://eczaneapi.com/api/v1/pharmacies/on-duty"
+            params = {"city": il.lower(), "date": str(date.today())}
+            if ilce:
+                params["district"] = ilce.lower()
+
+            headers = {"X-API-Key": self.eczaneapi_key}
+
+            response = self.session.get(url, params=params, headers=headers, timeout=10)
+
+            if response.status_code == 200:
+                data = response.json()
+
+                if data.get("success") and data.get("data"):
+                    # EczaneAPI data bir array, bugünün nöbetçileri first element
+                    today_data = data["data"][0] if isinstance(data["data"], list) else data["data"]
+                    pharmacies_raw = today_data.get("pharmacies", [])
+
+                    pharmacies = []
+                    for item in pharmacies_raw:
+                        loc = item.get("location", {})
+                        pharmacies.append({
+                            "name": item.get("name", ""),
+                            "address": item.get("address", ""),
+                            "phone": item.get("phone", ""),
+                            "city": il,
+                            "district": item.get("district", {}).get("name", ilce or ""),
+                            "loc": f"{loc.get('latitude')},{loc.get('longitude')}" if loc else ""
+                        })
+
+                    return {
+                        "success": len(pharmacies) > 0,
+                        "total": len(pharmacies),
+                        "data": pharmacies,
+                        "source": "EczaneAPI"
+                    }
+                else:
+                    error_msg = data.get("error", "Bilinmeyen API hatası")
+                    return {
+                        "success": False,
+                        "error": f"API: {error_msg}"
+                    }
+            else:
+                return {
+                    "success": False,
+                    "error": f"HTTP {response.status_code}"
+                }
+
+        except requests.exceptions.Timeout:
+            return {"success": False, "error": "EczaneAPI zaman aşımı"}
+        except Exception as e:
+            return {"success": False, "error": f"EczaneAPI hatası: {str(e)}"}
+
 
 # Singleton instance
 _api = None
 
 def init_nobetci_api(api_key: Optional[str] = None, source: str = "collectapi",
+                     eczaneapi_key: Optional[str] = None,
                      rapidapi_endpoint_1: Optional[str] = None, rapidapi_key_1: Optional[str] = None,
                      rapidapi_endpoint_2: Optional[str] = None, rapidapi_key_2: Optional[str] = None,
                      rapidapi_endpoint_3: Optional[str] = None, rapidapi_key_3: Optional[str] = None):
@@ -396,6 +462,7 @@ def init_nobetci_api(api_key: Optional[str] = None, source: str = "collectapi",
     _api = NobetciEczaneAPI(
         api_key=api_key,
         source=source,
+        eczaneapi_key=eczaneapi_key,
         rapidapi_endpoint_1=rapidapi_endpoint_1,
         rapidapi_key_1=rapidapi_key_1,
         rapidapi_endpoint_2=rapidapi_endpoint_2,
@@ -476,9 +543,10 @@ def get_nobetci_eczaneler(il: str, ilce: Optional[str] = None) -> Dict:
           .lower()
     )
 
-    # Session state'den RapidAPI bilgilerini al (varsa)
+    # Session state'den API bilgilerini al (varsa)
     try:
         import streamlit as st
+        eczaneapi_api_key = st.session_state.get("eczaneapi_api_key")
         rapidapi_endpoint_1 = st.session_state.get("rapidapi_endpoint_1")
         rapidapi_key_1 = st.session_state.get("rapidapi_key_1")
         rapidapi_endpoint_2 = st.session_state.get("rapidapi_endpoint_2")
@@ -487,6 +555,7 @@ def get_nobetci_eczaneler(il: str, ilce: Optional[str] = None) -> Dict:
         rapidapi_key_3 = st.session_state.get("rapidapi_key_3")
         collectapi_api_key = st.session_state.get("collectapi_api_key")
     except:
+        eczaneapi_api_key = None
         rapidapi_endpoint_1 = None
         rapidapi_key_1 = None
         rapidapi_endpoint_2 = None
@@ -496,7 +565,7 @@ def get_nobetci_eczaneler(il: str, ilce: Optional[str] = None) -> Dict:
         collectapi_api_key = None
 
     # Eğer session_state bilgileri yoksa config'den yükle
-    if not collectapi_api_key and not rapidapi_endpoint_1:
+    if not eczaneapi_api_key and not collectapi_api_key and not rapidapi_endpoint_1:
         try:
             from pathlib import Path
             import json
@@ -504,6 +573,7 @@ def get_nobetci_eczaneler(il: str, ilce: Optional[str] = None) -> Dict:
             if config_path.exists():
                 with open(config_path, "r") as f:
                     config = json.load(f)
+                    eczaneapi_api_key = config.get("eczaneapi_api_key", "").strip() or None
                     collectapi_api_key = config.get("collectapi_api_key", "").strip() or None
                     rapidapi_endpoint_1 = config.get("rapidapi_endpoint_1", "").strip() or None
                     rapidapi_key_1 = config.get("rapidapi_key_1", "").strip() or None
@@ -515,11 +585,12 @@ def get_nobetci_eczaneler(il: str, ilce: Optional[str] = None) -> Dict:
             pass
 
     # Eğer API key varsa gerçek API'yi dene
-    # Öncelik: CollectAPI > RapidAPI 1 > RapidAPI 3 > RapidAPI 2
+    # Öncelik: EczaneAPI > CollectAPI > RapidAPI 1 > RapidAPI 3 > RapidAPI 2
     if _api is None:
         # İlk kez çağrılıyorsa API'yi başlat
         init_nobetci_api(
             api_key=collectapi_api_key,
+            eczaneapi_key=eczaneapi_api_key,
             rapidapi_endpoint_1=rapidapi_endpoint_1,
             rapidapi_key_1=rapidapi_key_1,
             rapidapi_endpoint_2=rapidapi_endpoint_2,
@@ -529,6 +600,7 @@ def get_nobetci_eczaneler(il: str, ilce: Optional[str] = None) -> Dict:
         )
     else:
         # Mevcut API'ye bilgilerini güncelle
+        _api.eczaneapi_key = eczaneapi_api_key
         _api.api_key = collectapi_api_key
         _api.rapidapi_endpoint_1 = rapidapi_endpoint_1
         _api.rapidapi_key_1 = rapidapi_key_1
