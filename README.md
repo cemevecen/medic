@@ -23,7 +23,7 @@ WikiPharma; ilaç kutusu fotoğrafı, prospektüs PDF’i veya ilaç adı ile **
 
 | Sekme | İçerik |
 |--------|--------|
-| **İlaç Analizi** | Görsel / PDF / metin → `PharmaGuardOrchestrator` ile ajan zinciri, Markdown rapor ve indirilebilir PDF. |
+| **İlaç Analizi** | Üstte **Özellikli ilaçlar**: `ilacrehberi_ilac_listeleri.xlsx` sheet’leri (Masaüstü veya `data/`) alt liste olarak; görsel / PDF / metin → `PharmaGuardOrchestrator`, Markdown rapor ve indirilebilir PDF. |
 | **FDA Arşivi** | OpenFDA + Wikidata tabanlı gerçek kayıt sorgusu; özetler Groq ile Türkçeleştirilir. Onayı olmayan ürünler arşivde görünmeyebilir. |
 | **İlaç Fiyatları** | Birleştirilmiş referans fiyat listesi (`referans_ilac_fiyat.py`, `data/*.xlsx`). Filtrelenmiş tüm satırlar tabloda gösterilir; uzun listelerde kaydırma tablo kutusunun içindedir. |
 | **Fihrist** | Yerel `ilacrehberi_fihrist.xlsx` ile A–Z ilaç listesi; KT/KUB ve ilaç adı bağlantıları Google aramasına gider. Uygulama içi kaynak satırında [referans Google Sheets](https://docs.google.com/spreadsheets/d/13Hd8k4zVylcRSGB9FJpTpFqBUJ7FGnytKxvAV-TIWaY/edit?gid=0#gid=0) ve [ilacrehberi.com fihrist](https://www.ilacrehberi.com/ilac-fihrist/) verilir. |

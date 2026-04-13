@@ -191,6 +191,165 @@ _FIHRIST_TABLE_MAX = 180
 _FIHRIST_REF_GOOGLE_SHEETS = (
     "https://docs.google.com/spreadsheets/d/13Hd8k4zVylcRSGB9FJpTpFqBUJ7FGnytKxvAV-TIWaY/edit?gid=0#gid=0"
 )
+# Reçete / liste XLSX (export_ilacrehberi_recete_listeleri_xlsx.py) — referans eşleme tablosu
+_OZELLIKLI_REF_GOOGLE_SHEETS = (
+    "https://docs.google.com/spreadsheets/d/1GK1cJHpzL6VQwfxlWT2g9jZp-8nq1dmQtREh_RWRzIU/edit?gid=1046254751#gid=1046254751"
+)
+_OZELLIKLI_ILAC_LISTELERI_XLSX = "ilacrehberi_ilac_listeleri.xlsx"
+_OZELLIKLI_SHEET_ORDER = (
+    "Yesil_Receteli",
+    "Kirmizi_Receteli",
+    "Mor_Receteli",
+    "Turuncu_Receteli",
+    "Takibi_Zorunlu",
+    "Recetesiz",
+    "Geri_Cekilen",
+)
+_OZELLIKLI_SHEET_LABELS_TR = {
+    "Yesil_Receteli": "Yeşil reçeteli ilaçlar",
+    "Kirmizi_Receteli": "Kırmızı reçeteli ilaçlar",
+    "Mor_Receteli": "Mor reçeteli ilaçlar",
+    "Turuncu_Receteli": "Turuncu reçeteli ilaçlar",
+    "Takibi_Zorunlu": "Takibi zorunlu reçeteli ilaçlar",
+    "Recetesiz": "Reçetesiz satılan ilaçlar",
+    "Geri_Cekilen": "Geri çekilen ilaçlar",
+}
+_OZELLIKLI_TABLE_MAX = 100
+
+
+def _resolve_ozellikli_ilac_xlsx_path() -> Path | None:
+    for root in (Path(__file__).resolve().parent / "data", Path.home() / "Desktop"):
+        p = root / _OZELLIKLI_ILAC_LISTELERI_XLSX
+        if p.is_file():
+            return p
+    return None
+
+
+@st.cache_data(show_spinner=False)
+def _cached_ozellikli_ilac_listeleri(_cache_bust: int = 2) -> dict | None:
+    """Masaüstü veya data/ altındaki ilacrehberi_ilac_listeleri.xlsx — tüm sheet'ler."""
+    _ = _cache_bust
+    import pandas as pd
+
+    p = _resolve_ozellikli_ilac_xlsx_path()
+    if not p:
+        return None
+    raw = pd.read_excel(p, sheet_name=None, engine="openpyxl")
+    out: dict[str, pd.DataFrame] = {}
+    for name, df in raw.items():
+        if df is None or df.empty:
+            out[str(name)] = df
+            continue
+        df = df.copy()
+        df.columns = [str(c).strip() for c in df.columns]
+        df = df.dropna(how="all").reset_index(drop=True)
+        out[str(name)] = df
+    return out if out else None
+
+
+def _ozellikli_ilac_adi_column(df) -> str | None:
+    """İlaç ürün adı sütunu (Google araması); ETKİN MADDE / firma / KT sütunları değil."""
+    import pandas as pd
+
+    if df is None or df.empty or not len(df.columns):
+        return None
+    for c in df.columns:
+        u = str(c).upper().replace("İ", "I").replace("ı", "I")
+        if u.strip() in ("DETAY_URL", "_UYARI"):
+            continue
+        if "ETKIN" in u and "MADDE" in u:
+            continue
+        if "FIRMA" in u.replace(" ", "") and "ADI" in u:
+            continue
+        if "ILAC" in u:
+            return str(c)
+    cols = list(df.columns)
+    if len(cols) >= 2:
+        u0 = str(cols[0]).upper().replace("İ", "I").replace("/", " ")
+        if "KT" in u0 and "KUB" in u0.replace("_", " "):
+            return str(cols[1])
+    return str(cols[0])
+
+
+def _ozellikli_md_row_cells(row, columns: list, name_col: str | None) -> list[str]:
+    import pandas as pd
+
+    cells: list[str] = []
+    for c in columns:
+        v = row.get(c) if hasattr(row, "get") else row[c]
+        if pd.isna(v):
+            txt = "-"
+        else:
+            txt = str(v).strip()
+        if not txt or txt.casefold() in ("nan", "none"):
+            txt = "-"
+        if name_col and str(c) == str(name_col) and txt != "-":
+            u = _google_search_url(txt)
+            cells.append(f"[{_fihrist_md_link_label(txt)}]({u})")
+        else:
+            cells.append(_fihrist_md_link_label(txt))
+    return cells
+
+
+def _ozellikli_sheet_to_markdown(df, name_col: str | None, max_rows: int) -> str:
+    import pandas as pd
+
+    if df is None or df.empty:
+        return "_Veri yok._"
+    cols = [str(c) for c in df.columns]
+    head = "| " + " | ".join(_fihrist_md_link_label(c) for c in cols) + " |"
+    sep = "| " + " | ".join([":---"] * len(cols)) + " |"
+    lines = [head, sep]
+    sub = df.head(max_rows)
+    for _, r in sub.iterrows():
+        line = "| " + " | ".join(_ozellikli_md_row_cells(r, cols, name_col)) + " |"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+@st.fragment
+def _pg_fragment_ozellikli_ilaclar():
+    st.markdown(
+        '<p class="pg-section">Özellikli ilaçlar</p>',
+        unsafe_allow_html=True,
+    )
+    data = _cached_ozellikli_ilac_listeleri()
+    if not data:
+        st.info(
+            f"`{_OZELLIKLI_ILAC_LISTELERI_XLSX}` bulunamadı. Dosyayı `data/` veya Masaüstüne koyun; "
+            "`scripts/export_ilacrehberi_recete_listeleri_xlsx.py` ile üretebilirsiniz."
+        )
+        st.caption(
+            f"Referans: [Özellikli ilaç listeleri — Google Sheets]({_OZELLIKLI_REF_GOOGLE_SHEETS})"
+        )
+        return
+
+    st.caption(
+        f"Kaynak: yerel **{_OZELLIKLI_ILAC_LISTELERI_XLSX}** (sheet adları alt liste başlıklarıdır). "
+        f"Referans: [Google Sheets]({_OZELLIKLI_REF_GOOGLE_SHEETS}). "
+        "İlaç adı sütunları **Google** aramasına gider (Fihrist ile aynı mantık)."
+    )
+
+    seen = set(data.keys())
+    ordered = [s for s in _OZELLIKLI_SHEET_ORDER if s in data]
+    ordered += sorted(seen.difference(ordered))
+
+    for i, sheet in enumerate(ordered):
+        df = data.get(sheet)
+        label = _OZELLIKLI_SHEET_LABELS_TR.get(sheet, sheet.replace("_", " "))
+        name_col = _ozellikli_ilac_adi_column(df) if df is not None and not df.empty else None
+        ntot = len(df) if df is not None and not df.empty else 0
+        exp_title = f"{label} (`{sheet}`) — {ntot} satır"
+        with st.expander(exp_title, expanded=(i == 0)):
+            if df is None or df.empty:
+                st.caption("Bu sheet boş.")
+                continue
+            md = _ozellikli_sheet_to_markdown(df, name_col, _OZELLIKLI_TABLE_MAX)
+            st.markdown(md)
+            if ntot > _OZELLIKLI_TABLE_MAX:
+                st.caption(
+                    f"İlk **{_OZELLIKLI_TABLE_MAX}** / **{ntot}** satır gösteriliyor; tamamı için XLSX dosyasına bakın."
+                )
 
 
 @st.cache_data(show_spinner=False)
@@ -348,7 +507,8 @@ def _pg_fragment_ilac_fihrist():
 
     st.markdown(
         f"**Kaynaklar:** [İlaç A-Z fihrist — Google Sheets]({_FIHRIST_REF_GOOGLE_SHEETS}) · "
-        "[ilacrehberi.com — fihrist](https://www.ilacrehberi.com/ilac-fihrist/)"
+        "[ilacrehberi.com — fihrist](https://www.ilacrehberi.com/ilac-fihrist/) · "
+        f"[Özellikli ilaç listeleri — Google Sheets]({_OZELLIKLI_REF_GOOGLE_SHEETS})"
     )
 
 
@@ -1666,6 +1826,7 @@ if _pg_nav not in _PG_TAB_LABELS:
 # SEKME 1 — ANALİZ
 # ═════════════════════════════════════════════
 if _pg_nav == "İlaç Analizi":
+    _pg_fragment_ozellikli_ilaclar()
     col_in, col_out = st.columns([1, 1.5], gap="large")
 
     with col_in:
@@ -2653,6 +2814,7 @@ elif _pg_nav == "Hakkında":
         "**Canlı:** [medicalsearch.streamlit.app](https://medicalsearch.streamlit.app/) &nbsp;|&nbsp; "
         "**GitHub:** [cemevecen/medic](https://github.com/cemevecen/medic) &nbsp;|&nbsp; "
         f"**İlaç fihrist (referans):** [Google Sheets]({_FIHRIST_REF_GOOGLE_SHEETS}) &nbsp;|&nbsp; "
+        f"**Özellikli listeler (referans):** [Google Sheets]({_OZELLIKLI_REF_GOOGLE_SHEETS}) &nbsp;|&nbsp; "
         "**Lisans:** MIT &nbsp;|&nbsp; **Uygulama sürümü:** v"
         + str(_pgv_about)
     )
