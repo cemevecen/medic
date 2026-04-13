@@ -197,9 +197,7 @@ _FIHRIST_NAV_KEYS = (
     "X",
     "Y",
     "Z",
-    "Ş",
 )
-_FIHRIST_TR_HIGHLIGHT = frozenset({"Ş"})
 _FIHRIST_TABLE_MAX = 180
 
 
@@ -276,7 +274,7 @@ def _fihrist_first_letter_mask(series, chip: str):
 @st.fragment
 def _pg_fragment_ilac_fihrist():
     st.markdown(
-        '<p class="pg-section">İlaç Fihrist</p>',
+        '<p class="pg-section">Fihrist</p>',
         unsafe_allow_html=True,
     )
     df = _cached_ilacrehberi_fihrist_df()
@@ -297,7 +295,6 @@ def _pg_fragment_ilac_fihrist():
         selection_mode="single",
         key="pg_fihrist_pills",
         label_visibility="collapsed",
-        format_func=lambda k: (f"{k} ·" if k in _FIHRIST_TR_HIGHLIGHT else k),
     )
     chip = str(st.session_state.get("pg_fihrist_pills") or "A").strip() or "A"
     if chip not in _FIHRIST_NAV_KEYS:
@@ -1405,7 +1402,7 @@ hr.pg-hr-slim {
   letter-spacing: 0.12em; opacity: 0.75; user-select: none;
 }
 
-/* İlaç Fihrist */
+/* Fihrist */
 .pg-fihrist-title {
   font-size: clamp(1.05rem, 2.5vw, 1.35rem);
   font-weight: 800;
@@ -1654,7 +1651,7 @@ _PG_TAB_LABELS = (
     "İlaç Analizi",
     "FDA Arşivi",
     "İlaç Fiyatları",
-    "İlaç Fihrist",
+    "Fihrist",
     "Prospektüs Yönetimi",
     "Hakkında",
 )
@@ -2432,7 +2429,7 @@ elif _pg_nav == "İlaç Fiyatları":
 # ═════════════════════════════════════════════
 # SEKME 3b — İLAÇ FİHRİST (yerel XLSX)
 # ═════════════════════════════════════════════
-elif _pg_nav == "İlaç Fihrist":
+elif _pg_nav == "Fihrist":
     _pg_fragment_ilac_fihrist()
 
 # ═════════════════════════════════════════════
