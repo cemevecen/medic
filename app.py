@@ -357,6 +357,10 @@ div[data-testid="stVerticalBlock"] .stTabs [data-baseweb="tab-list"] {
   font-size: clamp(0.85rem, 2vw, 1rem) !important;
   min-height: clamp(2.4rem, 8vw, 2.75rem) !important;
 }
+/* Arşiv'de Ara butonu için özel yükseklik */
+[data-testid="stButton"] button[kind="primary"] {
+  height: 38px !important; min-height: 38px !important;
+}
 .stButton > button[kind="primary"] {
   background: linear-gradient(135deg, #0f766e, #0d9488) !important;
   color: #ffffff !important;
