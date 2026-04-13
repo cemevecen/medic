@@ -1,5 +1,5 @@
 """
-Birleşik ilaç fiyat tabloları: referans GKF (€) xlsx + web liste (₺) xlsx.
+Birleşik ilaç fiyat tabloları: referans GKF (€) xlsx + web liste (₺) xlsx + recete.org haber HTML tabloları.
 Ortak alanlar: ilaç adı, firma, fiyat (farklı para birimleri ayrı sütunlarda).
 Tekrarlayan ilaç adları (normalize edilmiş) tek satırda birleştirilir.
 """
@@ -112,25 +112,9 @@ def _ensure_unique_norm(out: pd.DataFrame) -> pd.DataFrame:
     return out.sort_values("İlaç adı", key=lambda s: s.str.casefold()).reset_index(drop=True)
 
 
-def _merge_firma(ref_f: object, web_f: object) -> str:
-    r = str(ref_f).strip() if pd.notna(ref_f) and str(ref_f).strip().casefold() != "nan" else ""
-    w = str(web_f).strip() if pd.notna(web_f) and str(web_f).strip().casefold() != "nan" else ""
-    if not r:
-        return w
-    if not w:
-        return r
-    if r.casefold() == w.casefold():
-        return r
-    return f"{r} | {w}"
-
-
-@st.cache_data(show_spinner=False)
-def load_birlesik_ilac_fiyat_df() -> Optional[pd.DataFrame]:
-    ref = _read_referans()
-    web = _read_web()
+def _merge_ref_web(ref: Optional[pd.DataFrame], web: Optional[pd.DataFrame]) -> Optional[pd.DataFrame]:
     if ref is None and web is None:
         return None
-
     if ref is None:
         w = web.drop(columns=["_k"], errors="ignore").rename(
             columns={"İlaç adı (web)": "İlaç adı", "Firma (web)": "Firma"}
@@ -143,8 +127,7 @@ def load_birlesik_ilac_fiyat_df() -> Optional[pd.DataFrame]:
                 w[c] = np.nan
         w = w[cols]
         w["Barkod"] = w["Barkod"].replace("", np.nan)
-        return _ensure_unique_norm(w)
-
+        return w
     if web is None:
         r = ref.drop(columns=["_k"]).copy()
         r["Liste fiyatı (₺)"] = np.nan
@@ -152,8 +135,7 @@ def load_birlesik_ilac_fiyat_df() -> Optional[pd.DataFrame]:
         r["Liste tarihi"] = np.nan
         cols = ["İlaç adı", "Firma", "GKF (€)", "Liste fiyatı (₺)", "Barkod", "Liste tarihi"]
         r = r[cols]
-        return _ensure_unique_norm(r)
-
+        return r
     m = pd.merge(
         ref.rename(columns={"İlaç adı": "_ad_ref", "Firma": "_firma_ref"}),
         web.rename(
@@ -183,6 +165,47 @@ def load_birlesik_ilac_fiyat_df() -> Optional[pd.DataFrame]:
     )
     out = out[out["İlaç adı"].str.len() > 0]
     out["Barkod"] = out["Barkod"].replace("", np.nan)
+    return out
+
+
+def _merge_firma(ref_f: object, web_f: object) -> str:
+    r = str(ref_f).strip() if pd.notna(ref_f) and str(ref_f).strip().casefold() != "nan" else ""
+    w = str(web_f).strip() if pd.notna(web_f) and str(web_f).strip().casefold() != "nan" else ""
+    if not r:
+        return w
+    if not w:
+        return r
+    if r.casefold() == w.casefold():
+        return r
+    return f"{r} | {w}"
+
+
+@st.cache_data(show_spinner=False)
+def load_birlesik_ilac_fiyat_df() -> Optional[pd.DataFrame]:
+    from recete_haber import merge_recete_into, read_recete_haber_df
+
+    ref = _read_referans()
+    web = _read_web()
+    recete = read_recete_haber_df()
+
+    base = _merge_ref_web(ref, web)
+    if base is None:
+        if recete is None or recete.empty:
+            return None
+        fr = recete["_firma_recete"].astype(str).str.strip()
+        fr = fr.replace("", np.nan)
+        base = pd.DataFrame(
+            {
+                "İlaç adı": recete["_ad_recete"].astype(str).str.strip(),
+                "Firma": fr,
+                "GKF (€)": np.nan,
+                "Liste fiyatı (₺)": np.nan,
+                "Barkod": np.nan,
+                "Liste tarihi": np.nan,
+            }
+        )
+
+    out = merge_recete_into(base, recete)
     return _ensure_unique_norm(out)
 
 

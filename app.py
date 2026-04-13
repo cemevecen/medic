@@ -1491,8 +1491,8 @@ with tab_its:
         unsafe_allow_html=True,
     )
     st.caption(
-        "Aşağıdaki tablo, repodaki **iki Excel** dosyasından birleştirilir: referans GKF (€) ve web liste fiyatı (₺). "
-        "İlaç adı **yazıma göre normalize** edilerek tekilleştirilir (aynı isim tek satır). ITS canlı API henüz bağlı değildir."
+        "Tablo: **referans** GKF (€) + **web** liste (₺) + isteğe bağlı **recete.org** haber tabloları (sayfa veya "
+        "`data/recete_haber_06102004.html` yedeği). İlaç adı normalize edilerek tek satırda birleştirilir. ITS canlı API yok."
     )
 
     from referans_ilac_fiyat import load_birlesik_ilac_fiyat_df
@@ -1500,13 +1500,14 @@ with tab_its:
     _rf_df = load_birlesik_ilac_fiyat_df()
     if _rf_df is None:
         st.warning(
-            "Fiyat dosyaları bulunamadı. Beklenen yollar: "
-            "`data/referans_bazli_ilac_fiyat_listesi.xlsx` ve `data/ilac_fiyat_web_listesi.xlsx`"
+            "En az bir kaynak gerekir: `data/referans_bazli_ilac_fiyat_listesi.xlsx` ve/veya "
+            "`data/ilac_fiyat_web_listesi.xlsx` ve/veya recete.org için `data/recete_haber_06102004.html` (tarayıcıdan "
+            "kaydedilmiş sayfa) veya erişilebilir URL."
         )
     else:
         st.markdown("### Birleşik ilaç fiyat listesi")
         st.caption(
-            f"**{len(_rf_df)}** tekil kayıt — GKF: EDİT-LST-18 referans listesi; ₺: WEBLISTE (`İLACFİYAT.xlsx` ile aynı yapı)."
+            f"**{len(_rf_df)}** tekil kayıt — GKF: referans Excel; ₺: WEBLISTE; Reçete.org: HTML’deki tablolar (varsa, ek sütunlar)."
         )
         _rf_q = st.text_input(
             "Listede ara (ilaç, firma veya barkod; boş = tümü)",
@@ -1522,12 +1523,18 @@ with tab_its:
             )
             if "Barkod" in _rf_show.columns:
                 _m = _m | _rf_show["Barkod"].astype(str).str.casefold().str.contains(q, na=False)
+            for _rc in ("Reçete.org notları", "Reçete.org fiyat sütunu"):
+                if _rc in _rf_show.columns:
+                    _m = _m | _rf_show[_rc].astype(str).str.casefold().str.contains(q, na=False)
             _rf_show = _rf_show[_m]
         st.caption(f"Gösterilen: **{len(_rf_show)}** satır")
         _col_cfg = {
             "GKF (€)": st.column_config.NumberColumn("GKF (€)", format="%.2f"),
             "Liste fiyatı (₺)": st.column_config.NumberColumn("Liste fiyatı (₺)", format="%.2f"),
+            "Reçete.org fiyat (sayı)": st.column_config.NumberColumn("Reçete.org fiyat (sayı)", format="%.4f"),
             "Barkod": st.column_config.TextColumn("Barkod"),
+            "Reçete.org fiyat sütunu": st.column_config.TextColumn("Reçete.org fiyat sütunu"),
+            "Reçete.org notları": st.column_config.TextColumn("Reçete.org notları", width="large"),
         }
         st.dataframe(
             _rf_show,
@@ -1631,7 +1638,7 @@ with tab_its:
       <strong>ℹ️ İTS (İlaç Takip Sistemi) Hakkında</strong><br><br>
       Sağlık Bakanlığı'nın resmi sistemidir. Türkiye'ye giren her ilaçı üretimden hasta eline kadar takip eder.
       <br><br>
-      <strong>Üstteki birleşik tablo</strong> iki Excel dosyasından yüklenir (GKF € + liste ₺, tekil ilaç adı); <strong>alttaki arama kutusu</strong> canlı ITS yerine örnek/demo veridir. Canlı ITS için API erişimi gerekir.
+      <strong>Üstteki birleşik tablo</strong> Excel dosyaları (GKF € + liste ₺) ve varsa <strong>recete.org</strong> haber HTML tabloları / <code>data/recete_haber_06102004.html</code> yedeğinden yüklenir; tekil ilaç adı. <strong>Alttaki arama kutusu</strong> canlı ITS yerine örnek/demo veridir.
       <br><br>
       <em>Kaynak: <a href="https://its.gov.tr/" target="_blank">its.gov.tr</a></em>
     </div>
