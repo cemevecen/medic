@@ -1122,8 +1122,8 @@ with tab_analyze:
 
             st.markdown("")
 
-            rt1, rt2, rt3, rt4, rt5 = st.tabs(
-                ["📋 Rapor", "🔬 Görsel", " Riskler", " Firma", " Benzer / Muadil"]
+            rt1, rt2, rt3, rt4 = st.tabs(
+                ["📋 Rapor", " Riskler", " Firma", " Benzer / Muadil"]
             )
 
             with rt1:
@@ -1136,75 +1136,76 @@ with tab_analyze:
                                        mime="application/pdf", type="primary",
                                        use_container_width=True)
 
+                # Teknik Detaylar (collapsed by default)
+                with st.expander("🔧 Teknik Detaylar", expanded=False):
+                    v_raw = res.get("vision") or {}
+                    v = _vision_for_display(res)
+                    try:
+                        from agents import vision_output_has_legacy_user_facing_copy
+
+                        if vision_output_has_legacy_user_facing_copy(v_raw):
+                            st.caption(
+                                "Önceki uygulama sürümünden kalan şablon satırları gizlendi. "
+                                "Tam tutarlı sonuç için **Önbelleği Temizle** → **Analizi Başlat**."
+                            )
+                    except Exception:
+                        pass
+                    pv = v.get("pharma_guard_scan_version")
+                    if pv:
+                        st.caption(f"Görsel pipeline sürümü: `{pv}`")
+                    ga_tab = v.get("gorsel_analiz")
+                    if isinstance(ga_tab, dict) and str(ga_tab.get("message") or "").strip():
+                        st.markdown("**Durum özeti**")
+                        st.markdown(str(_sanitize_gorsel_user_message(str(ga_tab.get("message") or ""))))
+                    n_extra = str(v.get("notlar") or "").strip()
+                    k_extra = str(v.get("kaynak") or "").strip()
+                    for label, key in [
+                        ("Ticari Ad", "ticari_ad"),
+                        ("Etken Madde", "etken_madde"),
+                        ("Dozaj", "dozaj"),
+                        ("Form", "form"),
+                        ("Barkod", "barkod"),
+                        ("Üretici", "uretici"),
+                    ]:
+                        val = v.get(key)
+                        if val:
+                            st.markdown(f"**{label}:** {val}")
+                    osk = v.get("okunabilirlik_skoru")
+                    if osk: st.markdown(f"**Okunabilirlik:** {osk}/10")
+                    # PDF'e özgü alanlar
+                    if v.get("endikasyonlar"):
+                        st.markdown(f"**Endikasyonlar:** {v['endikasyonlar']}")
+                    if v.get("prospektus_ozeti"):
+                        st.info(f" **Prospektüs Özeti:** {v['prospektus_ozeti']}")
+                    if v.get("pdf_metin_uzunlugu"):
+                        st.caption(f"PDF metin uzunluğu: {v['pdf_metin_uzunlugu']:,} karakter")
+                    err_v = str(v.get("hata") or "").strip()
+                    if err_v:
+                        st.warning(_sanitize_gorsel_user_message(err_v))
+                    gax = v.get("gorsel_analiz")
+                    if isinstance(gax, dict):
+                        with st.expander("Görsel analiz teknik özeti (JSON)", expanded=False):
+                            st.json(_gorsel_analiz_for_display_json(gax))
+                    bdet = v.get("barkod_detay")
+                    if isinstance(bdet, dict):
+                        with st.expander("Barkod taraması (makine)", expanded=False):
+                            st.json(bdet)
+                        if v.get("barkod_gorsel_okuma"):
+                            st.caption(f"Görsel model barkod okuması: {v['barkod_gorsel_okuma']}")
+                    qdet = v.get("qr_kod_detay")
+                    if isinstance(qdet, dict):
+                        with st.expander("QR kod taraması (makine)", expanded=False):
+                            st.json(qdet)
+                    st.markdown("---")
+                    st.markdown("**RAG eşleşmeleri**")
+                    for i, r in enumerate(res.get("rag_results", []), 1):
+                        k_src = str(r.get("kaynak") or "").strip() or "Kaynak belirtilmedi"
+                        s_src = str(r.get("sayfa") or "").strip() or "—"
+                        met_raw = str(r.get("metin") or "").strip() or "(Metin yok)"
+                        with st.expander(f"{i}. {k_src} · s.{s_src}"):
+                            st.caption(met_raw[:2000])
+
             with rt2:
-                v_raw = res.get("vision") or {}
-                v = _vision_for_display(res)
-                try:
-                    from agents import vision_output_has_legacy_user_facing_copy
-
-                    if vision_output_has_legacy_user_facing_copy(v_raw):
-                        st.caption(
-                            "Önceki uygulama sürümünden kalan şablon satırları gizlendi. "
-                            "Tam tutarlı sonuç için **Önbelleği Temizle** → **Analizi Başlat**."
-                        )
-                except Exception:
-                    pass
-                pv = v.get("pharma_guard_scan_version")
-                if pv:
-                    st.caption(f"Görsel pipeline sürümü: `{pv}`")
-                ga_tab = v.get("gorsel_analiz")
-                if isinstance(ga_tab, dict) and str(ga_tab.get("message") or "").strip():
-                    st.markdown("**Durum özeti**")
-                    st.markdown(str(_sanitize_gorsel_user_message(str(ga_tab.get("message") or ""))))
-                n_extra = str(v.get("notlar") or "").strip()
-                k_extra = str(v.get("kaynak") or "").strip()
-                for label, key in [
-                    ("Ticari Ad", "ticari_ad"),
-                    ("Etken Madde", "etken_madde"),
-                    ("Dozaj", "dozaj"),
-                    ("Form", "form"),
-                    ("Barkod", "barkod"),
-                    ("Üretici", "uretici"),
-                ]:
-                    val = v.get(key)
-                    if val:
-                        st.markdown(f"**{label}:** {val}")
-                osk = v.get("okunabilirlik_skoru")
-                if osk: st.markdown(f"**Okunabilirlik:** {osk}/10")
-                # PDF'e özgü alanlar
-                if v.get("endikasyonlar"):
-                    st.markdown(f"**Endikasyonlar:** {v['endikasyonlar']}")
-                if v.get("prospektus_ozeti"):
-                    st.info(f" **Prospektüs Özeti:** {v['prospektus_ozeti']}")
-                if v.get("pdf_metin_uzunlugu"):
-                    st.caption(f"PDF metin uzunluğu: {v['pdf_metin_uzunlugu']:,} karakter")
-                err_v = str(v.get("hata") or "").strip()
-                if err_v:
-                    st.warning(_sanitize_gorsel_user_message(err_v))
-                gax = v.get("gorsel_analiz")
-                if isinstance(gax, dict):
-                    with st.expander("Görsel analiz teknik özeti (JSON)", expanded=False):
-                        st.json(_gorsel_analiz_for_display_json(gax))
-                bdet = v.get("barkod_detay")
-                if isinstance(bdet, dict):
-                    with st.expander("Barkod taraması (makine)", expanded=False):
-                        st.json(bdet)
-                    if v.get("barkod_gorsel_okuma"):
-                        st.caption(f"Görsel model barkod okuması: {v['barkod_gorsel_okuma']}")
-                qdet = v.get("qr_kod_detay")
-                if isinstance(qdet, dict):
-                    with st.expander("QR kod taraması (makine)", expanded=False):
-                        st.json(qdet)
-                st.markdown("---")
-                st.markdown("**RAG eşleşmeleri**")
-                for i, r in enumerate(res.get("rag_results", []), 1):
-                    k_src = str(r.get("kaynak") or "").strip() or "Kaynak belirtilmedi"
-                    s_src = str(r.get("sayfa") or "").strip() or "—"
-                    met_raw = str(r.get("metin") or "").strip() or "(Metin yok)"
-                    with st.expander(f"{i}. {k_src} · s.{s_src}"):
-                        st.caption(met_raw[:2000])
-
-            with rt3:
                 s = res.get("safety", {})
                 if "hata" in s:
                     st.error(s["hata"])
