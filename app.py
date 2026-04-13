@@ -1538,8 +1538,7 @@ with tab_fda:
         drug_search = st.text_input(
             "İlaç adını girin",
             placeholder="örn: Augmentin, Parol, Aspirin, Dikloron…",
-            key="drug_search_input",
-            help="Ticari ad veya etken madde adını yazın"
+            key="drug_search_input"
         )
 
     with col2:
