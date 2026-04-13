@@ -140,7 +140,12 @@ class NobetciEczaneAPI:
             }
         """
         try:
-            # Öncelik sırası: RapidAPI 1 (Çalışıyor!) → RapidAPI 3 → RapidAPI 2 → CollectAPI
+            # Öncelik sırası: CollectAPI (Çalışıyor!) → RapidAPI 1 → RapidAPI 3 → RapidAPI 2
+
+            if self.api_key:
+                result = self._get_collectapi(il, ilce)
+                if result.get("success"):
+                    return result
 
             if self.rapidapi_endpoint_1 and self.rapidapi_key_1:
                 result = self._get_rapidapi_1(il, ilce)
@@ -157,13 +162,10 @@ class NobetciEczaneAPI:
                 if result.get("success"):
                     return result
 
-            if self.source == "collectapi":
-                return self._get_collectapi(il, ilce)
-            else:
-                return {
-                    "success": False,
-                    "error": f"Bilinmeyen kaynak: {self.source}"
-                }
+            return {
+                "success": False,
+                "error": "Tüm API'ler başarısız oldu"
+            }
         except Exception as e:
             return {
                 "success": False,
@@ -493,8 +495,27 @@ def get_nobetci_eczaneler(il: str, ilce: Optional[str] = None) -> Dict:
         rapidapi_key_3 = None
         collectapi_api_key = None
 
+    # Eğer session_state bilgileri yoksa config'den yükle
+    if not collectapi_api_key and not rapidapi_endpoint_1:
+        try:
+            from pathlib import Path
+            import json
+            config_path = Path(__file__).parent / "config_api.json"
+            if config_path.exists():
+                with open(config_path, "r") as f:
+                    config = json.load(f)
+                    collectapi_api_key = config.get("collectapi_api_key", "").strip() or None
+                    rapidapi_endpoint_1 = config.get("rapidapi_endpoint_1", "").strip() or None
+                    rapidapi_key_1 = config.get("rapidapi_key_1", "").strip() or None
+                    rapidapi_endpoint_2 = config.get("rapidapi_endpoint_2", "").strip() or None
+                    rapidapi_key_2 = config.get("rapidapi_key_2", "").strip() or None
+                    rapidapi_endpoint_3 = config.get("rapidapi_endpoint_3", "").strip() or None
+                    rapidapi_key_3 = config.get("rapidapi_key_3", "").strip() or None
+        except:
+            pass
+
     # Eğer API key varsa gerçek API'yi dene
-    # Öncelik: RapidAPI 1 > RapidAPI 3 > RapidAPI 2 > CollectAPI
+    # Öncelik: CollectAPI > RapidAPI 1 > RapidAPI 3 > RapidAPI 2
     if _api is None:
         # İlk kez çağrılıyorsa API'yi başlat
         init_nobetci_api(
@@ -507,14 +528,14 @@ def get_nobetci_eczaneler(il: str, ilce: Optional[str] = None) -> Dict:
             rapidapi_key_3=rapidapi_key_3
         )
     else:
-        # Mevcut API'ye RapidAPI bilgilerini güncelle
+        # Mevcut API'ye bilgilerini güncelle
+        _api.api_key = collectapi_api_key
         _api.rapidapi_endpoint_1 = rapidapi_endpoint_1
         _api.rapidapi_key_1 = rapidapi_key_1
         _api.rapidapi_endpoint_2 = rapidapi_endpoint_2
         _api.rapidapi_key_2 = rapidapi_key_2
         _api.rapidapi_endpoint_3 = rapidapi_endpoint_3
         _api.rapidapi_key_3 = rapidapi_key_3
-        _api.api_key = collectapi_api_key
 
     if _api is not None and (
         (_api.rapidapi_endpoint_1 and _api.rapidapi_key_1) or

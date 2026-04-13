@@ -18,6 +18,9 @@ rapidapi_endpoint_1 = config.get("rapidapi_endpoint_1", "").strip()
 rapidapi_key_1 = config.get("rapidapi_key_1", "").strip()
 rapidapi_endpoint_2 = config.get("rapidapi_endpoint_2", "").strip()
 rapidapi_key_2 = config.get("rapidapi_key_2", "").strip()
+rapidapi_endpoint_3 = config.get("rapidapi_endpoint_3", "").strip()
+rapidapi_key_3 = config.get("rapidapi_key_3", "").strip()
+collectapi_key = config.get("collectapi_api_key", "").strip()
 
 print("=" * 60)
 print("🧪 API TEST")
@@ -95,10 +98,13 @@ try:
 
     # API'yi init et
     init_nobetci_api(
+        api_key=collectapi_key,
         rapidapi_endpoint_1=rapidapi_endpoint_1,
         rapidapi_key_1=rapidapi_key_1,
         rapidapi_endpoint_2=rapidapi_endpoint_2,
         rapidapi_key_2=rapidapi_key_2,
+        rapidapi_endpoint_3=rapidapi_endpoint_3,
+        rapidapi_key_3=rapidapi_key_3,
     )
 
     # Test 1: Ankara
