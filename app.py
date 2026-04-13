@@ -37,15 +37,28 @@ load_api_config()
 
 
 def _dataframe_noneish_to_dash(df):
-    """Metin hücrelerindeki 'none' / 'nan' (büyük-küçük harf duyarsız) gösterimini '-' yapar."""
+    """Eksik değerler ile metin olarak 'None' / 'nan' vb. görünen tüm hücreleri '-' yapar (Streamlit tablo)."""
     import pandas as pd
 
     out = df.copy()
+    bad_tokens = frozenset(
+        ("none", "nan", "<na>", "<nat>", "nat", "null", "undefined")
+    )
     for c in out.columns:
         s = out[c]
-        if pd.api.types.is_object_dtype(s) or getattr(s.dtype, "name", "") == "string":
+        mask = pd.isna(s)
+        try:
             t = s.astype(str).str.strip()
-            mask = t.str.casefold().isin(("none", "nan")) | t.eq("<NA>")
+            mask = mask | t.str.casefold().isin(bad_tokens)
+        except (TypeError, ValueError):
+            pass
+        if not mask.any():
+            continue
+        if pd.api.types.is_numeric_dtype(s) and not isinstance(s.dtype, pd.CategoricalDtype):
+            v = s.astype(object)
+            v.loc[mask] = "-"
+            out[c] = v
+        else:
             out.loc[mask, c] = "-"
     return out
 
