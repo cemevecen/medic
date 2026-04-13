@@ -36,6 +36,20 @@ def load_api_config():
 load_api_config()
 
 
+def _dataframe_noneish_to_dash(df):
+    """Metin hücrelerindeki 'none' / 'nan' (büyük-küçük harf duyarsız) gösterimini '-' yapar."""
+    import pandas as pd
+
+    out = df.copy()
+    for c in out.columns:
+        s = out[c]
+        if pd.api.types.is_object_dtype(s) or getattr(s.dtype, "name", "") == "string":
+            t = s.astype(str).str.strip()
+            mask = t.str.casefold().isin(("none", "nan")) | t.eq("<NA>")
+            out.loc[mask, c] = "-"
+    return out
+
+
 def _eczaneapi_key_optional() -> str:
     k = str(os.environ.get("ECZANEAPI_API_KEY") or os.environ.get("eczaneapi_api_key") or "").strip()
     if k:
@@ -1524,6 +1538,7 @@ with tab_its:
             ],
             errors="ignore",
         )
+        _rf_show = _dataframe_noneish_to_dash(_rf_show)
         _col_cfg_all = {
             "Liste fiyatı (₺)": st.column_config.NumberColumn("Liste fiyatı (₺)", format="%.2f"),
             "Barkod": st.column_config.TextColumn("Barkod"),
