@@ -347,7 +347,7 @@ def fetch_drug_from_openfda(drug_name: str) -> Optional[Dict[str, Any]]:
             "kaynak": "OpenFDA (FDA)",
         }
 
-        logger.info(f"✓ OpenFDA'dan bulundu: {brand_name}")
+        logger.info(f"OpenFDA'dan bulundu: {brand_name}")
         return drug_data
 
     except requests.exceptions.Timeout:
@@ -393,7 +393,7 @@ def _translate_to_turkish(text: str) -> str:
 
         translated = (response.choices[0].message.content or "").strip()
         if translated:
-            logger.info(f"✓ Çeviri tamamlandı: {text[:50]}... → {translated[:50]}...")
+            logger.info(f"Çeviri tamamlandı: {text[:50]}... -> {translated[:50]}...")
             return translated
         else:
             logger.warning(f"Çeviri boş sonuç döndü: {text[:50]}")
@@ -434,7 +434,7 @@ def _translate_drug_data(drug_data: Dict[str, Any]) -> Dict[str, Any]:
             original = translated[field]
             translated[field] = _translate_to_turkish(original)
 
-    logger.info(f"✓ İlaç verisi Türkçeye çevrildi: {drug_data.get('ticari_ad')}")
+    logger.info(f"İlaç verisi Türkçeye çevrildi: {drug_data.get('ticari_ad')}")
     return translated
 
 
@@ -457,13 +457,13 @@ def fetch_drug_info(drug_name: str) -> Optional[Dict[str, Any]]:
     # Wikidata'dan dene (Türkçe ve uluslararası kaynaklar)
     result = fetch_drug_from_wikidata(drug_name)
     if result and result.get("ticari_ad"):
-        logger.info(f"✓ Wikidata'dan bulundu: {result['ticari_ad']}")
+        logger.info(f"Wikidata'dan bulundu: {result['ticari_ad']}")
         return _translate_drug_data(result)
 
     # OpenFDA'dan dene (ABD FDA veritabanı)
     result = fetch_drug_from_openfda(drug_name)
     if result and result.get("ticari_ad"):
-        logger.info(f"✓ OpenFDA'dan bulundu: {result['ticari_ad']}")
+        logger.info(f"OpenFDA'dan bulundu: {result['ticari_ad']}")
         return _translate_drug_data(result)
 
     # Türkçe ilaç adı varyasyonu varsa, canonical form ile yeniden dene
@@ -472,10 +472,10 @@ def fetch_drug_info(drug_name: str) -> Optional[Dict[str, Any]]:
         logger.info(f"Canonical form ile yeniden aranıyor: {clean_name}")
         result = fetch_drug_from_openfda(clean_name)
         if result and result.get("ticari_ad"):
-            logger.info(f"✓ OpenFDA'dan canonical form ile bulundu: {result['ticari_ad']}")
+            logger.info(f"OpenFDA'dan canonical form ile bulundu: {result['ticari_ad']}")
             return _translate_drug_data(result)
 
-    logger.warning(f"✗ Gerçek veri bulunamadı: {drug_name}")
+    logger.warning(f"Gerçek veri bulunamadı: {drug_name}")
     return None
 
 

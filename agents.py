@@ -1127,9 +1127,9 @@ class RAGSpecialistAgent:
                 for chunk in chunks:
                     chunk.metadata["source_file"] = pdf_path.name
                 all_docs.extend(chunks)
-                print(f"  ✓ {pdf_path.name} — {len(chunks)} parça")
+                print(f"  OK {pdf_path.name} — {len(chunks)} parça")
             except Exception as e:
-                print(f"  ✗ {pdf_path.name}: {e}")
+                print(f"  X {pdf_path.name}: {e}")
 
         if all_docs:
             self.CHROMA_DIR.mkdir(parents=True, exist_ok=True)
@@ -1610,10 +1610,10 @@ class FactChecker:
             return {
                 "uyusmazlik": True,
                 "sorunlar": issues,
-                "mesaj": "⚠️ VERİ UYUŞMAZLIĞI: Fact-Checker tutarsızlık tespit etti!",
+                "mesaj": "VERİ UYUŞMAZLIĞI: Fact-Checker tutarsızlık tespit etti!",
                 "corpus_bos": False,
             }
-        return {"uyusmazlik": False, "sorunlar": [], "mesaj": "✅ Fact-Check geçti.", "corpus_bos": False}
+        return {"uyusmazlik": False, "sorunlar": [], "mesaj": "Fact-Check geçti.", "corpus_bos": False}
 
 
 # ---------------------------------------------------------------------------
@@ -1636,7 +1636,7 @@ class PharmaGuardOrchestrator:
         self.corporate_agent = CorporateAnalystAgent()
         self.synthesizer = ReportSynthesizerAgent()
         self.fact_checker = FactChecker()
-        print("[Orchestrator] Tüm ajanlar hazır. ✓")
+        print("[Orchestrator] Tüm ajanlar hazır.")
 
     def run(
         self,
@@ -1693,13 +1693,13 @@ class PharmaGuardOrchestrator:
             _progress(1, f" Test veri kullanılıyor: {test_vision_data.get('ticari_ad', 'Bilinmiyor')}")
             vision_data = dict(test_vision_data)
         elif pdf_bytes is not None:
-            _progress(1, f"📄 PDF Scanner: '{pdf_filename}' prospektüsü analiz ediliyor...")
+            _progress(1, f"PDF Scanner: '{pdf_filename}' prospektüsü analiz ediliyor...")
             vision_data = self.vision_agent.scan_pdf(pdf_bytes, pdf_filename)
         elif image is not None:
-            _progress(1, "👁️ Vision Scanner: Görsel analiz ediliyor...")
+            _progress(1, "Vision Scanner: Görsel analiz ediliyor...")
             vision_data = vision_dict_for_ui(self.vision_agent.scan(image))
         else:
-            _progress(1, "✏️ Metin girişi işleniyor...")
+            _progress(1, "Metin girişi işleniyor...")
             vision_data = vision_dict_for_ui(self.vision_agent.scan_text_input(drug_name_text or ""))
         if pdf_bytes is not None:
             vision_data = vision_dict_for_ui(vision_data)
@@ -1718,12 +1718,12 @@ class PharmaGuardOrchestrator:
         # Okunabilirlik / PDF hata kontrolü
         score = vision_data.get("okunabilirlik_skoru", 10)
         if isinstance(score, (int, float)) and score < 5:
-            _progress(1, "⚠️ Fotoğraf kalitesi yetersiz! Lütfen daha aydınlık bir ortamda çekin.")
+            _progress(1, "Fotoğraf kalitesi yetersiz! Lütfen daha aydınlık bir ortamda çekin.")
         if "hata" in vision_data and pdf_bytes is not None:
-            _progress(1, f"⚠️ PDF hatası: {vision_data['hata']}")
+            _progress(1, f"PDF hatası: {vision_data['hata']}")
 
         # ADIM 2: RAG (embedding + Chroma ilk kez burada yüklenir; “Ajanlar başlatılıyor” adımı kısalır)
-        _progress(2, "📚 RAG Specialist: veritabanı hazırlanıyor / taranıyor…")
+        _progress(2, "RAG Specialist: veritabanı hazırlanıyor / taranıyor…")
         ticari_ad = _vision_field_str(vision_data, "ticari_ad", alt=drug_name_text or "")
         etken = _vision_field_str(vision_data, "etken_madde")
         bd = vision_data.get("barkod_detay") or {}
@@ -1739,12 +1739,12 @@ class PharmaGuardOrchestrator:
         results["rag_results"] = rag_results
 
         # ADIM 3: Fact-Check
-        _progress(3, "🔍 Fact-Checker: Veri tutarlılığı kontrol ediliyor...")
+        _progress(3, "Fact-Checker: Veri tutarlılığı kontrol ediliyor...")
         fact_check = self.fact_checker.check(vision_data, rag_results)
         results["fact_check"] = fact_check
 
         # ADIM 4+5: Safety Auditor ve Corporate Analyst — paralel çalıştır
-        _progress(4, "🛡️ Safety Auditor + 🏭 Corporate Analyst: Paralel analiz başladı...")
+        _progress(4, "Safety Auditor + Corporate Analyst: Paralel analiz başladı...")
         manufacturer = vision_data.get("uretici")
 
         with ThreadPoolExecutor(max_workers=2) as pool:
@@ -1755,10 +1755,10 @@ class PharmaGuardOrchestrator:
 
         results["safety"]    = safety_data
         results["corporate"] = corporate_data
-        _progress(5, "✅ Safety + Corporate tamamlandı.")
+        _progress(5, "Safety + Corporate tamamlandı.")
 
         # ADIM 6: Rapor Sentezi
-        _progress(6, "📝 Report Synthesizer: Nihai Türkçe rapor hazırlanıyor...")
+        _progress(6, "Report Synthesizer: Nihai Türkçe rapor hazırlanıyor...")
         kimlik: Dict[str, Any] = {}
         if vision_data.get("barkod_detay"):
             kimlik["barkod"] = vision_data["barkod_detay"]
@@ -1792,7 +1792,7 @@ class PharmaGuardOrchestrator:
         else:
             if avg_confidence < 8:
                 warning = (
-                    f"\n\n> ⚠️ **DİKKAT:** Ortalama güven puanı **{avg_confidence:.1f}/10**. "
+                    f"\n\n> **DİKKAT:** Ortalama güven puanı **{avg_confidence:.1f}/10**. "
                     "Bilgiler %100 doğrulanamadı. Lütfen bir sağlık uzmanına danışın.\n\n"
                 )
                 report_text = warning + report_text
@@ -1801,7 +1801,7 @@ class PharmaGuardOrchestrator:
         if fact_check["uyusmazlik"]:
             block = (
                 "\n\n---\n"
-                "## ⛔ VERİ UYUŞMAZLIĞI ALARI\n"
+                "## VERİ UYUŞMAZLIĞI ALARI\n"
                 + "\n".join(f"- {s}" for s in fact_check["sorunlar"])
                 + "\n\n**Bu rapor bloklanmıştır. Bir eczacı veya hekime danışın.**\n---\n"
             )
@@ -1811,5 +1811,5 @@ class PharmaGuardOrchestrator:
         results["avg_confidence"] = avg_confidence
         results["alarm"] = safety_data.get("alarm_seviyesi", "BİLİNMİYOR")
 
-        _progress(7, "✅ Analiz tamamlandı!")
+        _progress(7, "Analiz tamamlandı.")
         return results

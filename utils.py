@@ -102,7 +102,7 @@ def _find_unicode_ttf() -> tuple:
         reg = os.path.join(mpl_dir, "DejaVuSans.ttf")
         bold = os.path.join(mpl_dir, "DejaVuSans-Bold.ttf")
         if os.path.exists(reg) and os.path.exists(bold):
-            print(f"[utils] ✓ matplotlib DejaVuSans bulundu (EN YÜKSEK ÖNCELİK)")
+            print("[utils] matplotlib DejaVuSans bulundu (EN YÜKSEK ÖNCELİK)")
             return reg, bold
     except Exception as e:
         print(f"[utils] matplotlib font kontrolü: {e}")
@@ -111,7 +111,7 @@ def _find_unicode_ttf() -> tuple:
     for reg, bold in candidates:
         if os.path.exists(reg):
             bold_path = bold if os.path.exists(bold) else reg
-            print(f"[utils] ✓ Font bulundu: {os.path.basename(reg)}")
+            print(f"[utils] Font bulundu: {os.path.basename(reg)}")
             return reg, bold_path
 
     # 3. macOS — /Library/Fonts/ dizininde Unicode font ara
@@ -131,7 +131,7 @@ def _find_unicode_ttf() -> tuple:
                 # Bold variant ara
                 bold_names = [name + "bold" for name in font_names] + font_names
                 bold_found = _search_fonts_in_directory(library_fonts_dir, bold_names)
-                print(f"[utils] ✓ macOS font bulundu: {os.path.basename(found)}")
+                print(f"[utils] macOS font bulundu: {os.path.basename(found)}")
                 return found, bold_found if bold_found else found
 
     # 4. macOS — /System/Library/Fonts/ dizininde ara
@@ -141,7 +141,7 @@ def _find_unicode_ttf() -> tuple:
         for font_names in [["times"], ["courier"], ["helvetica"]]:
             found = _search_fonts_in_directory(system_fonts_dir, font_names)
             if found:
-                print(f"[utils] ✓ Sistem font bulundu: {os.path.basename(found)}")
+                print(f"[utils] Sistem font bulundu: {os.path.basename(found)}")
                 return found, found
 
     return None, None
@@ -160,7 +160,7 @@ def _register_unicode_fonts() -> None:
 
     # Adım 2: Fallback path'ler (Streamlit Cloud Ubuntu'da daima vardır)
     if reg_path is None:
-        print("[utils] ⚠️  Sistem font'u bulunamadı, fallback path'lere bakılıyor...")
+        print("[utils] UYARI: Sistem font'u bulunamadı, fallback path'lere bakılıyor...")
         fallback_paths = [
             "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
@@ -177,24 +177,24 @@ def _register_unicode_fonts() -> None:
 
     # Adım 3: Font registration
     if reg_path is None:
-        print("[utils] ❌ Font bulunamadı! Helvetica kullanılacak (Türkçe karakterler ■ olarak görünecek).")
+        print("[utils] Font bulunamadı! Helvetica kullanılacak (Türkçe karakterler kutu olarak görünebilir).")
         print("[utils] Çözüm: DejaVuSans, Arial, Courier New vb. Unicode font yükleyin.")
         return
 
     try:
-        print(f"[utils] 📝 Font kayıt ediliyor: {reg_path}")
+        print(f"[utils] Font kayıt ediliyor: {reg_path}")
         if "PGUnicode" not in pdfmetrics.getRegisteredFontNames():
             pdfmetrics.registerFont(TTFont("PGUnicode", reg_path))
             pdfmetrics.registerFont(TTFont("PGUnicodeBold", bold_path))
             _FONT_REGULAR = "PGUnicode"
             _FONT_BOLD = "PGUnicodeBold"
-            print(f"[utils] ✅ Font başarıyla kayıt edildi: {os.path.basename(reg_path)}")
+            print(f"[utils] Font kayıt edildi: {os.path.basename(reg_path)}")
         else:
             _FONT_REGULAR = "PGUnicode"
             _FONT_BOLD = "PGUnicodeBold"
             print(f"[utils] ℹ️  Font zaten register edilmiş: PGUnicode")
     except Exception as e:
-        print(f"[utils] ❌ Font kayıt hatası: {e}")
+        print(f"[utils] Font kayıt hatası: {e}")
         print(f"[utils] Font dosyası: {reg_path}")
         print(f"[utils] Helvetica fallback kullanılacak.")
 
@@ -528,7 +528,7 @@ def generate_pdf_report(
 
     # Meta bilgi tablosu
     alarm_color = ALARM_COLOR_MAP.get(alarm_level, COLOR_PRIMARY)
-    alarm_display = f"● {alarm_level}" if alarm_level in ALARM_COLOR_MAP else alarm_level
+    alarm_display = alarm_level
 
     meta_data = [
         ["İlaç Adı:", drug_name or "Bilinmiyor"],
@@ -683,10 +683,10 @@ def list_corpus_pdfs(corpus_dir: str = "data/corpus") -> list:
 # ---------------------------------------------------------------------------
 
 ALARM_EMOJI = {
-    "KIRMIZI": "🔴",
-    "SARI": "🟡",
-    "YEŞİL": "🟢",
-    "BİLİNMİYOR": "⚪",
+    "KIRMIZI": "[K]",
+    "SARI": "[S]",
+    "YEŞİL": "[Y]",
+    "BİLİNMİYOR": "[?]",
 }
 
 ALARM_MESSAGE = {

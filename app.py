@@ -987,7 +987,7 @@ st.markdown("""
 # ANA SEKMELER
 # ─────────────────────────────────────────────
 tab_analyze, tab_fda, tab_its, tab_corpus, tab_about = st.tabs(
-    ["🔬 İlaç Analizi", "🔍 FDA Arşivi", "💊 İlaç Fiyatları", "📄 Prospektüs Yönetimi", "ℹ️ Hakkında"]
+    ["İlaç Analizi", "FDA Arşivi", "İlaç Fiyatları", "Prospektüs Yönetimi", "Hakkında"]
 )
 
 # ═════════════════════════════════════════════
@@ -998,7 +998,7 @@ with tab_analyze:
 
     with col_in:
         st.markdown(
-            '<p class="pg-section"><span class="pg-section-icon">📥</span>Giriş yöntemi</p>',
+            '<p class="pg-section">Giriş yöntemi</p>',
             unsafe_allow_html=True,
         )
         method = st.radio(
@@ -1061,8 +1061,7 @@ with tab_analyze:
 
         st.markdown("---")
         st.markdown(
-            '<p class="pg-section" style="margin-bottom:0.35rem"><span class="pg-section-icon">🏪</span>'
-            "Nöbetçi eczaneler</p>",
+            '<p class="pg-section" style="margin-bottom:0.35rem">Nöbetçi eczaneler</p>',
             unsafe_allow_html=True,
         )
 
@@ -1132,7 +1131,7 @@ with tab_analyze:
 
     with col_out:
         st.markdown(
-            '<p class="pg-section"><span class="pg-section-icon">📊</span>Analiz sonuçları</p>',
+            '<p class="pg-section">Analiz sonuçları</p>',
             unsafe_allow_html=True,
         )
 
@@ -1187,7 +1186,7 @@ with tab_analyze:
                     similar_drugs_bundle=result.get("similar_drugs"),
                 )
             except Exception as e:
-                stat_ph.error(f"❌ Hata: {e}")
+                stat_ph.error(f"Hata: {e}")
                 st.exception(e)
 
             prog_ph.empty()
@@ -1210,11 +1209,13 @@ with tab_analyze:
                 st.rerun()
             res = st.session_state.analysis_result
             alarm = res.get("alarm", "BİLİNMİYOR")
-            emoji = ALARM_EMOJI.get(alarm, "⚪")
-            msg   = ALARM_MESSAGE.get(alarm, "")
-            css   = {"KIRMIZI":"alarm-red","SARI":"alarm-yellow","YEŞİL":"alarm-green"}.get(alarm,"alarm-unknown")
+            mark = ALARM_EMOJI.get(alarm, "[?]")
+            msg = ALARM_MESSAGE.get(alarm, "")
+            css = {"KIRMIZI": "alarm-red", "SARI": "alarm-yellow", "YEŞİL": "alarm-green"}.get(
+                alarm, "alarm-unknown"
+            )
 
-            st.markdown(f'<div class="{css}"><b>{emoji} {alarm}</b> — {msg}</div>',
+            st.markdown(f'<div class="{css}"><b>{mark} {alarm}</b> — {msg}</div>',
                         unsafe_allow_html=True)
             st.markdown("")
 
@@ -1351,21 +1352,21 @@ with tab_analyze:
             st.markdown("")
 
             rt1, rt2, rt3, rt4 = st.tabs(
-                ["📋 Rapor", " Riskler", " Firma", " Benzer / Muadil"]
+                ["Rapor", " Riskler", " Firma", " Benzer / Muadil"]
             )
 
             with rt1:
                 st.markdown(res.get("report", "Rapor oluşturulamadı."))
                 if "report_pdf" in st.session_state:
                     dn = (res["vision"].get("ticari_ad") or drug_name_input or "ilac")
-                    st.download_button("📥 PDF Raporu İndir",
+                    st.download_button("PDF Raporu İndir",
                                        data=st.session_state.report_pdf,
                                        file_name=f"pharma_guard_{dn.replace(' ','_')}.pdf",
                                        mime="application/pdf", type="primary",
                                        use_container_width=True)
 
                 # Teknik Detaylar (collapsed by default)
-                with st.expander("🔧 Teknik Detaylar", expanded=False):
+                with st.expander("Teknik Detaylar", expanded=False):
                     v_raw = res.get("vision") or {}
                     v = _vision_for_display(res)
                     try:
@@ -1439,16 +1440,19 @@ with tab_analyze:
                     st.error(s["hata"])
                 elif s:
                     alv = s.get("alarm_seviyesi","BİLİNMİYOR")
-                    st.markdown(f"**Alarm:** {ALARM_EMOJI.get(alv,'⚪')} {alv}")
+                    st.markdown(f"**Alarm:** {ALARM_EMOJI.get(alv, '[?]')} {alv}")
                     st.markdown(f"**Gerekçe:** {s.get('alarm_gerekce','—')}")
                     st.markdown(f"**Güven:** {s.get('guven_puani','?')}/10")
                     for tur, liste in (s.get("yan_etkiler") or {}).items():
                         if liste:
                             st.markdown(f"**Yan etkiler — {tur}:**")
                             for it in liste: st.markdown(f"  - {it}")
-                    for it in (s.get("etkilesimler") or []):   st.markdown(f"⚡ {it}")
-                    for it in (s.get("kontrendikasyonlar") or []): st.markdown(f" {it}")
-                    for it in (s.get("ozel_uyarilar") or []):  st.markdown(f" {it}")
+                    for it in (s.get("etkilesimler") or []):
+                        st.markdown(f"- {it}")
+                    for it in (s.get("kontrendikasyonlar") or []):
+                        st.markdown(f"- {it}")
+                    for it in (s.get("ozel_uyarilar") or []):
+                        st.markdown(f"- {it}")
 
             with rt4:
                 c = res.get("corporate", {})
@@ -1514,7 +1518,7 @@ with tab_analyze:
 # ═════════════════════════════════════════════
 with tab_its:
     st.markdown(
-        '<p class="pg-section"><span class="pg-section-icon">💊</span>İlaç Bilgileri & Fiyatları</p>',
+        '<p class="pg-section">İlaç Bilgileri & Fiyatları</p>',
         unsafe_allow_html=True,
     )
 
@@ -1579,7 +1583,7 @@ with tab_corpus:
         st.markdown("#### Prospektüs Ekle")
         ups = st.file_uploader("PDF yükle (çoklu seçim)", type=["pdf"],
                                accept_multiple_files=True, key="corpus_uploader")
-        if st.button("📂 Kaydet ve İndeksi Güncelle", disabled=not ups):
+        if st.button("Kaydet ve İndeksi Güncelle", disabled=not ups):
             saved = [save_uploaded_pdf(f) for f in ups]
             st.success(f" {len(saved)} dosya kaydedildi.")
             if "orchestrator" in st.session_state:
@@ -1613,7 +1617,7 @@ with tab_corpus:
 # ═════════════════════════════════════════════
 with tab_fda:
     st.markdown(
-        '<p class="pg-section"><span class="pg-section-icon">🔍</span>FDA Arşivi — Gerçek İlaç Bilgisi</p>',
+        '<p class="pg-section">FDA Arşivi — Gerçek İlaç Bilgisi</p>',
         unsafe_allow_html=True,
     )
     st.caption("Wikidata ve OpenFDA veritabanlarından gerçek ilaç bilgilerini çeker. Tüm veriler Türkçeye çevrilir.")
@@ -1638,7 +1642,7 @@ with tab_fda:
                     real_drug = fetch_drug_info(drug_search)
                     if real_drug:
                         st.session_state["test_drug_data"] = real_drug
-                        st.success(f"✓ Veriler bulundu ve Türkçeye çevrildi!")
+                        st.success("Veriler bulundu ve Türkçeye çevrildi.")
 
                         # Verilen bilgileri güzel tablo şeklinde göster
                         col_label, col_value = st.columns([1, 2])
@@ -1667,12 +1671,12 @@ with tab_fda:
                             with col_v:
                                 st.caption(value)
                     else:
-                        st.warning(f"⚠️ '{drug_search}' için veriler bulunamadı. Başka bir isimle deneyin.")
+                        st.warning(f"'{drug_search}' için veriler bulunamadı. Başka bir isimle deneyin.")
                         st.info("**İpucu:** Ticari isim (örn: Augmentin) veya etken madde adı (örn: Amoxicillin) yazabilirsiniz.")
                 except ImportError:
-                    st.error("❌ real_drug_data modülü bulunamadı")
+                    st.error("real_drug_data modülü bulunamadı")
                 except Exception as e:
-                    st.error(f"❌ Hata: {str(e)}")
+                    st.error(f"Hata: {str(e)}")
         else:
             st.info("Araştırma yapmak için ilaç adını girin")
 
@@ -1725,7 +1729,7 @@ with tab_about:
 
     st.markdown("""
     <div class="pg-about-card" style="margin-top:.75rem">
-      <strong>🔒 Güvenlik Mekanizmaları</strong>
+      <strong>Güvenlik Mekanizmaları</strong>
       <table>
         <tr><th>Mekanizma</th><th>Açıklama</th></tr>
         <tr><td>Halüsinasyon Engeli</td><td>Etken madde–prospektüs uyuşmazlığında rapor bloklanır</td></tr>
@@ -1738,12 +1742,12 @@ with tab_about:
     """, unsafe_allow_html=True)
 
     st.markdown("")
-    st.markdown("### ⚙️ API Ayarları")
+    st.markdown("### API Ayarları")
 
     # ─────────────────────────────────────────────
     # ITS (İLAÇ TAKIP SİSTEMİ) API
     # ─────────────────────────────────────────────
-    with st.expander("💊 ITS API - İlaç Takip Sistemi", expanded=False):
+    with st.expander("ITS API - İlaç Takip Sistemi", expanded=False):
         st.caption(
             "Sağlık Bakanlığı'nın resmi İlaç Takip Sistemi.\n\n"
             "**Kaynak:** https://its.gov.tr/\n\n"
@@ -1760,9 +1764,9 @@ with tab_about:
 
         if its_key:
             st.session_state["its_api_key"] = its_key
-            st.success("✓ ITS API key kaydedildi")
+            st.success("ITS API key kaydedildi")
 
-    with st.expander("⚙️ İsteğe bağlı: OpenAI-uyumlu API (PDF analiz için yedek)", expanded=False):
+    with st.expander("İsteğe bağlı: OpenAI-uyumlu API (PDF analiz için yedek)", expanded=False):
         st.caption(
             "PDF prospektüsü analiz sırası: **Groq → OpenAI-uyumlu API → Gemini**\n\n"
             "OpenAI, OpenRouter, Together AI vb. OpenAI-uyumlu API'ler kullanabilirsiniz."
@@ -1800,8 +1804,8 @@ with tab_about:
     oa_cls = "ok" if (openai_env or oa_sess) else "bad"
 
     st.markdown(
-        f'<div class="pg-status-pill {g_cls}">{"●" if gemini_key else "○"} Gemini API — {"aktif" if gemini_key else "eksik"}</div><br>'
-        f'<div class="pg-status-pill {gr_cls}">{"●" if groq_key else "○"} Groq — {"aktif" if groq_key else "eksik"}</div>',
+        f'<div class="pg-status-pill {g_cls}">Gemini API — {"aktif" if gemini_key else "eksik"}</div><br>'
+        f'<div class="pg-status-pill {gr_cls}">Groq — {"aktif" if groq_key else "eksik"}</div>',
         unsafe_allow_html=True,
     )
 
@@ -1824,4 +1828,4 @@ with tab_about:
         "**Lisans:** MIT &nbsp;|&nbsp; **Uygulama sürümü:** v"
         + str(_pgv_about)
     )
-    st.caption("⚕ Bu araç tıbbi tavsiye niteliği taşımaz. Tanı ve tedavi için hekime başvurun.")
+    st.caption("Bu araç tıbbi tavsiye niteliği taşımaz. Tanı ve tedavi için hekime başvurun.")
