@@ -699,51 +699,86 @@ div[data-testid="stVerticalBlock"] .stTabs [data-baseweb="tab-list"] {
   }
 }
 
-/* ── Hero banner ────────────────────────────── */
-.pg-hero {
-  position: relative; overflow: hidden; border-radius: 20px;
-  padding: clamp(1.25rem, 5vw, 2.25rem); margin-bottom: 1.75rem;
-  background: linear-gradient(135deg, #0f172a 0%, #134e4a 55%, #0f766e 100%);
+/* ── Masthead (WikiPharma + sekmeler — tek yeşil şerit) ─────────────── */
+section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) {
+  position: relative;
+  overflow: hidden;
+  border-radius: 20px;
+  margin-bottom: 1.75rem;
+  padding: clamp(1.1rem, 4vw, 1.65rem) clamp(1rem, 3vw, 1.5rem) !important;
+  background: linear-gradient(135deg, #0f172a 0%, #134e4a 55%, #0f766e 100%) !important;
   box-shadow: 0 20px 50px -12px rgba(15,23,42,.35);
+  align-items: center !important;
+  gap: 0.75rem 1.25rem !important;
 }
-.pg-hero::after {
-  content: ""; position: absolute; inset: 0; pointer-events: none;
+section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
   background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  border-radius: 20px;
 }
-.pg-hero-inner {
-  position: relative; z-index: 1;
-  display: flex; align-items: center; justify-content: space-between; gap: 1.5rem;
-  flex-wrap: wrap;
+section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) > div {
+  position: relative;
+  z-index: 1;
+  background: transparent !important;
 }
-.pg-hero-left { flex: 1; min-width: 200px; }
-.pg-hero h1 { margin:0; font-size:clamp(1.4rem, 4vw, 2.1rem); font-weight:700; letter-spacing:-.03em; color:#fff !important; }
-.pg-hero p  { margin:.5rem 0 0; font-size: clamp(0.85rem, 2vw, 0.95rem); color:rgba(226,232,240,.85) !important; line-height:1.55; max-width:520px; }
-.pg-hero-right {
-  display: flex; flex-direction: column; align-items: flex-end; gap: .35rem;
-  flex-shrink: 0;
+section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) h1 {
+  margin: 0 !important;
+  font-size: clamp(1.35rem, 4vw, 2rem) !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.03em !important;
+  color: #fff !important;
+  border: none !important;
+  padding: 0 !important;
 }
-.pg-hero-badge {
-  font-size: clamp(0.65rem, 1.5vw, 0.7rem); font-weight:700; text-transform:uppercase; letter-spacing:.07em;
-  padding:.25rem .65rem; border-radius:999px;
-  background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.18);
-  color:rgba(226,232,240,.9) !important; white-space:nowrap;
+section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) label p,
+section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) [data-testid="stWidgetLabel"] p {
+  color: rgba(248, 250, 252, 0.95) !important;
 }
-
-/* Responsive hero on mobile */
+section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) div[role="radiogroup"] {
+  flex-wrap: wrap !important;
+  justify-content: flex-end !important;
+  gap: 0.35rem 0.5rem !important;
+}
+section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) label[data-baseweb="radio"] {
+  margin: 0 !important;
+  padding: 0.35rem 0.85rem !important;
+  border-radius: 999px !important;
+  border: 1px solid rgba(255, 255, 255, 0.22) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) label[data-baseweb="radio"]:has(input:checked) {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-color: rgba(255, 255, 255, 0.95) !important;
+}
+section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) label[data-baseweb="radio"]:has(input:checked) p {
+  color: #0f766e !important;
+  font-weight: 600 !important;
+}
 @media (max-width: 640px) {
-  .pg-hero {
-    padding: 1.25rem 1rem;
+  section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) {
+    padding: 1rem 0.85rem !important;
     margin-bottom: 1.25rem;
   }
-  .pg-hero-inner {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1rem;
+  section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) div[role="radiogroup"] {
+    justify-content: flex-start !important;
   }
-  .pg-hero-right {
-    align-items: flex-start;
-    width: 100%;
-  }
+}
+/* Streamlit sürümleri: baseweb olmayan yatay radio */
+section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) .stRadio label {
+  color: rgba(248, 250, 252, 0.95) !important;
+}
+section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) .stRadio label:has(input:checked),
+section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) label:has(input:checked) {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-radius: 999px !important;
+}
+section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) .stRadio label:has(input:checked) p,
+section.main [data-testid="stHorizontalBlock"]:has(#pg-masthead-root) label:has(input:checked) p {
+  color: #0f766e !important;
+  font-weight: 600 !important;
 }
 
 /* ── Bölüm başlıkları ───────────────────────── */
@@ -1026,27 +1061,40 @@ def _get_responsive_columns(ratio_desktop: tuple, ratio_tablet: tuple = None, ra
         return ratio_desktop
 
 # ─────────────────────────────────────────────
-# HERO BANNER
+# MASTHEAD — yeşil şerit + sekmeler (Streamlit tabs yerine yatay radio)
 # ─────────────────────────────────────────────
-st.markdown("""
-<div class="pg-hero">
-  <div class="pg-hero-inner">
-    <h1>WikiPharma</h1>
-  </div>
-</div>
-""", unsafe_allow_html=True)
-
-# ─────────────────────────────────────────────
-# ANA SEKMELER
-# ─────────────────────────────────────────────
-tab_analyze, tab_fda, tab_its, tab_corpus, tab_about = st.tabs(
-    ["İlaç Analizi", "FDA Arşivi", "İlaç Fiyatları", "Prospektüs Yönetimi", "Hakkında"]
+_PG_TAB_LABELS = (
+    "İlaç Analizi",
+    "FDA Arşivi",
+    "İlaç Fiyatları",
+    "Prospektüs Yönetimi",
+    "Hakkında",
 )
+_mh_left, _mh_right = st.columns([2, 5], gap="small", vertical_alignment="center")
+with _mh_left:
+    st.markdown(
+        '<span id="pg-masthead-root" aria-hidden="true"></span>'
+        "<h1>WikiPharma</h1>",
+        unsafe_allow_html=True,
+    )
+with _mh_right:
+    st.radio(
+        "Bölüm",
+        _PG_TAB_LABELS,
+        horizontal=True,
+        label_visibility="collapsed",
+        key="pg_main_nav",
+    )
+
+_pg_nav = str(st.session_state.get("pg_main_nav") or _PG_TAB_LABELS[0]).strip()
+if _pg_nav not in _PG_TAB_LABELS:
+    _pg_nav = _PG_TAB_LABELS[0]
+    st.session_state.pg_main_nav = _pg_nav
 
 # ═════════════════════════════════════════════
 # SEKME 1 — ANALİZ
 # ═════════════════════════════════════════════
-with tab_analyze:
+if _pg_nav == "İlaç Analizi":
     col_in, col_out = st.columns([1, 1.5], gap="large")
 
     with col_in:
@@ -1578,7 +1626,7 @@ with tab_analyze:
 # ═════════════════════════════════════════════
 # SEKME 2 — FDA ARŞİVİ (Gerçek İlaç Verisi)
 # ═════════════════════════════════════════════
-with tab_fda:
+elif _pg_nav == "FDA Arşivi":
     st.markdown(
         '<p class="pg-section">FDA Arşivi — Gerçek İlaç Bilgisi</p>',
         unsafe_allow_html=True,
@@ -1652,7 +1700,7 @@ with tab_fda:
 # ═════════════════════════════════════════════
 # SEKME 3 — İLAÇ FİYATLARI (birleşik liste)
 # ═════════════════════════════════════════════
-with tab_its:
+elif _pg_nav == "İlaç Fiyatları":
     st.markdown(
         '<p class="pg-section">İlaç Bilgileri & Fiyatları</p>',
         unsafe_allow_html=True,
@@ -1722,7 +1770,7 @@ with tab_its:
 # ═════════════════════════════════════════════
 # SEKME 4 — PROSPEKTÜS YÖNETİMİ (CORPUS)
 # ═════════════════════════════════════════════
-with tab_corpus:
+elif _pg_nav == "Prospektüs Yönetimi":
     c1, c2 = st.columns([1, 1])
     with c1:
         st.markdown("#### Prospektüs Ekle")
@@ -1769,7 +1817,7 @@ with tab_corpus:
 # ═════════════════════════════════════════════
 # SEKME 5 — HAKKINDA
 # ═════════════════════════════════════════════
-with tab_about:
+elif _pg_nav == "Hakkında":
     try:
         from agents import PHARMA_GUARD_VERSION as _pgv_about
     except Exception:
