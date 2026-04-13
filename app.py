@@ -78,23 +78,39 @@ def _eczaneapi_key_from_disk() -> str:
     return ""
 
 
+def _eczaneapi_key_merged() -> str:
+    """Streamlit oturumu > disk > Cloud secrets > ortam (bulutta config_api.json olmayabilir)."""
+    k = str(st.session_state.get("eczaneapi_api_key") or "").strip()
+    if k:
+        return k
+    k = _eczaneapi_key_from_disk()
+    if k:
+        return k
+    try:
+        if hasattr(st, "secrets"):
+            sec = str(
+                st.secrets.get("ECZANEAPI_API_KEY")
+                or st.secrets.get("eczaneapi_api_key")
+                or ""
+            ).strip()
+            if sec:
+                return sec
+    except Exception:
+        pass
+    return str(os.environ.get("ECZANEAPI_API_KEY") or os.environ.get("eczaneapi_api_key") or "").strip()
+
+
 @st.cache_data(ttl=21600, show_spinner=False)
-def load_eczaneapi_widget_index(api_key: str) -> dict:
-    """
-    EczaneAPI resmi widget URL'leri ile uyumlu il/ilçe slug haritası.
-    https://eczaneapi.com/api/v1/cities ve .../cities/{slug}/districts çağrıları X-API-Key ister.
-    Dönüş: by_city, city_label, district_label (slug -> görünen ad).
-    """
+def eczaneapi_list_cities(api_key: str) -> dict:
+    """Tek istek: tüm iller (slug + görünen ad). ~81 kayıt."""
     import requests
 
-    out = {"by_city": {}, "city_label": {}, "district_label": {}}
+    out: dict = {"slugs": [], "labels": {}}
     if not (api_key or "").strip():
         return out
-
     headers = {"X-API-Key": api_key.strip()}
-
     try:
-        r = requests.get("https://eczaneapi.com/api/v1/cities", headers=headers, timeout=20)
+        r = requests.get("https://eczaneapi.com/api/v1/cities", headers=headers, timeout=30)
         if r.status_code != 200:
             return out
         j = r.json()
@@ -103,55 +119,59 @@ def load_eczaneapi_widget_index(api_key: str) -> dict:
         cities_data = j.get("data") or []
         if not isinstance(cities_data, list):
             return out
-
+        pairs: list[tuple[str, str]] = []
         for city in cities_data:
-            city_slug = str(city.get("slug") or "").strip().lower()
-            city_name = str(city.get("name") or city_slug).strip()
-            if not city_slug:
-                continue
-            out["city_label"][city_slug] = city_name
-
-            try:
-                dr = requests.get(
-                    f"https://eczaneapi.com/api/v1/cities/{city_slug}/districts",
-                    headers=headers,
-                    timeout=15,
-                )
-                if dr.status_code != 200:
-                    out["by_city"][city_slug] = []
-                    out["district_label"][city_slug] = {}
-                    continue
-                dj = dr.json()
-                if not dj.get("success"):
-                    out["by_city"][city_slug] = []
-                    out["district_label"][city_slug] = {}
-                    continue
-                data = dj.get("data") or {}
-                districts_data = data.get("districts") if isinstance(data, dict) else []
-                if not isinstance(districts_data, list):
-                    districts_data = []
-
-                slugs: list[str] = []
-                dlab: dict[str, str] = {}
-                for d in districts_data:
-                    ds = str(d.get("slug") or "").strip().lower()
-                    if not ds:
-                        continue
-                    slugs.append(ds)
-                    dlab[ds] = str(d.get("name") or ds).strip()
-                out["by_city"][city_slug] = sorted(slugs)
-                out["district_label"][city_slug] = dlab
-            except Exception:
-                out["by_city"][city_slug] = []
-                out["district_label"][city_slug] = {}
-
+            slug = str(city.get("slug") or "").strip().lower()
+            name = str(city.get("name") or slug).strip()
+            if slug:
+                pairs.append((name, slug))
+        pairs.sort(key=lambda x: x[0].casefold())
+        out["slugs"] = [p[1] for p in pairs]
+        out["labels"] = {p[1]: p[0] for p in pairs}
         return out
     except Exception as e:
-        print(f"❌ EczaneAPI widget indeks yükleme: {e}")
+        print(f"❌ EczaneAPI cities: {e}")
         return out
 
 
-ECZANEAPI_WIDGET_INDEX = load_eczaneapi_widget_index(_eczaneapi_key_from_disk())
+@st.cache_data(ttl=21600, show_spinner=False)
+def eczaneapi_list_districts(api_key: str, city_slug: str) -> dict:
+    """Seçilen il için ilçe slug’ları (widget URL ile birebir)."""
+    import requests
+
+    out: dict = {"slugs": [], "labels": {}}
+    if not (api_key or "").strip() or not (city_slug or "").strip():
+        return out
+    headers = {"X-API-Key": api_key.strip()}
+    cs = str(city_slug).strip().lower()
+    try:
+        dr = requests.get(
+            f"https://eczaneapi.com/api/v1/cities/{cs}/districts",
+            headers=headers,
+            timeout=25,
+        )
+        if dr.status_code != 200:
+            return out
+        dj = dr.json()
+        if not dj.get("success"):
+            return out
+        data = dj.get("data") or {}
+        districts_data = data.get("districts") if isinstance(data, dict) else []
+        if not isinstance(districts_data, list):
+            return out
+        pairs: list[tuple[str, str]] = []
+        for d in districts_data:
+            ds = str(d.get("slug") or "").strip().lower()
+            nm = str(d.get("name") or ds).strip()
+            if ds:
+                pairs.append((nm, ds))
+        pairs.sort(key=lambda x: x[0].casefold())
+        out["slugs"] = [p[1] for p in pairs]
+        out["labels"] = {p[1]: p[0] for p in pairs}
+        return out
+    except Exception as e:
+        print(f"❌ EczaneAPI districts {cs}: {e}")
+        return out
 
 from typing import Optional
 
@@ -1442,39 +1462,44 @@ with tab_nobetci:
     st.markdown("---")
     st.markdown("### 📍 Bugünün Nöbetçi Eczaneleri")
     with st.expander("🎯 Widget ile göz at", expanded=True):
-        widx = ECZANEAPI_WIDGET_INDEX or {}
-        by_city = widx.get("by_city") or {}
-        city_label = widx.get("city_label") or {}
-        district_label_root = widx.get("district_label") or {}
-        widget_index_ok = bool(by_city)
+        api_key_w = _eczaneapi_key_merged()
+        cities_pack = eczaneapi_list_cities(api_key_w)
+        city_slugs = list(cities_pack.get("slugs") or [])
+        city_label = dict(cities_pack.get("labels") or {})
+        widget_cities_ok = bool(city_slugs)
 
-        if not widget_index_ok:
-            st.info(
-                "EczaneAPI **widget iframe’i** anahtar istemez; ancak buradaki **il / ilçe seçimi**, "
-                "resmi API ile aynı slug’ları kullanmak için `config_api.json` içindeki "
-                "**eczaneapi_api_key** ile `GET /api/v1/cities` ve `.../districts` yanıtlarından doldurulur. "
-                "Anahtar yoksa liste boş kalır ve [sitene-ekle](https://eczaneapi.com/sitene-ekle) sayfasındaki "
-                "gibi ilçe seçemezsiniz. Anahtarı kaydettikten sonra **Listeyi yenile**ye basın."
+        if not api_key_w.strip():
+            st.warning(
+                "**eczaneapi_api_key** tanımlı değil. Streamlit Cloud’da `config_api.json` genelde yoktur; "
+                "anahtarı aşağıya yapıştırıp **Kaydet ve yenile** deyin veya "
+                "Cloud **Secrets** içine `ECZANEAPI_API_KEY` ekleyin. "
+                "İl listesi EczaneAPI `GET /api/v1/cities` ile gelir (resmi 81+ il)."
+            )
+        elif not widget_cities_ok:
+            st.warning(
+                "EczaneAPI il listesi boş döndü (anahtar geçersiz veya ağ hatası). "
+                "Anahtarı kontrol edip **Kaydet ve yenile** deneyin."
             )
 
         col_key, col_reload = st.columns([3, 1])
         with col_key:
             st.text_input(
-                "EczaneAPI anahtarı (il/ilçe slug listesi için; widget içeriği doğrudan eczaneapi.com’dan)",
+                "EczaneAPI anahtarı (il/ilçe slug listesi; widget iframe verisi eczaneapi.com sunucusundan)",
                 type="password",
                 key="eczaneapi_api_key",
                 placeholder="eczane_api_…",
             )
         with col_reload:
             st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("Listeyi yenile", use_container_width=True, key="widget_index_reload"):
+            if st.button("Kaydet ve yenile", use_container_width=True, key="widget_index_reload"):
                 save_api_config()
-                load_eczaneapi_widget_index.clear()
+                eczaneapi_list_cities.clear()
+                eczaneapi_list_districts.clear()
                 st.rerun()
 
         col_widget_city, col_widget_district = st.columns(2)
 
-        cities_list = sorted(by_city.keys()) if by_city else ["ankara"]
+        cities_list = city_slugs if city_slugs else ["ankara"]
 
         def _fmt_city(slug: str) -> str:
             return city_label.get(slug, slug.replace("-", " ").title())
@@ -1489,8 +1514,9 @@ with tab_nobetci:
                 key="widget_city_select",
             )
 
-        dlabels = district_label_root.get(widget_city, {}) if isinstance(district_label_root, dict) else {}
-        districts = list(by_city.get(widget_city, []))
+        dist_pack = eczaneapi_list_districts(api_key_w, widget_city)
+        districts = list(dist_pack.get("slugs") or [])
+        dlabels = dict(dist_pack.get("labels") or {})
 
         def _fmt_dist(slug: str) -> str:
             if not (slug or "").strip():
