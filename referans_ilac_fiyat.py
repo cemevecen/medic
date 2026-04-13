@@ -158,6 +158,15 @@ def _drop_loose_dupes_unpriced(df: pd.DataFrame) -> pd.DataFrame:
     return out.drop(columns=["_nk_loose"], errors="ignore")
 
 
+def _require_liste_fiyat(df: pd.DataFrame) -> pd.DataFrame:
+    """Liste fiyatı (₺) yok veya 0 olan satırları çıkarır."""
+    if df is None or df.empty or "Liste fiyatı (₺)" not in df.columns:
+        return df
+    p = pd.to_numeric(df["Liste fiyatı (₺)"], errors="coerce")
+    keep = p.notna() & (p != 0.0)
+    return df.loc[keep].reset_index(drop=True)
+
+
 def _join_unique_firms(s: pd.Series) -> str:
     xs = sorted(
         {
@@ -340,6 +349,7 @@ def load_birlesik_ilac_fiyat_df() -> Optional[pd.DataFrame]:
 
     out = merge_recete_into(base, recete)
     out = _drop_loose_dupes_unpriced(out)
+    out = _require_liste_fiyat(out)
     return _ensure_unique_norm(out)
 
 
