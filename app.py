@@ -1665,7 +1665,12 @@ with tab_fda:
         )
 
     with col2:
-        fetch_clicked = st.button(" Arşiv'de Ara", use_container_width=True, key="fetch_real_data_btn")
+        fetch_clicked = st.button(
+            " Arşiv'de Ara",
+            type="primary",
+            use_container_width=True,
+            key="fetch_real_data_btn",
+        )
 
     if fetch_clicked or drug_search:
         if drug_search.strip():
