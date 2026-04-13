@@ -1490,7 +1490,55 @@ with tab_its:
         '<p class="pg-section"><span class="pg-section-icon">💊</span>İlaç Bilgileri & Fiyatları</p>',
         unsafe_allow_html=True,
     )
-    st.caption("Sağlık Bakanlığı İlaç Takip Sistemi (ITS) üzerinden ilaç fiyatları, onay durumları ve güvenlik uyarılarını görüntüleyin.")
+    st.caption(
+        "Aşağıdaki tablo, repodaki **iki Excel** dosyasından birleştirilir: referans GKF (€) ve web liste fiyatı (₺). "
+        "İlaç adı **yazıma göre normalize** edilerek tekilleştirilir (aynı isim tek satır). ITS canlı API henüz bağlı değildir."
+    )
+
+    from referans_ilac_fiyat import load_birlesik_ilac_fiyat_df
+
+    _rf_df = load_birlesik_ilac_fiyat_df()
+    if _rf_df is None:
+        st.warning(
+            "Fiyat dosyaları bulunamadı. Beklenen yollar: "
+            "`data/referans_bazli_ilac_fiyat_listesi.xlsx` ve `data/ilac_fiyat_web_listesi.xlsx`"
+        )
+    else:
+        st.markdown("### Birleşik ilaç fiyat listesi")
+        st.caption(
+            f"**{len(_rf_df)}** tekil kayıt — GKF: EDİT-LST-18 referans listesi; ₺: WEBLISTE (`İLACFİYAT.xlsx` ile aynı yapı)."
+        )
+        _rf_q = st.text_input(
+            "Listede ara (ilaç, firma veya barkod; boş = tümü)",
+            placeholder="örn: ABILIFY, PFİZER, 86995…",
+            key="referans_fiyat_filter",
+        )
+        _rf_show = _rf_df
+        if (_rf_q or "").strip():
+            q = _rf_q.strip().casefold()
+            _m = (
+                _rf_show["İlaç adı"].astype(str).str.casefold().str.contains(q, na=False)
+                | _rf_show["Firma"].astype(str).str.casefold().str.contains(q, na=False)
+            )
+            if "Barkod" in _rf_show.columns:
+                _m = _m | _rf_show["Barkod"].astype(str).str.casefold().str.contains(q, na=False)
+            _rf_show = _rf_show[_m]
+        st.caption(f"Gösterilen: **{len(_rf_show)}** satır")
+        _col_cfg = {
+            "GKF (€)": st.column_config.NumberColumn("GKF (€)", format="%.2f"),
+            "Liste fiyatı (₺)": st.column_config.NumberColumn("Liste fiyatı (₺)", format="%.2f"),
+            "Barkod": st.column_config.TextColumn("Barkod"),
+        }
+        st.dataframe(
+            _rf_show,
+            column_config=_col_cfg,
+            use_container_width=True,
+            height=560,
+            hide_index=True,
+        )
+
+    st.markdown("---")
+    st.caption("Aşağıdaki arama kutusu **demo** ITS örneğidir; asıl fiyat tablosu yukarıdaki birleşik listedir.")
 
     col_search_its, col_btn_its = st.columns([4, 1], gap="small", vertical_alignment="bottom")
 
@@ -1498,7 +1546,7 @@ with tab_its:
         drug_search_its = st.text_input(
             "İlaç adı veya etken madde yazın",
             placeholder="örn: Aspirin, Parasetamol, Amoksisilin…",
-            key="its_search_input"
+            key="its_search_input",
         )
 
     with col_btn_its:
@@ -1583,7 +1631,7 @@ with tab_its:
       <strong>ℹ️ İTS (İlaç Takip Sistemi) Hakkında</strong><br><br>
       Sağlık Bakanlığı'nın resmi sistemidir. Türkiye'ye giren her ilaçı üretimden hasta eline kadar takip eder.
       <br><br>
-      <strong>Şu anda gösterilen veriler örnek/demo amaçlıdır.</strong> Gerçek sistem integrasyon için ITS API key gereklidir.
+      <strong>Üstteki birleşik tablo</strong> iki Excel dosyasından yüklenir (GKF € + liste ₺, tekil ilaç adı); <strong>alttaki arama kutusu</strong> canlı ITS yerine örnek/demo veridir. Canlı ITS için API erişimi gerekir.
       <br><br>
       <em>Kaynak: <a href="https://its.gov.tr/" target="_blank">its.gov.tr</a></em>
     </div>
