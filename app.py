@@ -1158,12 +1158,6 @@ with tab_analyze:
                     st.markdown(str(_sanitize_gorsel_user_message(str(ga_tab.get("message") or ""))))
                 n_extra = str(v.get("notlar") or "").strip()
                 k_extra = str(v.get("kaynak") or "").strip()
-                if n_extra or k_extra:
-                    with st.expander("Ek model notları (isteğe bağlı)", expanded=False):
-                        if n_extra:
-                            st.markdown(f"**Notlar:** {n_extra}")
-                        if k_extra:
-                            st.markdown(f"**Kaynak:** {k_extra}")
                 for label, key in [
                     ("Ticari Ad", "ticari_ad"),
                     ("Etken Madde", "etken_madde"),
