@@ -2037,11 +2037,6 @@ if _pg_nav == "İlaç Analizi":
                 key=f"eczane_widget_district__{_w_city}",
             )
 
-        st.caption(
-            f"Tarih yukarıda (**{_ecz_today}**). Liste ve harita, seçtiğiniz il ve ilçeye göre "
-            "[eczaneapi.com](https://eczaneapi.com) aracılığıyla yüklenir."
-        )
-
         _params: dict[str, str] = {"city": str(_w_city).strip().lower()}
         if str(_w_dist or "").strip():
             _params["district"] = str(_w_dist).strip().lower()
