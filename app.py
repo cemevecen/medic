@@ -216,13 +216,13 @@ _OZELLIKLI_SHEET_ORDER = (
     "Geri_Cekilen",
 )
 _OZELLIKLI_SHEET_LABELS_TR = {
-    "Yesil_Receteli": "Yeşil reçeteli ilaçlar",
-    "Kirmizi_Receteli": "Kırmızı reçeteli ilaçlar",
-    "Mor_Receteli": "Mor reçeteli ilaçlar",
-    "Turuncu_Receteli": "Turuncu reçeteli ilaçlar",
-    "Takibi_Zorunlu": "Takibi zorunlu reçeteli ilaçlar",
-    "Recetesiz": "Reçetesiz satılan ilaçlar",
-    "Geri_Cekilen": "Geri çekilen ilaçlar",
+    "Yesil_Receteli": "Yeşil reçeteli",
+    "Kirmizi_Receteli": "Kırmızı reçeteli",
+    "Mor_Receteli": "Mor reçeteli",
+    "Turuncu_Receteli": "Turuncu reçeteli",
+    "Takibi_Zorunlu": "Takibi zorunlu reçeteli",
+    "Recetesiz": "Reçetesiz satılan",
+    "Geri_Cekilen": "Geri çekilen",
 }
 
 
@@ -1978,7 +1978,7 @@ if _pg_nav not in _PG_TAB_LABELS:
 # SEKME 1 — ANALİZ
 # ═════════════════════════════════════════════
 if _pg_nav == "İlaç Analizi":
-    col_results, col_inputs = st.columns([1.55, 1], gap="large")
+    col_inputs, col_results = st.columns([1, 1.55], gap="large")
 
     with col_inputs:
         st.markdown(
