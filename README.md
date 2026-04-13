@@ -1,202 +1,144 @@
-# 💊 Pharma-Guard AI
+# WikiPharma
 
-> **Yapay Zeka Destekli Akıllı İlaç Denetçisi**  
-> Görüntü işleme ve NLP teknolojilerini birleştiren otonom Çoklu Ajan Sistemi (Multi-Agent System)
+> **Yapay zeka destekli ilaç kutusu analizi ve bilgi paneli** — görüntü / PDF / metin girişi, çoklu ajan orkestrasyonu ve yerel prospektüs (RAG) ile doğrulama.
 
-[![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://streamlit.io)
-[![Gemini](https://img.shields.io/badge/Gemini_2.0-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev)
-[![Groq](https://img.shields.io/badge/Groq_LLaVA%20%2B%20Llama3-F55036?style=for-the-badge)](https://groq.com)
+[![Canlı uygulama](https://img.shields.io/badge/Canlı-medicalsearch.streamlit.app-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://medicalsearch.streamlit.app/)
+[![Kaynak kod](https://img.shields.io/badge/GitHub-cemevecen%2Fmedic-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/cemevecen/medic)
+[![Gemini](https://img.shields.io/badge/Gemini-Google_AI-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev)
+[![Groq](https://img.shields.io/badge/Groq-Llama%20%2B%20JSON-F55036?style=for-the-badge)](https://groq.com)
 [![ChromaDB](https://img.shields.io/badge/ChromaDB-RAG-8B5CF6?style=for-the-badge)](https://www.trychroma.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 
----
-
-## 🎯 Proje Vizyonu
-
-Pharma-Guard AI; ilaç kutularının fotoğrafını veya ilaç adını alarak **5 otonom yapay zeka ajanı** aracılığıyla kapsamlı bir güvenlik ve kimlik analizi yapan, **RAG (Retrieval-Augmented Generation)** teknolojisiyle yerel prospektüs veritabanından gerçek zamanlı doğrulama gerçekleştiren bir sistemdir.
-
-Sistem sadece bir bilgi arama motoru değil; **halüsinasyon engeli**, **veri uyuşmazlığı alarmı** ve **güven puanı** mekanizmalarıyla kendi verisini denetleyen profesyonel bir asistan mimarisidir.
+**Bağlantılar:** [medicalsearch.streamlit.app](https://medicalsearch.streamlit.app/) · [github.com/cemevecen/medic](https://github.com/cemevecen/medic)
 
 ---
 
-## 🤖 Ajan Mimarisi
+## Ne yapar?
 
-| # | Ajan | Model | Görev |
-|---|------|-------|-------|
-| 1 | 👁️ **Vision Scanner** | LLaVA v1.5 (Groq) → Gemini Vision (fallback) | Görselden OCR — ticari ad, etken madde, dozaj, form, barkod |
-| 2 | 📚 **RAG Specialist** | ChromaDB + Multilingual Sentence Transformers | Yerel PDF prospektüs veritabanında semantik arama |
-| 3 | 🔍 **Fact-Checker** | Kural Tabanlı | Dozaj ve etken madde uyuşmazlığı tespiti |
-| 4 | 🛡️ **Safety Auditor** | Llama-3-70B (Groq) | Yan etki, etkileşim, kontrendikasyon analizi |
-| 5 | 🏭 **Corporate Analyst** | Gemini 2.0 Flash | Üretici firma, sertifika ve menşe bilgisi |
-| 6 | 📝 **Report Synthesizer** | Gemini 2.0 Flash | Tüm ajan çıktılarını birleştirip Türkçe rapor üretimi |
+WikiPharma; ilaç kutusu fotoğrafı, prospektüs PDF’i veya ilaç adı ile **kimlik, güvenlik ve tutarlılık** odaklı bir özet üretir. Yerel `data/corpus/` altındaki PDF’ler indekslenir; etken madde ve dozaj gibi alanlar **RAG + kural tabanlı Fact-Checker** ile karşılaştırılır. Bu bir tanı/tedavi aracı değildir; çıktılar bilgilendirme amaçlıdır.
 
 ---
 
-## 🔄 İş Akışı
+## Arayüz sekmeleri
 
-```
-Kullanıcı (Görsel / İlaç Adı)
-        │
-        ▼
-┌─────────────────┐
-│ Vision Scanner  │ ──── Görsel → JSON (ticari ad, etken, dozaj...)
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ RAG Specialist  │ ──── ChromaDB → Prospektüs pasajları
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  Fact-Checker   │ ──── VERİ UYUŞMAZLIĞI? → BLOK / DEVAM
-└────────┬────────┘
-         │
-    ┌────┴────┐
-    ▼         ▼
-┌────────┐ ┌──────────────┐
-│ Safety │ │  Corporate   │
-│Auditor │ │  Analyst     │
-└────┬───┘ └──────┬───────┘
-     │             │
-     └──────┬──────┘
-            ▼
-  ┌──────────────────┐
-  │ Report Synthesizer│ ──── Markdown + PDF Rapor
-  └──────────────────┘
-```
+| Sekme | İçerik |
+|--------|--------|
+| **İlaç Analizi** | Görsel / PDF / metin → `PharmaGuardOrchestrator` ile ajan zinciri, Markdown rapor ve indirilebilir PDF. |
+| **FDA Arşivi** | OpenFDA + Wikidata tabanlı gerçek kayıt sorgusu; özetler Groq ile Türkçeleştirilir. Onayı olmayan ürünler arşivde görünmeyebilir. |
+| **İlaç Fiyatları** | Birleştirilmiş referans fiyat listesi (`referans_ilac_fiyat.py`, `data/*.xlsx`). |
+| **Prospektüs Yönetimi** | PDF yükleme, ChromaDB indeks yenileme. |
+| **Hakkında** | Güncel model zincirleri, API durumu, sürüm (`PHARMA_GUARD_VERSION`). |
 
 ---
 
-## 🛠️ Teknoloji Yığını
+## Çoklu ajan mimarisi (özet)
 
-| Katman | Teknoloji | Rol |
-|--------|-----------|-----|
-| Ana Orkestra | Gemini 2.0 Flash | Karar mekanizması ve rapor sentezi |
-| Görüntü İşleme | LLaVA v1.5 (Groq) | İlaç kutusu OCR ve form tanıma |
-| Hızlı Analiz | Llama-3-70B (Groq) | JSON yapılandırma ve güvenlik analizi |
-| Bilgi Kaynağı | ChromaDB + LangChain | RAG vektör veritabanı |
-| Embedding | sentence-transformers (multilingual) | Semantik arama |
-| Arayüz | Streamlit | Kullanıcı paneli |
-| Raporlama | ReportLab | İndirilebilir PDF çıktısı |
+Uygulama içi **Hakkında** sekmesiyle uyumlu güncel tablo:
 
----
+| # | Ajan | Teknoloji | Görev |
+|---|------|-----------|--------|
+| 1 | Vision Scanner | Groq görüntü (Llama 4 zinciri) → Gemini görüntü yedeği → Tesseract OCR → Groq metin | Kutu / PDF’ten yapılandırılmış JSON |
+| 2 | RAG Specialist | ChromaDB + LangChain + HuggingFaceEmbeddings | Yerel prospektüs semantik arama |
+| 3 | Fact-Checker | Kural tabanlı Python | Görsel–RAG tutarlılığı |
+| 4 | Safety Auditor | Groq (Llama 3.3 / 3.1 zinciri, JSON) | Yan etki, etkileşim, alarm |
+| 5 | Corporate Analyst | Groq (aynı metin zinciri) | Firma / menşe özeti |
+| 6 | Report Synthesizer | Önce Groq; gerekirse Gemini | Türkçe Markdown rapor |
 
-## 📁 Dosya Yapısı
-
-```
-medic/
-├── app.py              # Streamlit arayüzü (ana giriş noktası)
-├── agents.py           # 5 ajan + Fact-Checker + Orkestratör
-├── utils.py            # Görüntü işleme, PDF rapor, yardımcı fonksiyonlar
-├── requirements.txt    # Python bağımlılıkları
-├── .env.example        # API anahtarı şablonu
-└── data/
-    └── corpus/         # RAG için PDF prospektüsler (buraya ekleyin)
-```
+**Not:** Eski dokümantasyondaki yalnızca “LLaVA + Groq” veya “yalnızca Gemini 2.0 orkestra” anlatımları güncel değildir. Groq tarafında LLaVA kullanımı kapatılmıştır; görüntü için Llama 4 tabanlı modeller ve yedek Gemini kullanılır.
 
 ---
 
-## 🚀 Kurulum ve Çalıştırma
+## Teknoloji katmanları
 
-### 1. Repoyu Klonlayın
+| Katman | Bileşen | Rol |
+|--------|---------|-----|
+| Arayüz | Streamlit (`app.py`) | Sekmeler, oturum, ilerleme, rapor indirme |
+| Orkestrasyon | `PharmaGuardOrchestrator` (`agents.py`) | Ajan sırası, paralel güvenlik / firma, sürüm ile önbellek tutarlılığı |
+| Görüntü | Groq vision, Gemini vision, PIL, pyzbar, Tesseract | OCR, barkod, QR |
+| Metin / JSON | Groq Chat; isteğe bağlı OpenAI-uyumlu API | PDF alan çıkarımı, güvenlik, firma |
+| RAG | ChromaDB, LangChain Community, `sentence-transformers` tabanlı embedding | Yerel indeks |
+| Dış veri | `real_drug_data.py` (OpenFDA, Wikidata), `its_api.py`, `referans_ilac_fiyat.py` | Arşiv ve liste verileri |
+| Rapor | ReportLab (`utils.py`) | PDF çıktı |
+
+---
+
+## Çalışma ve güvenlik ilkeleri
+
+- **Fact-Checker:** Etken madde / dozaj ile RAG ve görsel çıktı çelişirse rapor bloklanabilir veya uyarı üretilir.
+- **Dozaj duyarlılığı:** Küçük dozaj farkları bile “veri uyuşmazlığı” sinyali olarak işlenir.
+- **Güven puanı ve alarm:** Çıktılar birleşik güven skoru ve KIRMIZI / SARI / YEŞİL alarm bandı ile özetlenir.
+- **Sürüm senkronu:** `agents.py` içindeki `PHARMA_GUARD_VERSION` değiştiğinde, uygulama eski oturum sonuçlarını temizleyerek tutarsız metin gösterilmesini engeller.
+- **Yasal:** Uygulama tıbbi tavsiye vermez; tanı ve tedavi için hekime başvurun.
+
+---
+
+## Kurulum (yerel)
 
 ```bash
 git clone https://github.com/cemevecen/medic.git
 cd medic
-```
-
-### 2. Bağımlılıkları Yükleyin
-
-```bash
 pip install -r requirements.txt
-```
-
-### 3. API Anahtarlarını Ayarlayın
-
-```bash
 cp .env.example .env
-```
-
-`.env` dosyasını açıp anahtarları doldurun:
-
-```env
-GEMINI_API_KEY=your_gemini_api_key_here
-GROQ_API_KEY=your_groq_api_key_here
-```
-
-| Anahtar | Nereden Alınır |
-|---------|---------------|
-| `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com/app/apikey) |
-| `GROQ_API_KEY` | [Groq Console](https://console.groq.com/keys) |
-
-### 4. Prospektüs Ekleyin (Opsiyonel ama Önerilir)
-
-`data/corpus/` klasörüne ilaç PDF prospektüslerini ekleyin. İlk çalıştırmada ChromaDB indeksi otomatik oluşturulur.
-
-> **Kaynak önerileri:** TİTCK (titck.gov.tr), FDA DailyMed, EMA
-
-### 5. Uygulamayı Başlatın
-
-```bash
+# .env dosyasını düzenleyin
 streamlit run app.py
 ```
 
+### Ortam değişkenleri (`.env`)
+
+| Değişken | Zorunlu | Açıklama |
+|----------|---------|----------|
+| `GEMINI_API_KEY` | Önerilir | Görüntü/PDF/rapor yedeği ve model zinciri |
+| `GROQ_API_KEY` | Önerilir | Görüntü, metin, güvenlik, FDA metni Türkçeleştirme |
+| `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL` | Hayır | PDF/metin için Groq sonrası OpenAI-uyumlu yedek |
+| `HF_API_KEY` | Hayır | Hugging Face token (gerekirse embedding indirimi için) |
+| `ECZANEAPI_API_KEY` | Hayır | Nöbetçi eczane iframe sayımı (`eczaneapi.com`) |
+
+ITS API anahtarı arayüzde **Hakkında → ITS API** alanından oturuma yazılabilir; üretimde `st.secrets` veya ortam değişkeni tercih edin.
+
 ---
 
-## ☁️ Streamlit Cloud Deployment
+## Streamlit Cloud
 
-1. GitHub reposunu Streamlit Cloud'a bağlayın
-2. **Main file path:** `app.py`
-3. **Settings → Secrets** bölümüne ekleyin:
+1. Repo: [cemevecen/medic](https://github.com/cemevecen/medic), dal: **`main`**, ana dosya: **`app.py`**.
+2. **Settings → Secrets** içinde en azından:
 
 ```toml
-GEMINI_API_KEY = "your_gemini_api_key"
-GROQ_API_KEY = "your_groq_api_key"
+GEMINI_API_KEY = "…"
+GROQ_API_KEY = "…"
+```
+
+İhtiyaca göre: `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`, `ECZANEAPI_API_KEY`, `HF_API_KEY`.
+
+3. Dağıtım sonrası uygulama örneği: [medicalsearch.streamlit.app](https://medicalsearch.streamlit.app/). Güncelleme görünmüyorsa Streamlit panosunda **Reboot app** / **Redeploy** ve tarayıcıda sert yenileme deneyin.
+
+---
+
+## Veri dosyaları (fiyat sekmesi)
+
+**İlaç Fiyatları** sekmesinin dolması için `data/referans_bazli_ilac_fiyat_listesi.xlsx` ve/veya `data/ilac_fiyat_web_listesi.xlsx` dosyalarının mevcut olması gerekir (ayrıntı: `referans_ilac_fiyat.py`).
+
+---
+
+## Proje yapısı (özet)
+
+```
+medic/
+├── app.py                 # Streamlit arayüzü
+├── agents.py              # Ajanlar + orkestratör + PHARMA_GUARD_VERSION
+├── utils.py               # PDF rapor, görüntü yardımcıları
+├── real_drug_data.py      # FDA / Wikidata + Türkçe çeviri
+├── its_api.py             # İlaç Takip Sistemi (ITS) istemcisi
+├── referans_ilac_fiyat.py # Birleşik fiyat DataFrame
+├── gemini_models.py       # Gemini model zinciri
+├── openai_compat.py       # OpenAI-uyumlu istemci
+├── requirements.txt
+├── .env.example
+├── data/corpus/           # RAG PDF’leri
+└── .streamlit/config.toml # Tema
 ```
 
 ---
 
-## 🔒 Güvenlik Mekanizmaları
+## Lisans
 
-| Mekanizma | Açıklama |
-|-----------|----------|
-| **Halüsinasyon Engeli** | Etken madde ile prospektüs verisi eşleşmezse rapor bloklanır |
-| **VERİ UYUŞMAZLIĞI Alarmı** | 1 mg dozaj farkı bile alarm tetikler |
-| **Güven Puanı** | Her bilgi parçası 1-10 arası puanlanır; ortalama < 8 ise uyarı eklenir |
-| **Görüntü Kalite Kontrolü** | Okunabilirlik skoru < 5 ise kullanıcı daha net fotoğraf çekmesi için uyarılır |
-| **KIRMIZI/SARI/YEŞİL Alarm** | Hamilelik, ölümcül etkileşim gibi kritik riskler kırmızı alarm ile işaretlenir |
-
----
-
-## 📊 Örnek Çıktı Raporu
-
-```
-## 1. İlaç Kimlik Özeti
-Ticari Ad: Augmentin 1000 mg  [Güven: 9/10]
-Etken Madde: Amoksisilin + Klavulanik Asit
-
-## 2. Kullanım Amacı (Endikasyonlar)
-Bakteriyel enfeksiyonların tedavisinde kullanılır...
-
-## 3. Kritik Uyarılar ve Yan Etkiler
-🔴 Penisilin alerjisi olanlarda KESİNLİKLE kullanılmaz!
-
-## 4. Etken Madde ve Üretici Detayları
-Üretici: GlaxoSmithKline | TİTCK Onaylı ✓
-
-## 5. RAG Kaynakça
-- augmentin_prospektus.pdf (s.3): "...amoksisilin trihidrat..."
-```
-
----
-
-## ⚕️ Yasal Uyarı
-
-> Bu sistem **yalnızca bilgilendirme amaçlıdır**. Tanı, tedavi veya ilaç değişikliği kararları için mutlaka lisanslı bir hekim veya eczacıya başvurun. Pharma-Guard AI'ın sunduğu bilgiler **tıbbi tavsiye niteliği taşımaz**.
-
----
-
-## 📄 Lisans
-
-MIT License — Detaylar için [LICENSE](LICENSE) dosyasına bakın.
+MIT — ayrıntılar için [LICENSE](LICENSE).

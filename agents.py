@@ -1,5 +1,5 @@
 """
-PHARMA-GUARD AI — Çoklu Ajan Sistemi
+WikiPharma — çoklu ajan sistemi
 agents.py: Tüm ajan sınıfları ve ana orkestratör bu dosyada tanımlanmıştır.
 """
 
@@ -360,7 +360,7 @@ Döndüreceğin JSON şeması:
 guven_puani: kesin bilgi varsa 7-9, tahmini bilgi varsa 5-6, bilinmiyorsa 3.
 """
 
-SYNTHESIS_PROMPT_TEMPLATE = """Sen Pharma-Guard raporlama uzmanısın. Aşağıdaki ajan çıktılarından
+SYNTHESIS_PROMPT_TEMPLATE = """Sen WikiPharma raporlama uzmanısın. Aşağıdaki ajan çıktılarından
 kapsamlı, bütünlüklü bir Türkçe ilaç analiz raporu oluştur.
 
 VISION / PDF SCANNER SONUCU:

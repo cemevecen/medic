@@ -1,5 +1,5 @@
 """
-Görsel analiz ön işleme, OCR kurtarma ve tanılama (Pharma-Guard).
+Görsel analiz ön işleme, OCR kurtarma ve tanılama (WikiPharma).
 Streamlit / ajanlar tarafından kullanılır; Groq görüntü çağrılarından bağımsız yardımcılar.
 """
 

@@ -1,6 +1,6 @@
 """
-PHARMA-GUARD AI — Ana Streamlit Arayüzü
-app.py: Modern tasarım, çoklu ajan orkestrasyon, PDF rapor.
+WikiPharma — ana Streamlit arayüzü
+Canlı: https://medicalsearch.streamlit.app/ · Kaynak: https://github.com/cemevecen/medic
 """
 
 import os
@@ -1751,7 +1751,9 @@ with tab_about:
     <div class="pg-about-card">
       <strong style="font-size:1.1rem">WikiPharma</strong>
       <p style="margin:.5rem 0 1rem;color:#64748b">
-        Görüntü işleme ve NLP'yi birleştiren otonom Çoklu Ajan Sistemi (MAS). Uygulama sürümü: <strong>v{_pgv_about}</strong>
+        Görüntü işleme ve NLP'yi birleştiren otonom Çoklu Ajan Sistemi (MAS). Uygulama sürümü: <strong>v{_pgv_about}</strong><br>
+        <span style="font-size:0.9rem">Canlı: <a href="https://medicalsearch.streamlit.app/" target="_blank" rel="noopener noreferrer">medicalsearch.streamlit.app</a>
+        · Kaynak: <a href="https://github.com/cemevecen/medic" target="_blank" rel="noopener noreferrer">github.com/cemevecen/medic</a></span>
       </p>
       <table>
         <tr><th>#</th><th>Ajan</th><th>Teknoloji</th><th>Görev</th></tr>
@@ -1883,6 +1885,7 @@ with tab_about:
 
     st.markdown("---")
     st.markdown(
+        "**Canlı:** [medicalsearch.streamlit.app](https://medicalsearch.streamlit.app/) &nbsp;|&nbsp; "
         "**GitHub:** [cemevecen/medic](https://github.com/cemevecen/medic) &nbsp;|&nbsp; "
         "**Lisans:** MIT &nbsp;|&nbsp; **Uygulama sürümü:** v"
         + str(_pgv_about)

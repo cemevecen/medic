@@ -1,5 +1,5 @@
 """
-PHARMA-GUARD AI — Yardımcı Araçlar
+WikiPharma — yardımcı araçlar
 utils.py: Görüntü işleme, PDF rapor oluşturma ve yardımcı fonksiyonlar.
 """
 
@@ -637,17 +637,21 @@ def generate_pdf_report(
     story.append(Spacer(1, 0.5 * cm))
     story.append(HRFlowable(width="100%", thickness=1, color=COLOR_BORDER))
     story.append(Spacer(1, 0.2 * cm))
+    try:
+        from agents import PHARMA_GUARD_VERSION as _pg_pdf_ver
+    except Exception:
+        _pg_pdf_ver = "?"
     story.append(
         Paragraph(
             "Bu rapor yalnızca bilgilendirme amaçlıdır. Tanı, tedavi veya ilaç "
             "değişikliği için mutlaka lisanslı bir sağlık uzmanına başvurun. "
-            "Pharma-Guard AI'ın sunduğu bilgiler tıbbi tavsiye niteliği taşımaz.",
+            "WikiPharma'nın sunduğu bilgiler tıbbi tavsiye niteliği taşımaz.",
             styles["footer"],
         )
     )
     story.append(
         Paragraph(
-            f"Rapor: Pharma-Guard AI v1.0 | {datetime.now().strftime('%d.%m.%Y')}",
+            f"Rapor: WikiPharma v{_pg_pdf_ver} | {datetime.now().strftime('%d.%m.%Y')}",
             styles["footer"],
         )
     )
