@@ -351,14 +351,10 @@ div[data-testid="stVerticalBlock"] .stTabs [data-baseweb="tab-list"] {
 /* ── Butonlar ───────────────────────────────── */
 .stButton > button {
   border-radius: 12px !important; font-weight: 600 !important;
-  padding: clamp(0.5rem, 1.5vw, 0.75rem) clamp(1rem, 3vw, 1.25rem) !important;
+  padding: 0.35rem 1rem !important;
   border: 1px solid transparent !important;
   transition: transform .15s, box-shadow .15s !important;
-  font-size: clamp(0.85rem, 2vw, 1rem) !important;
-  min-height: clamp(2.4rem, 8vw, 2.75rem) !important;
-}
-/* Arşiv'de Ara butonu için özel yükseklik */
-[data-testid="stButton"] button[kind="primary"] {
+  font-size: 0.9rem !important;
   height: 38px !important; min-height: 38px !important;
 }
 .stButton > button[kind="primary"] {
