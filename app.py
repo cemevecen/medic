@@ -130,18 +130,26 @@ def _pg_fragment_ilac_fiyatlari():
         st.info("Aramanızla eşleşen satır yok.")
         return
 
-    _rf_view = _rf_show
+    _rf_view = _rf_show.copy()
     if _n_total > 25_000:
         st.warning(
             f"**{_n_total}** satır yüklendi; tarayıcı yavaşlayabilir. "
             "Daha hızlı çalışmak için arama kutusu ile listeyi daraltın."
         )
 
+    if "İlaç adı" in _rf_view.columns:
+        _ilac_for_links: list[str] | None = ["İlaç adı"]
+    else:
+        _h = _ilac_name_columns_for_google_search(_rf_view)
+        _ilac_for_links = _h if _h else None
+    _rf_view, _rf_gcfg, _rf_gorder = _prep_df_google_links_for_streamlit(_rf_view, link_cols=_ilac_for_links)
+
     _col_cfg_all = {
         "Liste fiyatı (₺)": st.column_config.NumberColumn("Liste fiyatı (₺)", format="%.2f"),
         "Barkod": st.column_config.TextColumn("Barkod"),
     }
     _col_cfg = {k: v for k, v in _col_cfg_all.items() if k in _rf_view.columns}
+    _col_cfg.update(_rf_gcfg)
     _df_kw: dict = dict(
         use_container_width=True,
         height=_FIYAT_SEKMESI_DF_VIEWPORT_HEIGHT_PX,
@@ -149,6 +157,8 @@ def _pg_fragment_ilac_fiyatlari():
     )
     if _col_cfg:
         _df_kw["column_config"] = _col_cfg
+    if _rf_gorder is not None:
+        _df_kw["column_order"] = _rf_gorder
     st.dataframe(_rf_view, **_df_kw)
     if _n_total > 12:
         st.caption(
@@ -350,7 +360,9 @@ def _pg_fragment_ozellikli_ilaclar():
                     f"**{ntot}** satır yüklendi; tarayıcı yavaşlayabilir. "
                     "Daha hızlı çalışmak için arama kutusu ile listeyi daraltın."
                 )
+            show, _oz_gcfg, _oz_gorder = _prep_df_google_links_for_streamlit(show)
             _oz_col_cfg = _ozellikli_column_config_for_df(show)
+            _oz_col_cfg.update(_oz_gcfg)
             _oz_df_kw: dict = dict(
                 use_container_width=True,
                 height=_FIYAT_SEKMESI_DF_VIEWPORT_HEIGHT_PX,
@@ -358,6 +370,8 @@ def _pg_fragment_ozellikli_ilaclar():
             )
             if _oz_col_cfg:
                 _oz_df_kw["column_config"] = _oz_col_cfg
+            if _oz_gorder is not None:
+                _oz_df_kw["column_order"] = _oz_gorder
             st.dataframe(show, **_oz_df_kw)
             if ntot > 12:
                 st.caption(
@@ -415,6 +429,107 @@ def _google_search_url(query: str) -> str:
     if not q:
         return "https://www.google.com/"
     return "https://www.google.com/search?q=" + quote_plus(q)
+
+
+def _google_lbl_col_for_linkcolumn(link_col: str, used: set[str] | None = None) -> str:
+    """Streamlit LinkColumn için gizli etiket sütunu adı (çakışmasız)."""
+    import hashlib
+
+    used = used if used is not None else set()
+    base = hashlib.sha256(str(link_col).encode("utf-8")).hexdigest()[:16]
+    lbl = f"_glnk_{base}"
+    out = lbl
+    n = 0
+    while out in used:
+        n += 1
+        out = f"{lbl}_{n}"
+    used.add(out)
+    return out
+
+
+def _ilac_name_columns_for_google_search(df) -> list[str]:
+    """Ticari ürün adı sütunları (firma, etken madde, barkod, fiyat, tarih, URL alanları hariç)."""
+    if df is None or df.empty or not len(df.columns):
+        return []
+    out: list[str] = []
+    for c in df.columns:
+        cs = str(c).strip()
+        u = cs.upper().replace("İ", "I").replace("İ", "I")
+        if u in ("DETAY_URL", "_UYARI", "ALAN", "BILGI"):
+            continue
+        if "DETAY" in u and "URL" in u.replace(" ", ""):
+            continue
+        if "ETKIN" in u and "MADDE" in u:
+            continue
+        if "FIRMA" in u.replace(" ", "") and "ADI" in u:
+            continue
+        if "BARKOD" in u.replace(" ", ""):
+            continue
+        if "FIYAT" in u or "GKF" in u:
+            continue
+        if "TARIH" in u or "TARIHI" in u.replace("İ", "I"):
+            continue
+        if "ILAC" in u:
+            out.append(c)
+            continue
+        low = cs.casefold()
+        if "ilac" in low and "adi" in low.replace("ı", "i"):
+            out.append(c)
+            continue
+    if not out:
+        for c in df.columns:
+            u = str(c).upper().replace("İ", "I")
+            u2 = u.replace(" ", "")
+            if ("RECETELI" in u2 or "RECETESIZ" in u2) and "AD" in u:
+                out.append(c)
+                break
+    seen: set[str] = set()
+    dedup: list[str] = []
+    for c in out:
+        if c not in seen:
+            dedup.append(c)
+            seen.add(c)
+    return dedup
+
+
+def _prep_df_google_links_for_streamlit(df, link_cols: list[str] | None = None):
+    """
+    Fihrist ile aynı mantık: hücre değeri Google arama URL’si; görünen metin gizli *_glnk_* sütununda.
+    Dönüş: (df_yeni, link_column_config, column_order | None).
+    """
+    if df is None or df.empty:
+        return df, {}, None
+    cols = list(link_cols) if link_cols is not None else _ilac_name_columns_for_google_search(df)
+    cols = [c for c in cols if c in df.columns]
+    if not cols:
+        return df, {}, None
+    out = df.copy()
+    used_lbl: set[str] = set()
+    lbl_map: dict[str, str] = {}
+    for c in cols:
+        lbl = _google_lbl_col_for_linkcolumn(c, used_lbl)
+        series = out[c].astype(str)
+        out[lbl] = series
+
+        def _cell_url(v):
+            t = str(v).strip()
+            if not t or t == "-" or t.casefold() in ("nan", "none", "<na>"):
+                return "https://www.google.com/"
+            return _google_search_url(t)
+
+        out[c] = series.map(_cell_url)
+        lbl_map[c] = lbl
+    cfg = {
+        str(c): st.column_config.LinkColumn(
+            str(c),
+            display_text=lbl_map[c],
+            help="Google'da ilaç adına göre ara",
+        )
+        for c in lbl_map
+    }
+    hide = frozenset(lbl_map.values())
+    col_order = [x for x in out.columns if x not in hide]
+    return out, cfg, col_order
 
 
 def _fihrist_md_link_label(text: str) -> str:
@@ -678,8 +793,6 @@ def _gorsel_analiz_for_display_json(ga: dict) -> dict:
 
 def _render_fda_drug_detail(real_drug: dict, *, fresh: bool = True) -> None:
     """FDA / Wikidata özetini tablo olarak gösterir (oturumda kalan sonuç için de kullanılır)."""
-    import pandas as pd
-
     if fresh:
         st.success("Veriler bulundu ve Türkçeye çevrildi.")
     else:
@@ -694,14 +807,19 @@ def _render_fda_drug_detail(real_drug: dict, *, fresh: bool = True) -> None:
         ("Barkod", real_drug.get("barkod", "—")),
         ("Kaynak", real_drug.get("kaynak", "—")),
     ]
-    df_show = pd.DataFrame(rows, columns=["Alan", "Bilgi"])
-    df_show["Bilgi"] = df_show["Bilgi"].astype(str)
-    st.dataframe(
-        df_show,
-        use_container_width=True,
-        hide_index=True,
-        height=min(340, 56 + len(df_show) * 38),
-    )
+    md_lines = ["| Alan | Bilgi |", "| :----- | :---- |"]
+    for label, raw_val in rows:
+        val = str(raw_val if raw_val is not None else "—").strip() or "—"
+        if label == "İlaç Adı" and val != "—":
+            md_lines.append(
+                f"| {_fihrist_md_link_label(label)} | "
+                f"[{_fihrist_md_link_label(val)}]({_google_search_url(val)}) |"
+            )
+        else:
+            md_lines.append(
+                f"| {_fihrist_md_link_label(label)} | {_fihrist_md_link_label(val)} |"
+            )
+    st.markdown("\n".join(md_lines))
 
 
 # ─────────────────────────────────────────────
@@ -2263,6 +2381,8 @@ if _pg_nav == "İlaç Analizi":
 
                 st.markdown("#### Liste fiyatı (birleşik liste eşleşmesi)")
                 _fdf = pd.DataFrame(_fl["satirlar"])
+                _fdf = _dataframe_noneish_to_dash(_fdf)
+                _fdf, _fdf_gcfg, _fdf_gorder = _prep_df_google_links_for_streamlit(_fdf)
                 _fdf_kw: dict = dict(use_container_width=True, hide_index=True)
                 _cfg = {}
                 if "Liste fiyatı (₺)" in _fdf.columns:
@@ -2271,9 +2391,12 @@ if _pg_nav == "İlaç Analizi":
                     )
                 if "GKF (€)" in _fdf.columns:
                     _cfg["GKF (€)"] = st.column_config.NumberColumn("GKF (€)", format="%.4f")
+                _cfg.update(_fdf_gcfg)
                 if _cfg:
                     _fdf_kw["column_config"] = _cfg
-                st.dataframe(_dataframe_noneish_to_dash(_fdf), **_fdf_kw)
+                if _fdf_gorder is not None:
+                    _fdf_kw["column_order"] = _fdf_gorder
+                st.dataframe(_fdf, **_fdf_kw)
                 st.caption(
                     "Kaynak: uygulama içi birleşik fiyat listesi (İlaç Fiyatları sekmesi ile aynı veri). "
                     "Eşleşme yalnızca **ticari ad / metin girişi** ile liste başlığı benzerliği (≈%70–75); "
@@ -2713,6 +2836,7 @@ elif _pg_nav == "Hakkında":
         Görüntü işleme ve NLP'yi birleştiren otonom Çoklu Ajan Sistemi (MAS). Uygulama sürümü: <strong>v{_pgv_about}</strong><br>
         <span style="font-size:0.9rem">Canlı: <a href="https://medicalsearch.streamlit.app/" target="_blank" rel="noopener noreferrer">medicalsearch.streamlit.app</a>
         · Kaynak: <a href="https://github.com/cemevecen/medic" target="_blank" rel="noopener noreferrer">github.com/cemevecen/medic</a>
+        · İlaç A–Z fihrist (referans): <a href="{_FIHRIST_REF_GOOGLE_SHEETS}" target="_blank" rel="noopener noreferrer">Google Sheets</a>
         · Özellikli ilaç listeleri (referans): <a href="{_OZELLIKLI_REF_GOOGLE_SHEETS}" target="_blank" rel="noopener noreferrer">Google Sheets</a></span>
       </p>
       <table>
