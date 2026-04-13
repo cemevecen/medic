@@ -248,6 +248,24 @@ st.markdown("""
   --pg-sidebar-muted: #64748b;
 }
 
+/* EczaneAPI widget iframe — alt bilgi satırını tema zeminiyle maskele */
+.pg-eczane-footer-mask {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 42px;
+  pointer-events: none;
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0) 0%,
+    var(--pg-canvas) 52%,
+    var(--pg-canvas) 100%
+  );
+}
+
 /* ── Zemin ──────────────────────────────────── */
 .stApp {
   background: var(--pg-canvas) !important;
@@ -1429,10 +1447,12 @@ with tab_analyze:
     _iframe_h = _eczane_iframe_height_px(_duty_n, _dist_sel)
 
     st.markdown(
-        '<div class="pg-eczane-widget-block" style="max-width:400px;width:100%;margin-top:0.5rem;">'
+        '<div class="pg-eczane-widget-block" style="max-width:400px;width:100%;margin-top:0.5rem;'
+        'position:relative;border-radius:12px;overflow:hidden;">'
         f'<iframe src="{html.escape(_widget_src)}" width="100%" height="{_iframe_h}" '
         'frameborder="0" style="border:none; border-radius:12px; max-width: 400px; '
         'margin: 0 auto; display: block;" title="Nöbetçi Eczaneler"></iframe>'
+        '<div class="pg-eczane-footer-mask" aria-hidden="true"></div>'
         "</div>",
         unsafe_allow_html=True,
     )
