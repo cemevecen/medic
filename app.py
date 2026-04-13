@@ -202,6 +202,35 @@ def _gorsel_analiz_for_display_json(ga: dict) -> dict:
     return d
 
 
+def _render_fda_drug_detail(real_drug: dict, *, fresh: bool = True) -> None:
+    """FDA / Wikidata özetini tablo olarak gösterir (oturumda kalan sonuç için de kullanılır)."""
+    import pandas as pd
+
+    if fresh:
+        st.success("Veriler bulundu ve Türkçeye çevrildi.")
+    else:
+        st.markdown("##### Son arşiv sonucu")
+        st.caption("Önceki sorgunuz — yeni arama için yukarıdaki alanı kullanın.")
+
+    rows = [
+        ("İlaç Adı", real_drug.get("ticari_ad", "—")),
+        ("Etken Madde", real_drug.get("etken_madde", "—")),
+        ("Dozaj", real_drug.get("dozaj", "—")),
+        ("Form", real_drug.get("form", "—")),
+        ("Üretici", real_drug.get("uretici", "—")),
+        ("Barkod", real_drug.get("barkod", "—")),
+        ("Kaynak", real_drug.get("kaynak", "—")),
+    ]
+    df_show = pd.DataFrame(rows, columns=["Alan", "Bilgi"])
+    df_show["Bilgi"] = df_show["Bilgi"].astype(str)
+    st.dataframe(
+        df_show,
+        use_container_width=True,
+        hide_index=True,
+        height=min(340, 56 + len(df_show) * 38),
+    )
+
+
 # ─────────────────────────────────────────────
 # SAYFA YAPISI
 # ─────────────────────────────────────────────
@@ -1539,6 +1568,80 @@ with tab_analyze:
             """, unsafe_allow_html=True)
 
 # ═════════════════════════════════════════════
+# SEKME 2 — FDA ARŞİVİ (Gerçek İlaç Verisi)
+# ═════════════════════════════════════════════
+with tab_fda:
+    st.markdown(
+        '<p class="pg-section">FDA Arşivi — Gerçek İlaç Bilgisi</p>',
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "Bilgi edinmek istediğiniz ilacı Amerikan Gıda ve İlaç Dairesi arşivinde sorgulayabilirsiniz. "
+        "Onayı bulunmayan ilaçlar arşiv sonuçlarında yer bulamayabilir."
+    )
+
+    col1, col2 = st.columns([3, 2], gap="small", vertical_alignment="bottom")
+
+    with col1:
+        drug_search = st.text_input(
+            "İlaç adını girin",
+            placeholder="örn: Augmentin, Parol, Aspirin, Dikloron…",
+            key="drug_search_input",
+        )
+
+    with col2:
+        fetch_clicked = st.button(
+            " Arşiv'de Ara",
+            type="primary",
+            use_container_width=True,
+            key="fetch_real_data_btn",
+        )
+
+    if fetch_clicked:
+        if drug_search.strip():
+            with st.spinner(f"'{drug_search.strip()}' FDA arşivinde aranıyor…"):
+                try:
+                    from real_drug_data import fetch_drug_info
+
+                    real_drug = fetch_drug_info(drug_search.strip())
+                    if real_drug:
+                        st.session_state["test_drug_data"] = real_drug
+                        _render_fda_drug_detail(real_drug, fresh=True)
+                    else:
+                        st.warning(
+                            f"'{drug_search.strip()}' için veriler bulunamadı. Başka bir isimle deneyin."
+                        )
+                        st.info(
+                            "**İpucu:** Ticari isim (örn: Augmentin) veya etken madde adı "
+                            "(örn: Amoxicillin) yazabilirsiniz."
+                        )
+                        if st.session_state.get("test_drug_data"):
+                            st.markdown("---")
+                            _render_fda_drug_detail(st.session_state["test_drug_data"], fresh=False)
+                except ImportError:
+                    st.error("real_drug_data modülü bulunamadı")
+                except Exception as e:
+                    st.error(f"Hata: {str(e)}")
+        else:
+            st.warning("Aramak için önce ilaç adı girin.")
+            if st.session_state.get("test_drug_data"):
+                st.markdown("---")
+                _render_fda_drug_detail(st.session_state["test_drug_data"], fresh=False)
+    elif st.session_state.get("test_drug_data"):
+        _render_fda_drug_detail(st.session_state["test_drug_data"], fresh=False)
+        st.divider()
+        st.info("Yeni kayıt için ilaç adını yazıp **Arşiv'de Ara** düğmesine basın.")
+    else:
+        st.markdown(
+            '<div class="pg-empty" style="margin-top:0.5rem">'
+            '<p style="margin:0;color:#64748b;font-size:0.95rem">'
+            "İlaç adını yazın ve <strong>Arşiv'de Ara</strong> ile OpenFDA / Wikidata üzerinden "
+            "kayıt sorgulayın. Sonuçlar Türkçeye uyarlanır."
+            "</p></div>",
+            unsafe_allow_html=True,
+        )
+
+# ═════════════════════════════════════════════
 # SEKME 3 — İLAÇ FİYATLARI (birleşik liste)
 # ═════════════════════════════════════════════
 with tab_its:
@@ -1609,7 +1712,7 @@ with tab_its:
             st.caption(f"Toplam {_n_satir} satır.")
 
 # ═════════════════════════════════════════════
-# SEKME 5 — PROSPEKTÜS YÖNETİMİ (CORPUS)
+# SEKME 4 — PROSPEKTÜS YÖNETİMİ (CORPUS)
 # ═════════════════════════════════════════════
 with tab_corpus:
     st.markdown("""
@@ -1662,82 +1765,6 @@ with tab_corpus:
                 "[TİTCK](https://titck.gov.tr) · "
                 "[FDA DailyMed](https://dailymed.nlm.nih.gov) · "
                 "[EMA](https://www.ema.europa.eu)")
-
-# ═════════════════════════════════════════════
-# SEKME 2 — FDA ARŞİVİ (Gerçek İlaç Verisi)
-# ═════════════════════════════════════════════
-with tab_fda:
-    st.markdown(
-        '<p class="pg-section">FDA Arşivi — Gerçek İlaç Bilgisi</p>',
-        unsafe_allow_html=True,
-    )
-    st.caption(
-        "Bilgi edinmek istediğiniz ilacı Amerikan Gıda ve İlaç Dairesi arşivinde sorgulayabilirsiniz. "
-        "Onayı bulunmayan ilaçlar arşiv sonuçlarında yer bulamayabilir."
-    )
-
-    col1, col2 = st.columns([3, 2], gap="small", vertical_alignment="bottom")
-
-    with col1:
-        drug_search = st.text_input(
-            "İlaç adını girin",
-            placeholder="örn: Augmentin, Parol, Aspirin, Dikloron…",
-            key="drug_search_input"
-        )
-
-    with col2:
-        fetch_clicked = st.button(
-            " Arşiv'de Ara",
-            type="primary",
-            use_container_width=True,
-            key="fetch_real_data_btn",
-        )
-
-    if fetch_clicked or drug_search:
-        if drug_search.strip():
-            with st.spinner(f"'{drug_search}' FDA arşivinde aranıyor…"):
-                try:
-                    from real_drug_data import fetch_drug_info
-                    real_drug = fetch_drug_info(drug_search)
-                    if real_drug:
-                        st.session_state["test_drug_data"] = real_drug
-                        st.success("Veriler bulundu ve Türkçeye çevrildi.")
-
-                        # Verilen bilgileri güzel tablo şeklinde göster
-                        col_label, col_value = st.columns([1, 2])
-
-                        with col_label:
-                            st.markdown("**Alan**")
-                        with col_value:
-                            st.markdown("**Bilgi**")
-
-                        st.divider()
-
-                        drug_display = {
-                            "İlaç Adı": real_drug.get("ticari_ad", "—"),
-                            "Etken Madde": real_drug.get("etken_madde", "—"),
-                            "Dozaj": real_drug.get("dozaj", "—"),
-                            "Form": real_drug.get("form", "—"),
-                            "Üretici": real_drug.get("uretici", "—"),
-                            "Barkod": real_drug.get("barkod", "—"),
-                            "Kaynak": real_drug.get("kaynak", "—"),
-                        }
-
-                        for key, value in drug_display.items():
-                            col_k, col_v = st.columns([1, 2])
-                            with col_k:
-                                st.markdown(f"**{key}**")
-                            with col_v:
-                                st.caption(value)
-                    else:
-                        st.warning(f"'{drug_search}' için veriler bulunamadı. Başka bir isimle deneyin.")
-                        st.info("**İpucu:** Ticari isim (örn: Augmentin) veya etken madde adı (örn: Amoxicillin) yazabilirsiniz.")
-                except ImportError:
-                    st.error("real_drug_data modülü bulunamadı")
-                except Exception as e:
-                    st.error(f"Hata: {str(e)}")
-        else:
-            st.info("Araştırma yapmak için ilaç adını girin")
 
 # ═════════════════════════════════════════════
 # SEKME 5 — HAKKINDA
