@@ -1672,7 +1672,8 @@ with tab_fda:
         unsafe_allow_html=True,
     )
     st.caption(
-        "Bilgi edinmek istediğiniz ilacı Amerikan Gıda ve İlaç Dairesi arşivinde sorgulayarak bilgi edinin."
+        "Bilgi edinmek istediğiniz ilacı Amerikan Gıda ve İlaç Dairesi arşivinde sorgulayarak bilgi edinin. "
+        "Onayı bulunmayan ilaçlar arşiv sonuçlarında yer bulamayabilir."
     )
 
     col1, col2 = st.columns([3, 2], gap="small", vertical_alignment="bottom")
