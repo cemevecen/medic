@@ -269,8 +269,14 @@ def _resolve_ozellikli_ilac_xlsx_path() -> Path | None:
     return None
 
 
+def _ozellikli_column_is_kt_kub(name: object) -> bool:
+    """KT_KUB / 'KT KUB' / kt-kub vb. tek sütun anahtarı (harf dışı karakterler yok sayılır)."""
+    key = "".join(ch for ch in str(name).strip().upper() if ch.isalnum())
+    return key == "KTKUB"
+
+
 @st.cache_data(show_spinner=False)
-def _cached_ozellikli_ilac_listeleri(_cache_bust: int = 4) -> tuple[dict, Path] | None:
+def _cached_ozellikli_ilac_listeleri(_cache_bust: int = 5) -> tuple[dict, Path] | None:
     """ilacrehberi_ilac_listeleri.xlsx — tüm sheet'ler; (sheet adı → DataFrame, dosya yolu)."""
     _ = _cache_bust
     import pandas as pd
@@ -286,6 +292,9 @@ def _cached_ozellikli_ilac_listeleri(_cache_bust: int = 4) -> tuple[dict, Path] 
             continue
         df = df.copy()
         df.columns = [str(c).strip() for c in df.columns]
+        _kt_kub_cols = [c for c in df.columns if _ozellikli_column_is_kt_kub(c)]
+        if _kt_kub_cols:
+            df = df.drop(columns=_kt_kub_cols, errors="ignore")
         df = df.dropna(how="all").reset_index(drop=True)
         out[str(name)] = df
     return (out, p) if out else None
@@ -304,17 +313,9 @@ def _pg_fragment_ozellikli_ilaclar():
             "Üretim: `scripts/export_ilacrehberi_recete_listeleri_xlsx.py` "
             "(`-o data/ilacrehberi_ilac_listeleri.xlsx`)."
         )
-        st.caption(
-            f"Referans: [Özellikli ilaç listeleri — Google Sheets]({_OZELLIKLI_REF_GOOGLE_SHEETS})"
-        )
         return
 
-    data, src_path = cached
-
-    st.caption(
-        f"Kaynak: `{src_path}` — her sekme bir Excel sayfasıdır; sütunlar ve satırlar dosyayla aynıdır. "
-        f"Referans: [Google Sheets]({_OZELLIKLI_REF_GOOGLE_SHEETS})."
-    )
+    data, _ = cached
 
     seen = set(data.keys())
     ordered = [s for s in _OZELLIKLI_SHEET_ORDER if s in data]
@@ -1845,12 +1846,6 @@ if _pg_nav not in _PG_TAB_LABELS:
     _pg_nav = _PG_TAB_LABELS[0]
     st.session_state.pg_main_nav = _pg_nav
 
-# İlaç Analizi dışından bu sekmeye dönünce nöbetçi widget'ı tekrar dropdown seçimine bağlansın.
-_pg_prev = st.session_state.get("_pg_nav_prev_stamp")
-if _pg_nav == "İlaç Analizi" and _pg_prev not in (None, "İlaç Analizi"):
-    st.session_state["pg_eczane_load_widget"] = False
-st.session_state["_pg_nav_prev_stamp"] = _pg_nav
-
 # ═════════════════════════════════════════════
 # SEKME 1 — ANALİZ
 # ═════════════════════════════════════════════
@@ -2013,11 +2008,6 @@ if _pg_nav == "İlaç Analizi":
             unsafe_allow_html=True,
         )
 
-        def _pg_eczane_on_dropdown_change() -> None:
-            st.session_state["pg_eczane_load_widget"] = True
-
-        st.session_state.setdefault("pg_eczane_load_widget", False)
-
         _geo_rows = load_turkey_geo_rows()
         _city_slugs = [r[1] for r in _geo_rows]
         _city_label = {r[1]: r[0] for r in _geo_rows}
@@ -2032,7 +2022,6 @@ if _pg_nav == "İlaç Analizi":
                 index=_ci0,
                 format_func=lambda s: _city_label.get(s, s),
                 key="eczane_widget_city",
-                on_change=_pg_eczane_on_dropdown_change,
             )
         _counties_raw = _city_counties.get(_w_city) or []
         _dist_slugs = [""] + [slug_tr(co) for co in _counties_raw]
@@ -2046,39 +2035,37 @@ if _pg_nav == "İlaç Analizi":
                 index=0,
                 format_func=lambda s: _dist_label.get(s, s),
                 key=f"eczane_widget_district__{_w_city}",
-                on_change=_pg_eczane_on_dropdown_change,
             )
 
-        if not st.session_state.get("pg_eczane_load_widget"):
-            st.caption(
-                f"Liste ve harita yalnızca il veya ilçe seçimini değiştirdiğinizde yüklenir "
-                f"(bugün: **{_ecz_today}**)."
-            )
-        else:
-            _params: dict[str, str] = {"city": str(_w_city).strip().lower()}
-            if str(_w_dist or "").strip():
-                _params["district"] = str(_w_dist).strip().lower()
-            _widget_src = "https://eczaneapi.com/widget?" + urlencode(_params)
+        st.caption(
+            f"Tarih yukarıda (**{_ecz_today}**). Liste ve harita, seçtiğiniz il ve ilçeye göre "
+            "[eczaneapi.com](https://eczaneapi.com) aracılığıyla yüklenir."
+        )
 
-            _dist_sel = bool(str(_w_dist or "").strip())
-            _duty_n = _eczane_on_duty_count(
-                _w_city, str(_w_dist or ""), _eczaneapi_key_optional()
-            )
-            _iframe_h = _eczane_iframe_height_px(_duty_n, _dist_sel)
-            # iframe üstünde HTML maskesi güvenilir değil; alt bilgi satırını görünür alanın dışına taşı
-            _ft = 34 if _duty_n == 1 else 48
-            _iframe_vis = max(210, _iframe_h - _ft)
+        _params: dict[str, str] = {"city": str(_w_city).strip().lower()}
+        if str(_w_dist or "").strip():
+            _params["district"] = str(_w_dist).strip().lower()
+        _widget_src = "https://eczaneapi.com/widget?" + urlencode(_params)
 
-            st.markdown(
-                '<div class="pg-eczane-widget-block" style="margin-top:0.5rem;position:relative;'
-                'border-radius:12px;overflow:hidden;">'
-                f'<iframe src="{html.escape(_widget_src)}" width="100%" height="{_iframe_vis}" '
-                'frameborder="0" style="border:none;border-radius:12px;" '
-                'title="Nöbetçi Eczaneler"></iframe>'
-                '<div class="pg-eczane-footer-mask" aria-hidden="true"></div>'
-                "</div>",
-                unsafe_allow_html=True,
-            )
+        _dist_sel = bool(str(_w_dist or "").strip())
+        _duty_n = _eczane_on_duty_count(
+            _w_city, str(_w_dist or ""), _eczaneapi_key_optional()
+        )
+        _iframe_h = _eczane_iframe_height_px(_duty_n, _dist_sel)
+        # iframe üstünde HTML maskesi güvenilir değil; alt bilgi satırını görünür alanın dışına taşı
+        _ft = 34 if _duty_n == 1 else 48
+        _iframe_vis = max(210, _iframe_h - _ft)
+
+        st.markdown(
+            '<div class="pg-eczane-widget-block" style="margin-top:0.5rem;position:relative;'
+            'border-radius:12px;overflow:hidden;">'
+            f'<iframe src="{html.escape(_widget_src)}" width="100%" height="{_iframe_vis}" '
+            'frameborder="0" style="border:none;border-radius:12px;" '
+            'title="Nöbetçi Eczaneler"></iframe>'
+            '<div class="pg-eczane-footer-mask" aria-hidden="true"></div>'
+            "</div>",
+            unsafe_allow_html=True,
+        )
 
         st.markdown("---")
         if st.button(
@@ -2089,7 +2076,6 @@ if _pg_nav == "İlaç Analizi":
         ):
             for k in ("orchestrator", "pg_version", "analysis_result", "report_pdf"):
                 st.session_state.pop(k, None)
-            st.session_state["pg_eczane_load_widget"] = False
             st.success(" Temizlendi — bir sonraki analizde yeniden başlatılır.")
             st.rerun()
 
@@ -2731,7 +2717,8 @@ elif _pg_nav == "Hakkında":
       <p style="margin:.5rem 0 1rem;color:#64748b">
         Görüntü işleme ve NLP'yi birleştiren otonom Çoklu Ajan Sistemi (MAS). Uygulama sürümü: <strong>v{_pgv_about}</strong><br>
         <span style="font-size:0.9rem">Canlı: <a href="https://medicalsearch.streamlit.app/" target="_blank" rel="noopener noreferrer">medicalsearch.streamlit.app</a>
-        · Kaynak: <a href="https://github.com/cemevecen/medic" target="_blank" rel="noopener noreferrer">github.com/cemevecen/medic</a></span>
+        · Kaynak: <a href="https://github.com/cemevecen/medic" target="_blank" rel="noopener noreferrer">github.com/cemevecen/medic</a>
+        · Özellikli ilaç listeleri (referans): <a href="{_OZELLIKLI_REF_GOOGLE_SHEETS}" target="_blank" rel="noopener noreferrer">Google Sheets</a></span>
       </p>
       <table>
         <tr><th>#</th><th>Ajan</th><th>Teknoloji</th><th>Görev</th></tr>
