@@ -131,6 +131,14 @@ python scripts/export_ilacrehberi_fihrist_xlsx.py -o data/ilacrehberi_fihrist.xl
 
 Referans düzen için uygulamadaki kaynak linklerine bakın; örnek eşleme tablosu: [Google Sheets — İlaç A-Z fihrist](https://docs.google.com/spreadsheets/d/13Hd8k4zVylcRSGB9FJpTpFqBUJ7FGnytKxvAV-TIWaY/edit?gid=0#gid=0).
 
+Yeşil / kırmızı / mor / turuncu reçete, takibi zorunlu, reçetesiz ve geri çekilen ilaç listelerini tek XLSX’te (sayfa başına bir sheet) indirmek için:
+
+```bash
+python scripts/export_ilacrehberi_recete_listeleri_xlsx.py
+```
+
+Varsayılan çıktı: Masaüstünde `ilacrehberi_ilac_listeleri.xlsx`. `-o yol.xlsx` ile değiştirilebilir.
+
 ### Prospektüs (RAG)
 
 Yüklü PDF’ler `data/corpus/` altında tutulur (`MEDIC_CORPUS_DIR` ile özelleştirilebilir). İndeks `data/chroma_db/` altında tutulur; indeks yenileme bu klasörü yeniden oluşturur, PDF dosyalarını silmez.
@@ -150,7 +158,8 @@ medic/
 ├── gemini_models.py       # Gemini model zinciri
 ├── openai_compat.py       # OpenAI-uyumlu istemci
 ├── scripts/
-│   └── export_ilacrehberi_fihrist_xlsx.py  # ilacrehberi.com fihrist → XLSX
+│   ├── export_ilacrehberi_fihrist_xlsx.py       # ilacrehberi.com A–Z fihrist → XLSX
+│   └── export_ilacrehberi_recete_listeleri_xlsx.py  # reçete/liste sayfaları → çok sayfalı XLSX
 ├── requirements.txt
 ├── .env.example
 ├── data/corpus/           # RAG PDF’leri (MEDIC_CORPUS_DIR ile değiştirilebilir)
