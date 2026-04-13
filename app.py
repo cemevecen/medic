@@ -7,6 +7,7 @@ import os
 import json
 import html
 from pathlib import Path
+from urllib.parse import urlencode
 
 import streamlit as st
 from PIL import Image
@@ -32,18 +33,31 @@ def load_api_config():
             pass
 
 def save_api_config():
-    """API bilgilerini config dosyasına kaydet"""
-    config = {
-        "rapidapi_endpoint_1": st.session_state.get("rapidapi_endpoint_1", ""),
-        "rapidapi_key_1": st.session_state.get("rapidapi_key_1", ""),
-        "rapidapi_endpoint_2": st.session_state.get("rapidapi_endpoint_2", ""),
-        "rapidapi_key_2": st.session_state.get("rapidapi_key_2", ""),
-        "collectapi_api_key": st.session_state.get("collectapi_api_key", "")
-    }
+    """API bilgilerini config dosyasına kaydet (diskteki diğer anahtarları silmez)."""
+    config = {}
+    if CONFIG_API_PATH.exists():
+        try:
+            with open(CONFIG_API_PATH, "r", encoding="utf-8") as f:
+                config = json.load(f)
+        except Exception:
+            config = {}
+    keys = (
+        "rapidapi_endpoint_1",
+        "rapidapi_key_1",
+        "rapidapi_endpoint_2",
+        "rapidapi_key_2",
+        "rapidapi_endpoint_3",
+        "rapidapi_key_3",
+        "collectapi_api_key",
+        "eczaneapi_api_key",
+    )
+    for k in keys:
+        if k in st.session_state:
+            config[k] = st.session_state.get(k) or ""
     try:
         CONFIG_API_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(CONFIG_API_PATH, "w") as f:
-            json.dump(config, f, indent=2)
+        with open(CONFIG_API_PATH, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
         print(f"✓ API config kaydedildi: {CONFIG_API_PATH}")
     except Exception as e:
         print(f"❌ API config kaydetme hatası: {e}")
@@ -52,50 +66,92 @@ def save_api_config():
 load_api_config()
 
 # ═════════════════════════════════════════════
-# EczaneAPI Widget — Tüm Şehir/İlçeler Cache
+# EczaneAPI Widget — İl/İlçe indeksi (API v1, X-API-Key zorunlu)
 # ═════════════════════════════════════════════
-@st.cache_data
-def load_eczaneapi_cities_districts():
-    """EczaneAPI'den tüm şehir ve ilçeleri load et (cache'lendi)"""
+def _eczaneapi_key_from_disk() -> str:
+    try:
+        if CONFIG_API_PATH.exists():
+            with open(CONFIG_API_PATH, "r", encoding="utf-8") as f:
+                return str(json.load(f).get("eczaneapi_api_key") or "").strip()
+    except Exception:
+        pass
+    return ""
+
+
+@st.cache_data(ttl=21600, show_spinner=False)
+def load_eczaneapi_widget_index(api_key: str) -> dict:
+    """
+    EczaneAPI resmi widget URL'leri ile uyumlu il/ilçe slug haritası.
+    https://eczaneapi.com/api/v1/cities ve .../cities/{slug}/districts çağrıları X-API-Key ister.
+    Dönüş: by_city, city_label, district_label (slug -> görünen ad).
+    """
     import requests
 
-    try:
-        # Tüm şehirleri al
-        response = requests.get("https://eczaneapi.com/api/v1/cities", timeout=10)
-        if response.status_code != 200:
-            return {}
+    out = {"by_city": {}, "city_label": {}, "district_label": {}}
+    if not (api_key or "").strip():
+        return out
 
-        cities_data = response.json().get("data", [])
-        cities_districts = {}
+    headers = {"X-API-Key": api_key.strip()}
+
+    try:
+        r = requests.get("https://eczaneapi.com/api/v1/cities", headers=headers, timeout=20)
+        if r.status_code != 200:
+            return out
+        j = r.json()
+        if not j.get("success"):
+            return out
+        cities_data = j.get("data") or []
+        if not isinstance(cities_data, list):
+            return out
 
         for city in cities_data:
-            city_slug = city.get("slug", "").lower()
-            city_name = city.get("name", "")
-
+            city_slug = str(city.get("slug") or "").strip().lower()
+            city_name = str(city.get("name") or city_slug).strip()
             if not city_slug:
                 continue
+            out["city_label"][city_slug] = city_name
 
             try:
-                # Her şehir için ilçeleri al
-                dist_response = requests.get(
+                dr = requests.get(
                     f"https://eczaneapi.com/api/v1/cities/{city_slug}/districts",
-                    timeout=10
+                    headers=headers,
+                    timeout=15,
                 )
+                if dr.status_code != 200:
+                    out["by_city"][city_slug] = []
+                    out["district_label"][city_slug] = {}
+                    continue
+                dj = dr.json()
+                if not dj.get("success"):
+                    out["by_city"][city_slug] = []
+                    out["district_label"][city_slug] = {}
+                    continue
+                data = dj.get("data") or {}
+                districts_data = data.get("districts") if isinstance(data, dict) else []
+                if not isinstance(districts_data, list):
+                    districts_data = []
 
-                if dist_response.status_code == 200:
-                    districts_data = dist_response.json().get("data", {}).get("districts", [])
-                    districts_list = [d.get("slug", "").lower() for d in districts_data if d.get("slug")]
-                    cities_districts[city_slug] = sorted(districts_list) if districts_list else []
-            except:
-                cities_districts[city_slug] = []
+                slugs: list[str] = []
+                dlab: dict[str, str] = {}
+                for d in districts_data:
+                    ds = str(d.get("slug") or "").strip().lower()
+                    if not ds:
+                        continue
+                    slugs.append(ds)
+                    dlab[ds] = str(d.get("name") or ds).strip()
+                out["by_city"][city_slug] = sorted(slugs)
+                out["district_label"][city_slug] = dlab
+            except Exception:
+                out["by_city"][city_slug] = []
+                out["district_label"][city_slug] = {}
 
-        return cities_districts
+        return out
     except Exception as e:
-        print(f"❌ EczaneAPI cities/districts load hatası: {e}")
-        return {}
+        print(f"❌ EczaneAPI widget indeks yükleme: {e}")
+        return out
 
-# Widget başlatılırken cache load et
-ECZANEAPI_CITIES_DISTRICTS = load_eczaneapi_cities_districts()
+
+ECZANEAPI_WIDGET_INDEX = load_eczaneapi_widget_index(_eczaneapi_key_from_disk())
 
 from typing import Optional
 
@@ -1386,40 +1442,84 @@ with tab_nobetci:
     st.markdown("---")
     st.markdown("### 📍 Bugünün Nöbetçi Eczaneleri")
     with st.expander("🎯 Widget ile göz at", expanded=True):
+        widx = ECZANEAPI_WIDGET_INDEX or {}
+        by_city = widx.get("by_city") or {}
+        city_label = widx.get("city_label") or {}
+        district_label_root = widx.get("district_label") or {}
+        widget_index_ok = bool(by_city)
+
+        if not widget_index_ok:
+            st.info(
+                "EczaneAPI **widget iframe’i** anahtar istemez; ancak buradaki **il / ilçe seçimi**, "
+                "resmi API ile aynı slug’ları kullanmak için `config_api.json` içindeki "
+                "**eczaneapi_api_key** ile `GET /api/v1/cities` ve `.../districts` yanıtlarından doldurulur. "
+                "Anahtar yoksa liste boş kalır ve [sitene-ekle](https://eczaneapi.com/sitene-ekle) sayfasındaki "
+                "gibi ilçe seçemezsiniz. Anahtarı kaydettikten sonra **Listeyi yenile**ye basın."
+            )
+
+        col_key, col_reload = st.columns([3, 1])
+        with col_key:
+            st.text_input(
+                "EczaneAPI anahtarı (il/ilçe slug listesi için; widget içeriği doğrudan eczaneapi.com’dan)",
+                type="password",
+                key="eczaneapi_api_key",
+                placeholder="eczane_api_…",
+            )
+        with col_reload:
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("Listeyi yenile", use_container_width=True, key="widget_index_reload"):
+                save_api_config()
+                load_eczaneapi_widget_index.clear()
+                st.rerun()
+
         col_widget_city, col_widget_district = st.columns(2)
 
+        cities_list = sorted(by_city.keys()) if by_city else ["ankara"]
+
+        def _fmt_city(slug: str) -> str:
+            return city_label.get(slug, slug.replace("-", " ").title())
+
         with col_widget_city:
-            # Tüm cache'lenmiş şehirler
-            cities_list = sorted(ECZANEAPI_CITIES_DISTRICTS.keys()) if ECZANEAPI_CITIES_DISTRICTS else ["ankara"]
+            _ci = cities_list.index("ankara") if "ankara" in cities_list else 0
             widget_city = st.selectbox(
                 "Widget İçin İl Seçin",
                 options=cities_list,
-                format_func=lambda x: x.capitalize(),
-                index=0 if "ankara" in cities_list else 0,
-                key="widget_city_select"
+                format_func=_fmt_city,
+                index=_ci,
+                key="widget_city_select",
             )
 
+        dlabels = district_label_root.get(widget_city, {}) if isinstance(district_label_root, dict) else {}
+        districts = list(by_city.get(widget_city, []))
+
+        def _fmt_dist(slug: str) -> str:
+            if not (slug or "").strip():
+                return "Tüm ilçeler"
+            return dlabels.get(slug, slug.replace("-", " ").title())
+
         with col_widget_district:
-            # Seçili şehrin ilçeleri
-            districts = ECZANEAPI_CITIES_DISTRICTS.get(widget_city, [])
             districts_with_empty = [""] + districts
             widget_district = st.selectbox(
                 "Widget İçin İlçe Seçin (İsteğe Bağlı)",
                 options=districts_with_empty,
-                format_func=lambda x: x.capitalize() if x else "Tüm ilçeler",
-                key="widget_district_select"
+                format_func=_fmt_dist,
+                key="widget_district_select",
             )
 
-        # Widget URL oluştur
-        widget_url = f"https://eczaneapi.com/widget?city={widget_city}"
-        if widget_district:
-            widget_url += f"&district={widget_district}"
+        params = {"city": str(widget_city).strip().lower()}
+        if str(widget_district or "").strip():
+            params["district"] = str(widget_district).strip().lower()
+        widget_url = "https://eczaneapi.com/widget?" + urlencode(params)
 
         st.markdown(
-            f'<iframe src="{widget_url}" width="100%" height="400" frameborder="0" style="border:none; border-radius:12px; max-width: 400px; margin: 0 auto; display: block;" title="Nöbetçi Eczaneler"></iframe>',
-            unsafe_allow_html=True
+            f'<iframe src="{html.escape(widget_url)}" width="100%" height="520" frameborder="0" '
+            'style="border:none; border-radius:12px; max-width: 440px; margin: 0 auto; display: block;" '
+            'title="Nöbetçi Eczaneler"></iframe>',
+            unsafe_allow_html=True,
         )
-        st.caption("✨ Widget sağlayıcısı: EczaneAPI — Tüm şehir/ilçeler, canlı veriler")
+        st.caption(
+            f"Örnek URL (slug): `{widget_url}` — [eczaneapi.com/sitene-ekle](https://eczaneapi.com/sitene-ekle) ile aynı parametreler."
+        )
 
     st.markdown("---")
     st.markdown("### 🔍 Ayrıntılı Arama")
