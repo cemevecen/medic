@@ -1237,7 +1237,7 @@ with tab_analyze:
                     if c.get("genel_degerlendirme"):
                         st.info(c["genel_degerlendirme"])
 
-            with rt5:
+            with rt4:
                 sim = res.get("similar_drugs") or {}
                 st.markdown("### Benzer İlaçlar / Muadil Alternatifler")
                 if sim.get("uyari"):
