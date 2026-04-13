@@ -15,7 +15,7 @@
 
 ## Ne yapar?
 
-WikiPharma; ilaç kutusu fotoğrafı, prospektüs PDF’i veya ilaç adı ile **kimlik, güvenlik ve tutarlılık** odaklı bir özet üretir. Yerel `data/corpus/` altındaki PDF’ler indekslenir; etken madde ve dozaj gibi alanlar **RAG + kural tabanlı Fact-Checker** ile karşılaştırılır. Bu bir tanı/tedavi aracı değildir; çıktılar bilgilendirme amaçlıdır.
+WikiPharma; ilaç kutusu fotoğrafı, prospektüs PDF’i veya ilaç adı ile **kimlik, güvenlik ve tutarlılık** odaklı bir özet üretir. Prospektüs PDF’leri corpus dizinine kaydedilir (varsayılan `data/corpus/`; isteğe bağlı `MEDIC_CORPUS_DIR`), ChromaDB’de indekslenir; etken madde ve dozaj gibi alanlar **RAG + kural tabanlı Fact-Checker** ile karşılaştırılır. Bu bir tanı/tedavi aracı değildir; çıktılar bilgilendirme amaçlıdır.
 
 ---
 
@@ -25,9 +25,10 @@ WikiPharma; ilaç kutusu fotoğrafı, prospektüs PDF’i veya ilaç adı ile **
 |--------|--------|
 | **İlaç Analizi** | Görsel / PDF / metin → `PharmaGuardOrchestrator` ile ajan zinciri, Markdown rapor ve indirilebilir PDF. |
 | **FDA Arşivi** | OpenFDA + Wikidata tabanlı gerçek kayıt sorgusu; özetler Groq ile Türkçeleştirilir. Onayı olmayan ürünler arşivde görünmeyebilir. |
-| **İlaç Fiyatları** | Birleştirilmiş referans fiyat listesi (`referans_ilac_fiyat.py`, `data/*.xlsx`). |
-| **Prospektüs Yönetimi** | PDF yükleme, ChromaDB indeks yenileme. |
-| **Hakkında** | Güncel model zincirleri, API durumu, sürüm (`PHARMA_GUARD_VERSION`). |
+| **İlaç Fiyatları** | Birleştirilmiş referans fiyat listesi (`referans_ilac_fiyat.py`, `data/*.xlsx`). Filtrelenmiş tüm satırlar tabloda gösterilir; uzun listelerde kaydırma tablo kutusunun içindedir. |
+| **Fihrist** | Yerel `ilacrehberi_fihrist.xlsx` ile A–Z ilaç listesi; KT/KUB ve ilaç adı bağlantıları Google aramasına gider. Uygulama içi kaynak satırında [referans Google Sheets](https://docs.google.com/spreadsheets/d/13Hd8k4zVylcRSGB9FJpTpFqBUJ7FGnytKxvAV-TIWaY/edit?gid=0#gid=0) ve [ilacrehberi.com fihrist](https://www.ilacrehberi.com/ilac-fihrist/) verilir. |
+| **Prospektüs Yönetimi** | PDF yükleme; dosyalar üzerine yazılmadan kaydedilir, yalnızca kullanıcı **Sil** ile kaldırılır. **İndeksi yenile** yalnızca Chroma vektör veritabanını günceller, PDF’leri silmez. |
+| **Hakkında** | Güncel model zincirleri, API durumu, sürüm (`PHARMA_GUARD_VERSION`), RAG dosya sayısı. |
 
 ---
 
@@ -92,6 +93,7 @@ streamlit run app.py
 | `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL` | Hayır | PDF/metin için Groq sonrası OpenAI-uyumlu yedek |
 | `HF_API_KEY` | Hayır | Hugging Face token (gerekirse embedding indirimi için) |
 | `ECZANEAPI_API_KEY` | Hayır | Nöbetçi eczane iframe sayımı (`eczaneapi.com`) |
+| `MEDIC_CORPUS_DIR` | Hayır | Prospektüs PDF’lerinin yazılacağı kalıcı dizin (Streamlit Cloud / Docker’da volume yolu); boşsa `data/corpus` kullanılır |
 
 ITS API anahtarı arayüzde **Hakkında → ITS API** alanından oturuma yazılabilir; üretimde `st.secrets` veya ortam değişkeni tercih edin.
 
@@ -107,15 +109,31 @@ GEMINI_API_KEY = "…"
 GROQ_API_KEY = "…"
 ```
 
-İhtiyaca göre: `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`, `ECZANEAPI_API_KEY`, `HF_API_KEY`.
+İhtiyaca göre: `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`, `ECZANEAPI_API_KEY`, `HF_API_KEY`, `MEDIC_CORPUS_DIR` (prospektüs PDF’lerinin dağıtım örneği yeniden başlatıldığında da kalması için harici/kalıcı bir yol).
 
 3. Dağıtım sonrası uygulama örneği: [medicalsearch.streamlit.app](https://medicalsearch.streamlit.app/). Güncelleme görünmüyorsa Streamlit panosunda **Reboot app** / **Redeploy** ve tarayıcıda sert yenileme deneyin.
 
 ---
 
-## Veri dosyaları (fiyat sekmesi)
+## Veri dosyaları
 
-**İlaç Fiyatları** sekmesinin dolması için `data/referans_bazli_ilac_fiyat_listesi.xlsx` ve/veya `data/ilac_fiyat_web_listesi.xlsx` dosyalarının mevcut olması gerekir (ayrıntı: `referans_ilac_fiyat.py`).
+### İlaç fiyatları
+
+**İlaç Fiyatları** sekmesinin dolması için `data/referans_bazli_ilac_fiyat_listesi.xlsx` ve/veya `data/ilac_fiyat_web_listesi.xlsx` dosyalarının mevcut olması gerekir (ayrıntı: `referans_ilac_fiyat.py`). İsteğe bağlı olarak `recete_haber` ile birleştirilen ek kaynaklar da kullanılır.
+
+### Fihrist (A–Z liste)
+
+**Fihrist** sekmesi `data/ilacrehberi_fihrist.xlsx` (veya Masaüstündeki aynı adda dosya) okur. Dosyayı üretmek için:
+
+```bash
+python scripts/export_ilacrehberi_fihrist_xlsx.py -o data/ilacrehberi_fihrist.xlsx
+```
+
+Referans düzen için uygulamadaki kaynak linklerine bakın; örnek eşleme tablosu: [Google Sheets — İlaç A-Z fihrist](https://docs.google.com/spreadsheets/d/13Hd8k4zVylcRSGB9FJpTpFqBUJ7FGnytKxvAV-TIWaY/edit?gid=0#gid=0).
+
+### Prospektüs (RAG)
+
+Yüklü PDF’ler `data/corpus/` altında tutulur (`MEDIC_CORPUS_DIR` ile özelleştirilebilir). İndeks `data/chroma_db/` altında tutulur; indeks yenileme bu klasörü yeniden oluşturur, PDF dosyalarını silmez.
 
 ---
 
@@ -125,15 +143,18 @@ GROQ_API_KEY = "…"
 medic/
 ├── app.py                 # Streamlit arayüzü
 ├── agents.py              # Ajanlar + orkestratör + PHARMA_GUARD_VERSION
-├── utils.py               # PDF rapor, görüntü yardımcıları
+├── utils.py               # PDF rapor, corpus yardımcıları (kaydet / listele / sil)
 ├── real_drug_data.py      # FDA / Wikidata + Türkçe çeviri
 ├── its_api.py             # İlaç Takip Sistemi (ITS) istemcisi
 ├── referans_ilac_fiyat.py # Birleşik fiyat DataFrame
 ├── gemini_models.py       # Gemini model zinciri
 ├── openai_compat.py       # OpenAI-uyumlu istemci
+├── scripts/
+│   └── export_ilacrehberi_fihrist_xlsx.py  # ilacrehberi.com fihrist → XLSX
 ├── requirements.txt
 ├── .env.example
-├── data/corpus/           # RAG PDF’leri
+├── data/corpus/           # RAG PDF’leri (MEDIC_CORPUS_DIR ile değiştirilebilir)
+├── data/chroma_db/        # Chroma vektör indeksi (.gitignore)
 └── .streamlit/config.toml # Tema
 ```
 
