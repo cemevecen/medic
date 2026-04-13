@@ -210,7 +210,6 @@ def _render_fda_drug_detail(real_drug: dict, *, fresh: bool = True) -> None:
         st.success("Veriler bulundu ve Türkçeye çevrildi.")
     else:
         st.markdown("##### Son arşiv sonucu")
-        st.caption("Önceki sorgunuz — yeni arama için yukarıdaki alanı kullanın.")
 
     rows = [
         ("İlaç Adı", real_drug.get("ticari_ad", "—")),
@@ -1293,16 +1292,17 @@ with tab_analyze:
                 if rag:
                     k0 = str(rag[0].get("kaynak") or "—").strip() or "—"
                     k0_short = html.escape(k0[:36]) + ("…" if len(k0) > 36 else "")
-                    r2 = "İlk eşleşen kaynak özeti"
-                    r3 = k0_short
+                    detail_inner = k0_short
                 else:
-                    r2 = "Kayıtlı prospektüs araması"
-                    r3 = "Henüz eşleşen parça yok — corpus veya sorgu genişletilebilir."
+                    detail_inner = (
+                        "<strong>Kayıtlı prospektüs araması</strong><br>"
+                        "Henüz eşleşen parça yok — corpus veya sorgu genişletilebilir."
+                    )
                 st.markdown(
                     f'<div class="metric-card"><h3>{rc}</h3>'
                     f'<p>RAG kayıt sayısı</p>'
                     f'<p style="margin:.35rem 0 0;font-size:0.82rem;color:#64748b;line-height:1.35">'
-                    f"<strong>{html.escape(r2)}</strong><br>{r3}</p></div>",
+                    f"{detail_inner}</p></div>",
                     unsafe_allow_html=True,
                 )
             with m3:
@@ -1548,10 +1548,18 @@ with tab_analyze:
                 for i, row in enumerate(rows, 1):
                     if not isinstance(row, dict):
                         continue
-                    st.markdown(
-                        f"**{i}. {row.get('ticari_ad', '—')}** "
-                        f"(`{row.get('kaynak', '—')}`)"
+                    _ksrc = str(row.get("kaynak") or "").strip()
+                    _hide_src = _ksrc.casefold() in (
+                        "",
+                        "—",
+                        "-",
+                        "yerel_katalog",
+                        "model_onerisi",
                     )
+                    _title = f"**{i}. {row.get('ticari_ad', '—')}**"
+                    if _ksrc and not _hide_src:
+                        _title += f" (`{html.escape(_ksrc)}`)"
+                    st.markdown(_title)
                     st.markdown(
                         f"- **Etken madde:** {row.get('etken_madde', '—')}\n"
                         f"- **Dozaj:** {row.get('dozaj', '—')}\n"
@@ -1715,14 +1723,6 @@ with tab_its:
 # SEKME 4 — PROSPEKTÜS YÖNETİMİ (CORPUS)
 # ═════════════════════════════════════════════
 with tab_corpus:
-    st.markdown("""
-    <div class="pg-about-card" style="margin-bottom:1.25rem">
-      <strong> RAG Prospektüs Veritabanı</strong><br><br>
-      RAG sisteminin doğru çalışması için TİTCK / FDA onaylı ilaç prospektüslerini (PDF)
-      buraya yükleyin. Sistem ilk çalıştırmada ChromaDB indeksini otomatik oluşturur.
-    </div>
-    """, unsafe_allow_html=True)
-
     c1, c2 = st.columns([1, 1])
     with c1:
         st.markdown("#### Prospektüs Ekle")

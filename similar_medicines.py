@@ -136,7 +136,6 @@ def match_catalog(vision: Dict[str, Any], limit: int = 8) -> List[Dict[str, Any]
             "dozaj": row.get("dozaj"),
             "form": row.get("form"),
             "benzerlik_aciklamasi": row.get("benzerlik_aciklamasi") or row.get("eslestirme_notu") or "",
-            "kaynak": "yerel_katalog",
         }
         scored.append((s, out))
     scored.sort(key=lambda x: x[0], reverse=True)
@@ -218,7 +217,6 @@ Kurallar:
                         "dozaj": item.get("dozaj"),
                         "form": item.get("form"),
                         "benzerlik_aciklamasi": item.get("benzerlik_aciklamasi") or "",
-                        "kaynak": "model_onerisi",
                     }
                 )
             if out:

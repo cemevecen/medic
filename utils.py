@@ -614,13 +614,16 @@ def generate_pdf_report(
         for row in similar_drugs_bundle.get("oneriler") or []:
             if not isinstance(row, dict):
                 continue
+            _k = str(row.get("kaynak") or "").strip()
+            if _k.casefold() in ("yerel_katalog", "model_onerisi"):
+                _k = ""
+            _tail = f" ({escape(_k)})" if _k else ""
             line = (
                 f"<b>{escape(str(row.get('ticari_ad') or '—'))}</b><br/>"
                 f"Etken: {escape(str(row.get('etken_madde') or '—'))} · "
                 f"Dozaj: {escape(str(row.get('dozaj') or '—'))} · "
                 f"Form: {escape(str(row.get('form') or '—'))}<br/>"
-                f"<i>{escape(str(row.get('benzerlik_aciklamasi') or ''))}</i> "
-                f"({escape(str(row.get('kaynak') or ''))})"
+                f"<i>{escape(str(row.get('benzerlik_aciklamasi') or ''))}</i>{_tail}"
             )
             story.append(Paragraph(line, styles["body"]))
             story.append(Spacer(1, 0.12 * cm))
