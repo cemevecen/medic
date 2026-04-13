@@ -432,6 +432,7 @@ from utils import (
     save_uploaded_pdf,
     list_corpus_pdfs,
     delete_corpus_pdf,
+    read_corpus_pdf_bytes,
     ALARM_EMOJI,
     ALARM_MESSAGE,
 )
@@ -1720,10 +1721,6 @@ if _pg_nav == "İlaç Analizi":
                     placeholder="örn: Augmentin 1000 mg, Parol 500 mg…",
                     key="pg_drug_name_input",
                 )
-                st.caption(
-                    "İlaç Fiyatları önerileri: en az iki harf yazın; **Önerileri göster** veya "
-                    "**Analizi Başlat** ile gönderin (metin kutusu ile düğme ayrı istekte güvenilir çalışmaz)."
-                )
                 _ac_col, _run_col = st.columns(2, gap="small")
                 with _ac_col:
                     ac_sub = st.form_submit_button(
@@ -2426,7 +2423,7 @@ elif _pg_nav == "Prospektüs Yönetimi":
         st.markdown("#### Prospektüs Ekle")
         st.caption(
             "PDF’ler kalıcı corpus dizinine yazılır (varsayılan `data/corpus`; ortamda `MEDIC_CORPUS_DIR` ile başka yol verilebilir). "
-            "Yalnızca sağdaki **Sil** ile kaldırılır. İndeks yenileme yalnızca vektör veritabanını günceller, PDF dosyalarını silmez."
+            "**İndir** ile yerel kopya alınır; yalnızca **Sil** ile kaldırılır. İndeks yenileme yalnızca vektör veritabanını günceller, PDF dosyalarını silmez."
         )
         ups = st.file_uploader("PDF yükle (çoklu seçim)", type=["pdf"],
                                accept_multiple_files=True, key="corpus_uploader")
@@ -2451,10 +2448,23 @@ elif _pg_nav == "Prospektüs Yönetimi":
         pdfs = list_corpus_pdfs()
         if pdfs:
             for i, p in enumerate(pdfs):
-                r1, r2 = st.columns([4, 1], vertical_alignment="center")
+                r1, r2, r3 = st.columns([3, 1, 1], vertical_alignment="center")
                 with r1:
                     st.markdown(f"`{p}`")
                 with r2:
+                    _pdf_bytes = read_corpus_pdf_bytes(p)
+                    if _pdf_bytes:
+                        st.download_button(
+                            "İndir",
+                            data=_pdf_bytes,
+                            file_name=p,
+                            mime="application/pdf",
+                            key=f"corpus_pdf_dl_{i}",
+                            help="Bu prospektüsü bilgisayarınıza indirin.",
+                        )
+                    else:
+                        st.caption("—")
+                with r3:
                     if st.button(
                         "Sil",
                         key=f"corpus_pdf_del_{i}",

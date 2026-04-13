@@ -779,6 +779,18 @@ def delete_corpus_pdf(filename: str, corpus_dir: Optional[Path] = None) -> bool:
     return False
 
 
+def read_corpus_pdf_bytes(filename: str, corpus_dir: Optional[Path] = None) -> Optional[bytes]:
+    """Corpus kökündeki tek bir PDF'in içeriği; yoksa veya güvenli değilse None."""
+    root = (get_corpus_dir() if corpus_dir is None else Path(corpus_dir)).resolve()
+    safe = _safe_corpus_filename(filename)
+    target = (root / safe).resolve()
+    if target.parent != root:
+        return None
+    if not target.is_file() or target.suffix.lower() != ".pdf":
+        return None
+    return target.read_bytes()
+
+
 # ---------------------------------------------------------------------------
 # YARDIMCI: ALARM RENK ETİKETİ
 # ---------------------------------------------------------------------------
