@@ -214,20 +214,30 @@ _OZELLIKLI_SHEET_LABELS_TR = {
     "Recetesiz": "Reçetesiz satılan ilaçlar",
     "Geri_Cekilen": "Geri çekilen ilaçlar",
 }
-_OZELLIKLI_TABLE_MAX = 100
+_OZELLIKLI_DF_VIEWPORT_HEIGHT_PX = 560
 
 
 def _resolve_ozellikli_ilac_xlsx_path() -> Path | None:
-    for root in (Path(__file__).resolve().parent / "data", Path.home() / "Desktop"):
+    """Sıra: MEDIC_OZELLIKLI_ILAC_XLSX tam yol, data/, Desktop, Masaüstü."""
+    raw_env = (os.environ.get("MEDIC_OZELLIKLI_ILAC_XLSX") or "").strip()
+    if raw_env:
+        p = Path(raw_env).expanduser()
+        if p.is_file():
+            return p.resolve()
+    for root in (
+        Path(__file__).resolve().parent / "data",
+        Path.home() / "Desktop",
+        Path.home() / "Masaüstü",
+    ):
         p = root / _OZELLIKLI_ILAC_LISTELERI_XLSX
         if p.is_file():
-            return p
+            return p.resolve()
     return None
 
 
 @st.cache_data(show_spinner=False)
-def _cached_ozellikli_ilac_listeleri(_cache_bust: int = 2) -> dict | None:
-    """Masaüstü veya data/ altındaki ilacrehberi_ilac_listeleri.xlsx — tüm sheet'ler."""
+def _cached_ozellikli_ilac_listeleri(_cache_bust: int = 3) -> tuple[dict, Path] | None:
+    """ilacrehberi_ilac_listeleri.xlsx — tüm sheet'ler; (sheet adı → DataFrame, dosya yolu)."""
     _ = _cache_bust
     import pandas as pd
 
@@ -244,67 +254,7 @@ def _cached_ozellikli_ilac_listeleri(_cache_bust: int = 2) -> dict | None:
         df.columns = [str(c).strip() for c in df.columns]
         df = df.dropna(how="all").reset_index(drop=True)
         out[str(name)] = df
-    return out if out else None
-
-
-def _ozellikli_ilac_adi_column(df) -> str | None:
-    """İlaç ürün adı sütunu (Google araması); ETKİN MADDE / firma / KT sütunları değil."""
-    import pandas as pd
-
-    if df is None or df.empty or not len(df.columns):
-        return None
-    for c in df.columns:
-        u = str(c).upper().replace("İ", "I").replace("ı", "I")
-        if u.strip() in ("DETAY_URL", "_UYARI"):
-            continue
-        if "ETKIN" in u and "MADDE" in u:
-            continue
-        if "FIRMA" in u.replace(" ", "") and "ADI" in u:
-            continue
-        if "ILAC" in u:
-            return str(c)
-    cols = list(df.columns)
-    if len(cols) >= 2:
-        u0 = str(cols[0]).upper().replace("İ", "I").replace("/", " ")
-        if "KT" in u0 and "KUB" in u0.replace("_", " "):
-            return str(cols[1])
-    return str(cols[0])
-
-
-def _ozellikli_md_row_cells(row, columns: list, name_col: str | None) -> list[str]:
-    import pandas as pd
-
-    cells: list[str] = []
-    for c in columns:
-        v = row.get(c) if hasattr(row, "get") else row[c]
-        if pd.isna(v):
-            txt = "-"
-        else:
-            txt = str(v).strip()
-        if not txt or txt.casefold() in ("nan", "none"):
-            txt = "-"
-        if name_col and str(c) == str(name_col) and txt != "-":
-            u = _google_search_url(txt)
-            cells.append(f"[{_fihrist_md_link_label(txt)}]({u})")
-        else:
-            cells.append(_fihrist_md_link_label(txt))
-    return cells
-
-
-def _ozellikli_sheet_to_markdown(df, name_col: str | None, max_rows: int) -> str:
-    import pandas as pd
-
-    if df is None or df.empty:
-        return "_Veri yok._"
-    cols = [str(c) for c in df.columns]
-    head = "| " + " | ".join(_fihrist_md_link_label(c) for c in cols) + " |"
-    sep = "| " + " | ".join([":---"] * len(cols)) + " |"
-    lines = [head, sep]
-    sub = df.head(max_rows)
-    for _, r in sub.iterrows():
-        line = "| " + " | ".join(_ozellikli_md_row_cells(r, cols, name_col)) + " |"
-        lines.append(line)
-    return "\n".join(lines)
+    return (out, p) if out else None
 
 
 def _pg_fragment_ozellikli_ilaclar():
@@ -312,43 +262,61 @@ def _pg_fragment_ozellikli_ilaclar():
         '<p class="pg-section">Özellikli ilaçlar</p>',
         unsafe_allow_html=True,
     )
-    data = _cached_ozellikli_ilac_listeleri()
-    if not data:
-        st.info(
-            f"`{_OZELLIKLI_ILAC_LISTELERI_XLSX}` bulunamadı. Dosyayı `data/` veya Masaüstüne koyun; "
-            "`scripts/export_ilacrehberi_recete_listeleri_xlsx.py` ile üretebilirsiniz."
+    cached = _cached_ozellikli_ilac_listeleri()
+    if not cached:
+        st.markdown(
+            f"`{_OZELLIKLI_ILAC_LISTELERI_XLSX}` bulunamadı. Dosyayı **`data/`** veya "
+            "**Masaüstü / Desktop** klasörüne koyun; tam yol için ortam değişkeni "
+            "`MEDIC_OZELLIKLI_ILAC_XLSX` kullanılabilir (ör. "
+            "`/Users/kullanici/Desktop/ilacrehberi_ilac_listeleri.xlsx`). "
+            "Üretim: `scripts/export_ilacrehberi_recete_listeleri_xlsx.py`."
         )
         st.caption(
             f"Referans: [Özellikli ilaç listeleri — Google Sheets]({_OZELLIKLI_REF_GOOGLE_SHEETS})"
         )
         return
 
+    data, src_path = cached
+
     st.caption(
-        f"Kaynak: yerel **{_OZELLIKLI_ILAC_LISTELERI_XLSX}** (sheet adları alt liste başlıklarıdır). "
-        f"Referans: [Google Sheets]({_OZELLIKLI_REF_GOOGLE_SHEETS}). "
-        "İlaç adı sütunları **Google** aramasına gider (Fihrist ile aynı mantık)."
+        f"Kaynak: `{src_path}` — her sekme bir Excel sayfasıdır; sütunlar ve satırlar dosyayla aynıdır. "
+        f"Referans: [Google Sheets]({_OZELLIKLI_REF_GOOGLE_SHEETS})."
     )
 
     seen = set(data.keys())
     ordered = [s for s in _OZELLIKLI_SHEET_ORDER if s in data]
     ordered += sorted(seen.difference(ordered))
 
-    for i, sheet in enumerate(ordered):
-        df = data.get(sheet)
-        label = _OZELLIKLI_SHEET_LABELS_TR.get(sheet, sheet.replace("_", " "))
-        name_col = _ozellikli_ilac_adi_column(df) if df is not None and not df.empty else None
-        ntot = len(df) if df is not None and not df.empty else 0
-        exp_title = f"{label} (`{sheet}`) — {ntot} satır"
-        with st.expander(exp_title, expanded=(i == 0)):
+    tab_labels = [
+        f"{_OZELLIKLI_SHEET_LABELS_TR.get(s, s.replace('_', ' '))} ({len(data[s]) if data.get(s) is not None and not data[s].empty else 0})"
+        for s in ordered
+    ]
+    tabs = st.tabs(tab_labels)
+    for tab, sheet in zip(tabs, ordered):
+        with tab:
+            df = data.get(sheet)
             if df is None or df.empty:
-                st.caption("Bu sheet boş.")
+                st.caption("Bu sayfada satır yok.")
                 continue
-            md = _ozellikli_sheet_to_markdown(df, name_col, _OZELLIKLI_TABLE_MAX)
-            st.markdown(md)
-            if ntot > _OZELLIKLI_TABLE_MAX:
-                st.caption(
-                    f"İlk **{_OZELLIKLI_TABLE_MAX}** / **{ntot}** satır gösteriliyor; tamamı için XLSX dosyasına bakın."
+            view = _dataframe_noneish_to_dash(df)
+            ntot = len(view)
+            if ntot > 25_000:
+                st.warning(
+                    f"**{ntot}** satır yüklendi; tarayıcı yavaşlayabilir. Gerekirse Excel’de filtreleyip "
+                    "daha küçük bir kopya kullanın."
                 )
+            st.dataframe(
+                view,
+                use_container_width=True,
+                hide_index=True,
+                height=_OZELLIKLI_DF_VIEWPORT_HEIGHT_PX,
+            )
+            if ntot > 12:
+                st.caption(
+                    f"**{ntot}** satır — tümünü görmek için tablo alanında dikey kaydırın."
+                )
+            else:
+                st.caption(f"**{ntot}** satır.")
 
 
 @st.cache_data(show_spinner=False)
