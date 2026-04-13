@@ -431,6 +431,25 @@ def _google_search_url(query: str) -> str:
     return "https://www.google.com/search?q=" + quote_plus(q)
 
 
+def _ascii_upper_tr(s: str) -> str:
+    """Sütun adı eşlemesi: Türkçe harfleri ASCII’ye (İLAÇ → ILAC; REÇETELİ → RECETELI)."""
+    u = str(s).strip().upper()
+    for a, b in (
+        ("İ", "I"),
+        ("İ", "I"),
+        ("Ç", "C"),
+        ("Ğ", "G"),
+        ("Ö", "O"),
+        ("Ş", "S"),
+        ("Ü", "U"),
+        ("Â", "A"),
+        ("Î", "I"),
+        ("Û", "U"),
+    ):
+        u = u.replace(a, b)
+    return u
+
+
 def _ilac_name_columns_for_google_search(df) -> list[str]:
     """Ticari ürün adı sütunları (firma, etken madde, barkod, fiyat, tarih, URL alanları hariç)."""
     if df is None or df.empty or not len(df.columns):
@@ -438,7 +457,7 @@ def _ilac_name_columns_for_google_search(df) -> list[str]:
     out: list[str] = []
     for c in df.columns:
         cs = str(c).strip()
-        u = cs.upper().replace("İ", "I").replace("İ", "I")
+        u = _ascii_upper_tr(cs)
         if u in ("DETAY_URL", "_UYARI", "ALAN", "BILGI"):
             continue
         if "DETAY" in u and "URL" in u.replace(" ", ""):
@@ -451,7 +470,7 @@ def _ilac_name_columns_for_google_search(df) -> list[str]:
             continue
         if "FIYAT" in u or "GKF" in u:
             continue
-        if "TARIH" in u or "TARIHI" in u.replace("İ", "I"):
+        if "TARIH" in u or "TARIHI" in u:
             continue
         if "ILAC" in u:
             out.append(c)
@@ -462,9 +481,8 @@ def _ilac_name_columns_for_google_search(df) -> list[str]:
             continue
     if not out:
         for c in df.columns:
-            u = str(c).upper().replace("İ", "I")
-            u2 = u.replace(" ", "")
-            if ("RECETELI" in u2 or "RECETESIZ" in u2) and "AD" in u:
+            u2 = _ascii_upper_tr(c).replace(" ", "")
+            if ("RECETELI" in u2 or "RECETESIZ" in u2) and "AD" in u2:
                 out.append(c)
                 break
     seen: set[str] = set()
