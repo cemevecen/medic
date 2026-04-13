@@ -1616,7 +1616,12 @@ with tab_corpus:
         st.markdown("#### Prospektüs Ekle")
         ups = st.file_uploader("PDF yükle (çoklu seçim)", type=["pdf"],
                                accept_multiple_files=True, key="corpus_uploader")
-        if st.button("Kaydet ve İndeksi Güncelle", disabled=not ups):
+        if st.button(
+            "Kaydet ve İndeksi Güncelle",
+            type="primary",
+            disabled=not ups,
+            use_container_width=True,
+        ):
             saved = [save_uploaded_pdf(f) for f in ups]
             st.success(f" {len(saved)} dosya kaydedildi.")
             if "orchestrator" in st.session_state:
@@ -1629,7 +1634,11 @@ with tab_corpus:
         pdfs = list_corpus_pdfs()
         if pdfs:
             for p in pdfs: st.markdown(f" `{p}`")
-            if st.button(" İndeksi Yeniden Oluştur"):
+            if st.button(
+                " İndeksi Yeniden Oluştur",
+                type="primary",
+                use_container_width=True,
+            ):
                 if "orchestrator" in st.session_state:
                     with st.spinner("Yeniden indeksleniyor…"):
                         st.session_state.orchestrator.rag_agent.rebuild_index()
