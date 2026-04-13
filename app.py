@@ -1299,7 +1299,7 @@ with tab_nobetci:
     )
     st.caption("Türkiye'nin herhangi bir yerindeki nöbetçi (açık) eczaneleri bulun.")
 
-    col_city, col_district, col_btn = st.columns([2, 2, 1], gap="small")
+    col_city, col_district, col_btn = st.columns([2, 2, 1], gap="small", vertical_alignment="bottom")
 
     with col_city:
         from nobetci_eczane import get_cities_list
