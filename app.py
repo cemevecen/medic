@@ -1328,14 +1328,7 @@ hr.pg-hr-slim {
   padding: clamp(0.8rem, 3vw, 1rem) !important;
 }
 
-/* Responsive columns for tablet and mobile */
-@media (max-width: 1024px) {
-  [data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
-    width: 100% !important;
-    flex-basis: auto !important;
-  }
-}
-
+/* Responsive columns — yığılma yalnızca ≤768 (1024’te %100 genişlik + satır = taşma) */
 @media (max-width: 768px) {
   [data-testid="stHorizontalBlock"] {
     flex-direction: column !important;
@@ -1874,25 +1867,64 @@ code, .stMarkdown code {
 
 @media (max-width: 640px) {
   .block-container {
-    padding-left: 0.5rem !important;
-    padding-right: 0.5rem !important;
-    padding-top: 0.75rem !important;
+    padding-left: max(0.5rem, env(safe-area-inset-left)) !important;
+    padding-right: max(0.5rem, env(safe-area-inset-right)) !important;
+    padding-top: max(0.75rem, env(safe-area-inset-top)) !important;
     max-width: 100% !important;
   }
+}
 
-  /* Sidebar responsiveness */
-  [data-testid="stSidebar"] {
-    width: 100vw !important;
-    position: fixed !important;
-    left: -100vw !important;
-    transition: left 0.3s ease !important;
-    z-index: 999 !important;
-    height: 100vh !important;
+/* ── Mobil / taşma: yatay kaydırma, flex min-width ───────────────── */
+[data-testid="stAppViewContainer"],
+[data-testid="stMain"] {
+  max-width: 100vw !important;
+  overflow-x: hidden !important;
+}
+[data-testid="stColumn"],
+div[data-testid="element-container"] {
+  min-width: 0 !important;
+}
+[data-testid="stMarkdownContainer"] table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+div[data-testid="stDataFrame"],
+[data-testid="stDataFrame"] {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+[data-testid="stMain"] div[data-testid="stDataFrame"] {
+  min-width: 0 !important;
+}
+[data-testid="stPills"] {
+  flex-wrap: wrap !important;
+  gap: 0.35rem !important;
+  row-gap: 0.45rem !important;
+}
+@media (max-width: 480px) {
+  .st-key-pg_masthead label[data-baseweb="radio"] {
+    padding: 0.32rem 0.55rem !important;
+    font-size: 0.74rem !important;
   }
+  .stTabs [data-baseweb="tab-list"] {
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+  }
+}
 
-  [data-testid="stSidebar"].open {
-    left: 0 !important;
-  }
+[data-theme="dark"] .pg-eczane-footer-mask,
+[data-color-scheme="dark"] .pg-eczane-footer-mask {
+  background: linear-gradient(
+    180deg,
+    rgba(17, 24, 39, 0) 0%,
+    rgba(17, 24, 39, 0) 14%,
+    rgba(17, 24, 39, 0.88) 38%,
+    #111827 62%,
+    #111827 100%
+  );
 }
 </style>
 """, unsafe_allow_html=True)
