@@ -62,6 +62,37 @@ def get_cities_list() -> List[str]:
     return TURKISH_CITIES
 
 
+def get_districts_for_city(il: str) -> List[str]:
+    """Belirli il için mevcut ilçeleri döndür (demo + gerçek veri)"""
+    # İl adını normalize et
+    il_normalized = (
+        il.replace("İ", "i").replace("Ş", "s").replace("Ç", "c")
+          .replace("Ğ", "g").replace("Ü", "u").replace("Ö", "o")
+          .lower()
+    )
+
+    districts = set()
+
+    # Demo veriden ilçeleri al
+    if il_normalized in DEMO_PHARMACIES:
+        for pharmacy in DEMO_PHARMACIES[il_normalized]:
+            district = pharmacy.get("district", "").strip()
+            if district:
+                districts.add(district)
+
+    # Fallback: benzer anahtarları ara
+    if not districts:
+        for key, values in DEMO_PHARMACIES.items():
+            if il_normalized.startswith(key[:3]) or key.startswith(il_normalized[:3]):
+                for pharmacy in values:
+                    district = pharmacy.get("district", "").strip()
+                    if district:
+                        districts.add(district)
+                break
+
+    return sorted(list(districts)) if districts else []
+
+
 class NobetciEczaneAPI:
     """Nöbetçi Eczane API istemcisi"""
 

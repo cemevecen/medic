@@ -1339,7 +1339,7 @@ with tab_nobetci:
     col_city, col_district, col_btn = st.columns([2, 2, 1], gap="small", vertical_alignment="bottom")
 
     with col_city:
-        from nobetci_eczane import get_cities_list
+        from nobetci_eczane import get_cities_list, get_districts_for_city
 
         cities_list = get_cities_list()
         selected_city_nobetci = st.selectbox(
@@ -1350,11 +1350,21 @@ with tab_nobetci:
         )
 
     with col_district:
-        selected_district_nobetci = st.text_input(
-            "İlçe (İsteğe Bağlı)",
-            placeholder="örn: Çankaya, Maslak…",
-            key="nobetci_district_input"
-        )
+        # İl seçilirse ilçeleri otomatik getir
+        districts = get_districts_for_city(selected_city_nobetci)
+
+        if districts:
+            selected_district_nobetci = st.selectbox(
+                "İlçe Seçin",
+                options=districts,
+                key="nobetci_district_select"
+            )
+        else:
+            selected_district_nobetci = st.text_input(
+                "İlçe (İsteğe Bağlı)",
+                placeholder="örn: Çankaya, Maslak…",
+                key="nobetci_district_input"
+            )
 
     with col_btn:
         search_nobetci_btn = st.button("🔍 Ara", use_container_width=True, key="nobetci_search_btn")
