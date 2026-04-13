@@ -35,6 +35,77 @@ def load_api_config():
 # Uygulamayı başlatırken yapılandırmayı yükle
 load_api_config()
 
+
+def _eczaneapi_key_optional() -> str:
+    k = str(os.environ.get("ECZANEAPI_API_KEY") or os.environ.get("eczaneapi_api_key") or "").strip()
+    if k:
+        return k
+    try:
+        if hasattr(st, "secrets"):
+            return str(
+                st.secrets.get("ECZANEAPI_API_KEY")
+                or st.secrets.get("eczaneapi_api_key")
+                or ""
+            ).strip()
+    except Exception:
+        pass
+    return ""
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _eczane_on_duty_count(city_slug: str, district_slug: str, api_key: str) -> int | None:
+    """Bugünkü nöbetçi sayısı; iframe yüksekliği için. Anahtar yoksa None (istek yapılmaz)."""
+    import requests
+
+    if not (api_key or "").strip():
+        return None
+    params: dict[str, str] = {"city": (city_slug or "").strip().lower()}
+    d = (district_slug or "").strip().lower()
+    if d:
+        params["district"] = d
+    try:
+        r = requests.get(
+            "https://eczaneapi.com/api/v1/pharmacies/on-duty",
+            headers={"X-API-Key": api_key.strip()},
+            params=params,
+            timeout=12,
+        )
+        if r.status_code != 200:
+            return None
+        j = r.json()
+        if not j.get("success"):
+            return None
+        data = j.get("data")
+        if not isinstance(data, dict):
+            return None
+        c = data.get("count")
+        if isinstance(c, int):
+            return max(0, c)
+        ph = data.get("pharmacies")
+        if isinstance(ph, list):
+            return len(ph)
+        return None
+    except Exception:
+        return None
+
+
+def _eczane_iframe_height_px(count: int | None, district_selected: bool) -> int:
+    """Tek kartta alttaki boşluğu kırpmak için dinamik yükseklik (px)."""
+    if count == 0:
+        return 260
+    if count == 1:
+        return 292
+    if count == 2:
+        return 368
+    if count == 3:
+        return 436
+    if isinstance(count, int) and count > 3:
+        return min(620, 220 + count * 52)
+    if district_selected:
+        return 300
+    return 400
+
+
 from typing import Optional
 
 from utils import (
@@ -1353,9 +1424,13 @@ with tab_analyze:
         _params["district"] = str(_w_dist).strip().lower()
     _widget_src = "https://eczaneapi.com/widget?" + urlencode(_params)
 
+    _dist_sel = bool(str(_w_dist or "").strip())
+    _duty_n = _eczane_on_duty_count(_w_city, str(_w_dist or ""), _eczaneapi_key_optional())
+    _iframe_h = _eczane_iframe_height_px(_duty_n, _dist_sel)
+
     st.markdown(
         '<div class="pg-eczane-widget-block" style="max-width:400px;width:100%;margin-top:0.5rem;">'
-        f'<iframe src="{html.escape(_widget_src)}" width="100%" height="400" '
+        f'<iframe src="{html.escape(_widget_src)}" width="100%" height="{_iframe_h}" '
         'frameborder="0" style="border:none; border-radius:12px; max-width: 400px; '
         'margin: 0 auto; display: block;" title="Nöbetçi Eczaneler"></iframe>'
         "</div>",
