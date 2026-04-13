@@ -1308,6 +1308,21 @@ with tab_analyze:
         st.success(" Temizlendi — bir sonraki analizde yeniden başlatılır.")
         st.rerun()
 
+    st.markdown("---")
+    st.markdown(
+        '<p class="pg-section"><span class="pg-section-icon">🏪</span>Nöbetçi eczaneler</p>',
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "Canlı liste [EczaneAPI](https://eczaneapi.com/sitene-ekle) resmi widget’ıdır; veri doğrudan eczaneapi.com’dan gelir."
+    )
+    st.markdown(
+        '<iframe src="https://eczaneapi.com/widget" width="100%" height="400" '
+        'frameborder="0" style="border:none; border-radius:12px; max-width: 400px; '
+        'margin: 0 auto; display: block;" title="Nöbetçi Eczaneler"></iframe>',
+        unsafe_allow_html=True,
+    )
+
 # ═════════════════════════════════════════════
 # SEKME 3 — İTS (İLAÇ FİYATLARI VE BİLGİLERİ)
 # ═════════════════════════════════════════════
