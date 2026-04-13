@@ -4,11 +4,10 @@ Canlı: https://medicalsearch.streamlit.app/ · Kaynak: https://github.com/cemev
 """
 
 import os
-import re
 import json
 import html
 from pathlib import Path
-from urllib.parse import urlencode
+from urllib.parse import quote_plus, urlencode
 
 import streamlit as st
 from PIL import Image
@@ -171,7 +170,7 @@ def _pg_fragment_ilac_fiyatlari():
         st.caption(f"Toplam {_n_total} satır.")
 
 
-# ilacrehberi.com A–Z fihrist anahtar sırası (tekilleştirilmiş XLSX ile uyumlu)
+# Fihrist chip’leri: yalnızca tek harf (ilaç adının ilk karakterine göre gruplama; AL vb. yok)
 _FIHRIST_NAV_KEYS = (
     "A",
     "B",
@@ -199,39 +198,15 @@ _FIHRIST_NAV_KEYS = (
     "Y",
     "Z",
     "Ş",
-    "AL",
-    "AN",
-    "BE",
-    "CA",
-    "CE",
-    "CO",
-    "DE",
-    "DI",
-    "FL",
-    "GE",
-    "IN",
-    "KA",
-    "LA",
-    "LI",
-    "ME",
-    "MI",
-    "NA",
-    "NI",
-    "NO",
-    "PA",
-    "PE",
-    "SE",
-    "SI",
-    "TR",
-    "VI",
 )
 _FIHRIST_TR_HIGHLIGHT = frozenset({"Ş"})
 _FIHRIST_TABLE_MAX = 180
 
 
 @st.cache_data(show_spinner=False)
-def _cached_ilacrehberi_fihrist_df():
-    """Masaüstü veya data/ altındaki ilacrehberi_fihrist.xlsx."""
+def _cached_ilacrehberi_fihrist_df(_cache_bust: int = 3):
+    """Masaüstü veya data/ altındaki ilacrehberi_fihrist.xlsx (yalnızca grup + ad)."""
+    _ = _cache_bust
     import pandas as pd
 
     roots = (
@@ -257,41 +232,45 @@ def _cached_ilacrehberi_fihrist_df():
 
         c_grp = _pick("fihrist_grubu", "grup")
         c_ad = _pick("ilac_adi", "i̇laç adı", "ilac adi", "ad")
-        c_url = _pick("detay_url", "url", "link")
         if not c_ad:
             continue
         out = pd.DataFrame(
             {
                 "fihrist_grubu": df[c_grp].astype(str) if c_grp else "",
                 "ilac_adi": df[c_ad].astype(str).str.strip(),
-                "detay_url": df[c_url].astype(str).str.strip() if c_url else "",
             }
         )
         out = out[out["ilac_adi"].str.len() > 0].reset_index(drop=True)
-        if c_url:
-            out.loc[~out["detay_url"].str.startswith("http", na=False), "detay_url"] = ""
-        else:
-            out["detay_url"] = ""
         return out
     return None
 
 
-def _fihrist_kt_kub_urls(detay_url: str) -> tuple[str, str]:
-    u = (detay_url or "").strip()
-    if not u.startswith("http"):
-        return "", ""
-    u = u.rstrip("/")
-    if "/v/" not in u:
-        return "", ""
-    return f"{u}/kt/", f"{u}/kub/"
+def _google_search_url(query: str) -> str:
+    """Harici arama; ilacrehberi.com’a yönlendirme kullanılmaz."""
+    q = (query or "").strip()
+    if not q:
+        return "https://www.google.com/"
+    return "https://www.google.com/search?q=" + quote_plus(q)
 
 
-def _fihrist_prefix_mask(series, chip: str):
+def _fihrist_md_link_label(text: str) -> str:
+    """Markdown [etiket](url) için tablo hücresi / köşeli parantez kaçışı."""
+    t = str(text).replace("\\", "\\\\").replace("|", "\\|")
+    t = t.replace("[", "\\[").replace("]", "\\]")
+    return t
+
+
+def _fihrist_first_letter_mask(series, chip: str):
+    """İlaç adının ilk karakteri `chip` ile eşleşen satırlar (ör. ALBACORT → A)."""
+    import pandas as pd
+
     ch = (chip or "A").strip()
-    if not ch:
-        return pd.Series([True] * len(series), index=series.index)
-    pat = "^" + re.escape(ch)
-    return series.astype(str).str.strip().str.match(pat, case=False, na=False)
+    if len(ch) != 1:
+        ch = "A"
+    s = series.astype(str).str.strip()
+    ok = s.str.len() > 0
+    first = s.str.slice(0, 1)
+    return ok & (first.str.casefold() == ch.casefold())
 
 
 @st.fragment
@@ -309,11 +288,14 @@ def _pg_fragment_ilac_fihrist():
         return
 
     st.caption(
-        "Kaynak: yerel XLSX (ilacrehberi.com fihrist düzenine benzer). "
-        "KT/KUB bağlantıları yalnızca `detay_url` sütunu dolu olduğunda çalışır."
+        "Kaynak: yerel XLSX (fihrist düzeni). Bağlantılar **Google aramasına** gider; "
+        "üçüncü taraf ilaç sitelerine yönlendirme yoktur."
     )
 
     st.session_state.setdefault("pg_fihrist_pills", "A")
+    _fp = str(st.session_state.get("pg_fihrist_pills") or "A").strip()
+    if _fp not in _FIHRIST_NAV_KEYS:
+        st.session_state.pg_fihrist_pills = "A"
     st.pills(
         "Fihrist harfi / grup",
         options=list(_FIHRIST_NAV_KEYS),
@@ -323,19 +305,20 @@ def _pg_fragment_ilac_fihrist():
         format_func=lambda k: (f"{k} ·" if k in _FIHRIST_TR_HIGHLIGHT else k),
     )
     chip = str(st.session_state.get("pg_fihrist_pills") or "A").strip() or "A"
+    if chip not in _FIHRIST_NAV_KEYS:
+        chip = "A"
 
     st.markdown(
         f'<h2 class="pg-fihrist-title">İLAÇ A-Z FİHRİST<span class="pg-fihrist-letter">{html.escape(chip)}</span></h2>',
         unsafe_allow_html=True,
     )
     st.markdown(
-        '<div class="pg-fihrist-hint">Aşağıdaki listede seçili harf veya önek ile başlayan ilaçları '
-        "bulabilirsiniz. İlaç adına tıklayarak ilacrehberi.com’daki ilgili sayfaya gidebilirsiniz "
-        "(detay bağlantısı yoksa yalnızca metin gösterilir).</div>",
+        '<div class="pg-fihrist-hint">Aşağıdaki listede seçili <strong>ilk harfe</strong> göre ilaçları '
+        "bulabilirsiniz. İlaç adı, KT ve KUB tıklamaları ilaç adına göre **Google** arama sayfasını açar.</div>",
         unsafe_allow_html=True,
     )
 
-    mask = _fihrist_prefix_mask(df["ilac_adi"], chip)
+    mask = _fihrist_first_letter_mask(df["ilac_adi"], chip)
     sub = df.loc[mask].copy()
     sub = sub.sort_values("ilac_adi", key=lambda s: s.astype(str).str.casefold()).reset_index(drop=True)
     names = sub["ilac_adi"].tolist()
@@ -357,37 +340,21 @@ def _pg_fragment_ilac_fihrist():
     )
 
     show = sub.head(_FIHRIST_TABLE_MAX)
-    rows_html: list[str] = []
+    # Markdown [metin](url) — unsafe HTML <a href> bazen CDN/sanitizer ile beklenmedik davranabiliyor.
+    md_rows = [
+        "| KT / KUB | İlaç adı |",
+        "| :--------- | :-------- |",
+    ]
     for _, row in show.iterrows():
         ad = str(row["ilac_adi"])
-        url = str(row.get("detay_url") or "").strip()
-        kt_u, kub_u = _fihrist_kt_kub_urls(url)
-        if kt_u and kub_u:
-            kt_cell = (
-                f'<a class="pg-fh-doc" href="{html.escape(kt_u)}" target="_blank" rel="noopener" title="KT">KT</a>'
-                f'<a class="pg-fh-doc" href="{html.escape(kub_u)}" target="_blank" rel="noopener" title="KUB">KUB</a>'
-            )
-        else:
-            kt_cell = '<span style="color:var(--pg-muted);font-size:0.8rem">—</span>'
-        if url.startswith("http"):
-            name_cell = (
-                f'<a class="pg-fh-name" href="{html.escape(url)}" target="_blank" rel="noopener">'
-                f"{html.escape(ad)}</a>"
-            )
-        else:
-            name_cell = f'<span style="color:var(--pg-ink)">{html.escape(ad)}</span>'
-        rows_html.append(
-            f"<tr><td>{kt_cell}</td><td>{name_cell}</td>"
-            f'<td class="pg-fh-barkod">—</td></tr>'
+        u_ad = _google_search_url(ad)
+        u_kt = _google_search_url(f"{ad} kullanma talimatı")
+        u_kub = _google_search_url(f"{ad} kısa ürün bilgisi")
+        lab = _fihrist_md_link_label(ad)
+        md_rows.append(
+            f"| [KT]({u_kt}) · [KUB]({u_kub}) | [{lab}]({u_ad}) |"
         )
-
-    table = (
-        '<div class="pg-fihrist-table-wrap"><table><thead><tr>'
-        "<th>KT/KUB</th><th>İlaç Adı</th><th>Barkodu</th></tr></thead><tbody>"
-        + "".join(rows_html)
-        + "</tbody></table></div>"
-    )
-    st.markdown(table, unsafe_allow_html=True)
+    st.markdown("\n".join(md_rows))
     if len(sub) > _FIHRIST_TABLE_MAX:
         st.caption(
             f"Toplam **{len(sub)}** satır; performans için yalnızca ilk {_FIHRIST_TABLE_MAX} gösteriliyor. "
@@ -1499,11 +1466,6 @@ hr.pg-hr-slim {
   padding: 0.45rem 0.65rem;
   border-bottom: 1px solid var(--pg-line);
   vertical-align: middle;
-}
-.pg-fihrist-table-wrap td.pg-fh-barkod {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  color: var(--pg-muted);
 }
 .pg-fh-doc {
   display: inline-flex;
