@@ -1784,6 +1784,26 @@ with tab_about:
             st.success("✓ API 2 kaydedildi")
             save_api_config()
 
+        st.markdown("---")
+
+        # Third RapidAPI endpoint
+        st.markdown("**API 3: Eczanem**")
+        st.text_input(
+            "Endpoint URL (örn: https://eczanem.p.rapidapi.com/eczane)",
+            key="rapidapi_endpoint_3",
+            placeholder="https://..."
+        )
+        st.text_input(
+            "API Key",
+            type="password",
+            key="rapidapi_key_3",
+            placeholder="RapidAPI anahtarı…"
+        )
+
+        if st.session_state.get("rapidapi_endpoint_3") and st.session_state.get("rapidapi_key_3"):
+            st.success("✓ API 3 kaydedildi")
+            save_api_config()
+
     # ─────────────────────────────────────────────
     # ITS (İLAÇ TAKIP SİSTEMİ) API
     # ─────────────────────────────────────────────

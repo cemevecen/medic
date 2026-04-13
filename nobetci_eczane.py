@@ -101,7 +101,8 @@ class NobetciEczaneAPI:
 
     def __init__(self, api_key: Optional[str] = None, source: str = "collectapi",
                  rapidapi_endpoint_1: Optional[str] = None, rapidapi_key_1: Optional[str] = None,
-                 rapidapi_endpoint_2: Optional[str] = None, rapidapi_key_2: Optional[str] = None):
+                 rapidapi_endpoint_2: Optional[str] = None, rapidapi_key_2: Optional[str] = None,
+                 rapidapi_endpoint_3: Optional[str] = None, rapidapi_key_3: Optional[str] = None):
         """
         Args:
             api_key: API anahtarı (CollectAPI için)
@@ -117,6 +118,8 @@ class NobetciEczaneAPI:
         self.rapidapi_key_1 = rapidapi_key_1
         self.rapidapi_endpoint_2 = rapidapi_endpoint_2
         self.rapidapi_key_2 = rapidapi_key_2
+        self.rapidapi_endpoint_3 = rapidapi_endpoint_3
+        self.rapidapi_key_3 = rapidapi_key_3
         self.session = requests.Session()
 
     def get_nobetci_eczaneler(self, il: str, ilce: Optional[str] = None) -> Dict:
@@ -137,10 +140,15 @@ class NobetciEczaneAPI:
             }
         """
         try:
-            # Öncelik sırası: RapidAPI 1 → RapidAPI 2 → CollectAPI
+            # Öncelik sırası: RapidAPI 1 (Çalışıyor!) → RapidAPI 3 → RapidAPI 2 → CollectAPI
 
             if self.rapidapi_endpoint_1 and self.rapidapi_key_1:
                 result = self._get_rapidapi_1(il, ilce)
+                if result.get("success"):
+                    return result
+
+            if self.rapidapi_endpoint_3 and self.rapidapi_key_3:
+                result = self._get_rapidapi_3(il, ilce)
                 if result.get("success"):
                     return result
 
@@ -163,22 +171,17 @@ class NobetciEczaneAPI:
             }
 
     def _get_rapidapi_1(self, il: str, ilce: Optional[str] = None) -> Dict:
-        """RapidAPI 1: Nöbetçi Eczaneler - Türkiye"""
+        """RapidAPI 1: Nöbetçi Eczaneler - Türkiye (Parametreler işlemiyor, parametresiz sorguyla getir)"""
         try:
-            # Parametreleri hazırla
-            params = {"city_name": il}
-            if ilce:
-                params["district_name"] = ilce
-
             headers = {
                 "x-rapidapi-key": self.rapidapi_key_1,
                 "x-rapidapi-host": self._extract_host_from_url(self.rapidapi_endpoint_1),
                 "content-type": "application/json"
             }
 
+            # API parametreleri işlemediğinden, tüm eczaneleri al ve client-side filtrele
             response = self.session.get(
                 self.rapidapi_endpoint_1,
-                params=params,
                 headers=headers,
                 timeout=10
             )
@@ -186,18 +189,44 @@ class NobetciEczaneAPI:
             if response.status_code == 200:
                 data = response.json()
 
-                # RapidAPI 1 yanıtını standartlaştır
-                pharmacies = []
-                results = data if isinstance(data, list) else data.get("result", [])
+                # RapidAPI 1 yanıt formatı: {"data": [...], "meta": {...}}
+                results = data.get("data", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
 
+                pharmacies = []
                 for item in results:
+                    # Şehir filtresi
+                    city_name = ""
+                    if isinstance(item.get("city"), dict):
+                        city_name = item["city"].get("name", "")
+                    else:
+                        city_name = item.get("city", "")
+
+                    city_normalized = city_name.lower().replace("ı", "i").replace("ş", "s").replace("ç", "c").replace("ğ", "g").replace("ü", "u").replace("ö", "o")
+                    il_normalized = il.lower().replace("İ", "i").replace("Ş", "s").replace("Ç", "c").replace("Ğ", "g").replace("Ü", "u").replace("Ö", "o")
+
+                    if city_normalized != il_normalized:
+                        continue
+
+                    # İlçe filtresi (varsa)
+                    district_name = ""
+                    if isinstance(item.get("district"), dict):
+                        district_name = item["district"].get("name", "")
+                    else:
+                        district_name = item.get("district", "")
+
+                    if ilce:
+                        ilce_normalized = ilce.lower().replace("İ", "i").replace("Ş", "s").replace("Ç", "c").replace("Ğ", "g").replace("Ü", "u").replace("Ö", "o")
+                        district_normalized = district_name.lower().replace("ı", "i").replace("ş", "s").replace("ç", "c").replace("ğ", "g").replace("ü", "u").replace("ö", "o")
+                        if ilce_normalized not in district_normalized and district_normalized not in ilce_normalized:
+                            continue
+
                     pharmacies.append({
-                        "name": item.get("name", item.get("pharmacy_name", "")),
-                        "address": item.get("address", item.get("location", "")),
-                        "phone": item.get("phone", item.get("phone_number", "")),
-                        "city": il,
-                        "district": item.get("district", item.get("district_name", ilce or "")),
-                        "loc": item.get("loc", item.get("location_coordinates", ""))
+                        "name": item.get("name", ""),
+                        "address": item.get("address", ""),
+                        "phone": item.get("phone", ""),
+                        "city": city_name,
+                        "district": district_name,
+                        "loc": ""
                     })
 
                 return {
@@ -218,54 +247,68 @@ class NobetciEczaneAPI:
         except Exception as e:
             return {"success": False, "error": f"RapidAPI 1 hatası: {str(e)}", "source": "RapidAPI 1"}
 
-    def _get_rapidapi_2(self, il: str, ilce: Optional[str] = None) -> Dict:
-        """RapidAPI 2: Nöbetçi Eczane Listesi"""
+    def _get_rapidapi_3(self, il: str, ilce: Optional[str] = None) -> Dict:
+        """RapidAPI 3: Eczanem API"""
         try:
-            # URL'deki placeholder'ları değiştir
-            url = self.rapidapi_endpoint_2.replace("{city}", il.lower()).replace("{district}", ilce.lower() if ilce else "")
+            params = {"il": il}
+            if ilce:
+                params["ilce"] = ilce
 
             headers = {
-                "x-rapidapi-key": self.rapidapi_key_2,
-                "x-rapidapi-host": self._extract_host_from_url(self.rapidapi_endpoint_2),
-                "content-type": "application/json"
+                "x-rapidapi-key": self.rapidapi_key_3,
+                "x-rapidapi-host": self._extract_host_from_url(self.rapidapi_endpoint_3),
             }
 
-            response = self.session.get(url, headers=headers, timeout=10)
+            response = self.session.get(
+                self.rapidapi_endpoint_3,
+                params=params,
+                headers=headers,
+                timeout=10
+            )
 
             if response.status_code == 200:
                 data = response.json()
 
-                # RapidAPI 2 yanıtını standartlaştır
+                # Eczanem yanıt formatını standartlaştır
                 pharmacies = []
-                results = data if isinstance(data, list) else data.get("result", data.get("data", []))
+                results = data if isinstance(data, list) else data.get("data", data.get("result", []))
 
                 for item in results:
                     pharmacies.append({
-                        "name": item.get("name", item.get("pharmacy_name", "")),
-                        "address": item.get("address", item.get("location", "")),
-                        "phone": item.get("phone", item.get("phone_number", "")),
+                        "name": item.get("name", item.get("eczane_adi", "")),
+                        "address": item.get("address", item.get("adres", "")),
+                        "phone": item.get("phone", item.get("telefon", "")),
                         "city": il,
-                        "district": item.get("district", ilce or ""),
-                        "loc": item.get("loc", item.get("location_coordinates", ""))
+                        "district": item.get("district", item.get("ilce", ilce or "")),
+                        "loc": item.get("coordinates", "")
                     })
 
                 return {
                     "success": len(pharmacies) > 0,
                     "total": len(pharmacies),
                     "data": pharmacies,
-                    "source": "RapidAPI 2"
+                    "source": "RapidAPI 3 (Eczanem)"
                 }
             else:
                 return {
                     "success": False,
                     "error": f"HTTP {response.status_code}",
-                    "source": "RapidAPI 2"
+                    "source": "RapidAPI 3"
                 }
 
         except requests.exceptions.Timeout:
-            return {"success": False, "error": "RapidAPI 2 zaman aşımı", "source": "RapidAPI 2"}
+            return {"success": False, "error": "RapidAPI 3 zaman aşımı", "source": "RapidAPI 3"}
         except Exception as e:
-            return {"success": False, "error": f"RapidAPI 2 hatası: {str(e)}", "source": "RapidAPI 2"}
+            return {"success": False, "error": f"RapidAPI 3 hatası: {str(e)}", "source": "RapidAPI 3"}
+
+    def _get_rapidapi_2(self, il: str, ilce: Optional[str] = None) -> Dict:
+        """RapidAPI 2: Nöbetçi Eczane Listesi (QUOTA EXCEEDED - devre dışı)"""
+        # API 2 aylık quota'sı aşılmış, devre dışı
+        return {
+            "success": False,
+            "error": "RapidAPI 2 aylık quota aşıldı (upgrade gerekli)",
+            "source": "RapidAPI 2"
+        }
 
     def _extract_host_from_url(self, url: str) -> str:
         """URL'den host adını çıkar"""
@@ -344,7 +387,8 @@ _api = None
 
 def init_nobetci_api(api_key: Optional[str] = None, source: str = "collectapi",
                      rapidapi_endpoint_1: Optional[str] = None, rapidapi_key_1: Optional[str] = None,
-                     rapidapi_endpoint_2: Optional[str] = None, rapidapi_key_2: Optional[str] = None):
+                     rapidapi_endpoint_2: Optional[str] = None, rapidapi_key_2: Optional[str] = None,
+                     rapidapi_endpoint_3: Optional[str] = None, rapidapi_key_3: Optional[str] = None):
     """Nöbetçi Eczane API'yi başlat"""
     global _api
     _api = NobetciEczaneAPI(
@@ -353,7 +397,9 @@ def init_nobetci_api(api_key: Optional[str] = None, source: str = "collectapi",
         rapidapi_endpoint_1=rapidapi_endpoint_1,
         rapidapi_key_1=rapidapi_key_1,
         rapidapi_endpoint_2=rapidapi_endpoint_2,
-        rapidapi_key_2=rapidapi_key_2
+        rapidapi_key_2=rapidapi_key_2,
+        rapidapi_endpoint_3=rapidapi_endpoint_3,
+        rapidapi_key_3=rapidapi_key_3
     )
 
 # ═════════════════════════════════════════════
@@ -435,16 +481,20 @@ def get_nobetci_eczaneler(il: str, ilce: Optional[str] = None) -> Dict:
         rapidapi_key_1 = st.session_state.get("rapidapi_key_1")
         rapidapi_endpoint_2 = st.session_state.get("rapidapi_endpoint_2")
         rapidapi_key_2 = st.session_state.get("rapidapi_key_2")
+        rapidapi_endpoint_3 = st.session_state.get("rapidapi_endpoint_3")
+        rapidapi_key_3 = st.session_state.get("rapidapi_key_3")
         collectapi_api_key = st.session_state.get("collectapi_api_key")
     except:
         rapidapi_endpoint_1 = None
         rapidapi_key_1 = None
         rapidapi_endpoint_2 = None
         rapidapi_key_2 = None
+        rapidapi_endpoint_3 = None
+        rapidapi_key_3 = None
         collectapi_api_key = None
 
     # Eğer API key varsa gerçek API'yi dene
-    # Öncelik: RapidAPI > CollectAPI
+    # Öncelik: RapidAPI 1 > RapidAPI 3 > RapidAPI 2 > CollectAPI
     if _api is None:
         # İlk kez çağrılıyorsa API'yi başlat
         init_nobetci_api(
@@ -452,7 +502,9 @@ def get_nobetci_eczaneler(il: str, ilce: Optional[str] = None) -> Dict:
             rapidapi_endpoint_1=rapidapi_endpoint_1,
             rapidapi_key_1=rapidapi_key_1,
             rapidapi_endpoint_2=rapidapi_endpoint_2,
-            rapidapi_key_2=rapidapi_key_2
+            rapidapi_key_2=rapidapi_key_2,
+            rapidapi_endpoint_3=rapidapi_endpoint_3,
+            rapidapi_key_3=rapidapi_key_3
         )
     else:
         # Mevcut API'ye RapidAPI bilgilerini güncelle
@@ -460,6 +512,8 @@ def get_nobetci_eczaneler(il: str, ilce: Optional[str] = None) -> Dict:
         _api.rapidapi_key_1 = rapidapi_key_1
         _api.rapidapi_endpoint_2 = rapidapi_endpoint_2
         _api.rapidapi_key_2 = rapidapi_key_2
+        _api.rapidapi_endpoint_3 = rapidapi_endpoint_3
+        _api.rapidapi_key_3 = rapidapi_key_3
         _api.api_key = collectapi_api_key
 
     if _api is not None and (
