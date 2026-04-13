@@ -1336,6 +1336,37 @@ with tab_nobetci:
     )
     st.caption("Türkiye'nin herhangi bir yerindeki nöbetçi (açık) eczaneleri bulun.")
 
+    # EczaneAPI Widget
+    st.markdown("---")
+    st.markdown("### 📍 Bugünün Nöbetçi Eczaneleri")
+    with st.expander("🎯 Widget ile göz at", expanded=True):
+        col_widget_city, col_widget_district = st.columns(2)
+        with col_widget_city:
+            widget_city = st.selectbox(
+                "Widget İçin İl Seçin",
+                options=["ankara", "istanbul", "izmir", "bursa", "antalya"],
+                key="widget_city_select"
+            )
+        with col_widget_district:
+            widget_district = st.text_input(
+                "Widget İçin İlçe Seçin (İsteğe Bağlı)",
+                placeholder="Örn: çankaya",
+                key="widget_district_input"
+            )
+
+        widget_url = f"https://eczaneapi.com/widget?city={widget_city}"
+        if widget_district:
+            widget_url += f"&district={widget_district}"
+
+        st.markdown(
+            f'<iframe src="{widget_url}" width="100%" height="400" frameborder="0" style="border:none; border-radius:12px; max-width: 500px; margin: 0 auto; display: block;" title="Nöbetçi Eczaneler"></iframe>',
+            unsafe_allow_html=True
+        )
+        st.caption("✨ Widget sağlayıcısı: EczaneAPI")
+
+    st.markdown("---")
+    st.markdown("### 🔍 Ayrıntılı Arama")
+
     col_city, col_district, col_btn = st.columns([2, 2, 1], gap="small", vertical_alignment="bottom")
 
     with col_city:
