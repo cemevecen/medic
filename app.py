@@ -1092,7 +1092,12 @@ with tab_analyze:
         )
 
         st.markdown("---")
-        if st.button(" Önbelleği Temizle", use_container_width=True, key="clear_cache_btn"):
+        if st.button(
+            " Önbelleği Temizle",
+            type="primary",
+            use_container_width=True,
+            key="clear_cache_btn",
+        ):
             for k in ("orchestrator", "pg_version", "analysis_result", "report_pdf"):
                 st.session_state.pop(k, None)
             st.success(" Temizlendi — bir sonraki analizde yeniden başlatılır.")
