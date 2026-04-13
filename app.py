@@ -252,16 +252,16 @@ def _ozellikli_column_config_for_df(df):
 
 
 def _resolve_ozellikli_ilac_xlsx_path() -> Path | None:
-    """Sıra: MEDIC_OZELLIKLI_ILAC_XLSX tam yol, data/, Desktop, Masaüstü."""
+    """Sıra: MEDIC_OZELLIKLI_ILAC_XLSX, sonra Masaüstü/Desktop (yerel export), son paket data/."""
     raw_env = (os.environ.get("MEDIC_OZELLIKLI_ILAC_XLSX") or "").strip()
     if raw_env:
         p = Path(raw_env).expanduser()
         if p.is_file():
             return p.resolve()
     for root in (
-        Path(__file__).resolve().parent / "data",
         Path.home() / "Desktop",
         Path.home() / "Masaüstü",
+        Path(__file__).resolve().parent / "data",
     ):
         p = root / _OZELLIKLI_ILAC_LISTELERI_XLSX
         if p.is_file():
@@ -270,7 +270,7 @@ def _resolve_ozellikli_ilac_xlsx_path() -> Path | None:
 
 
 @st.cache_data(show_spinner=False)
-def _cached_ozellikli_ilac_listeleri(_cache_bust: int = 3) -> tuple[dict, Path] | None:
+def _cached_ozellikli_ilac_listeleri(_cache_bust: int = 4) -> tuple[dict, Path] | None:
     """ilacrehberi_ilac_listeleri.xlsx — tüm sheet'ler; (sheet adı → DataFrame, dosya yolu)."""
     _ = _cache_bust
     import pandas as pd
@@ -299,11 +299,10 @@ def _pg_fragment_ozellikli_ilaclar():
     cached = _cached_ozellikli_ilac_listeleri()
     if not cached:
         st.markdown(
-            f"`{_OZELLIKLI_ILAC_LISTELERI_XLSX}` bulunamadı. Dosyayı **`data/`** veya "
-            "**Masaüstü / Desktop** klasörüne koyun; tam yol için ortam değişkeni "
-            "`MEDIC_OZELLIKLI_ILAC_XLSX` kullanılabilir (ör. "
-            "`/Users/kullanici/Desktop/ilacrehberi_ilac_listeleri.xlsx`). "
-            "Üretim: `scripts/export_ilacrehberi_recete_listeleri_xlsx.py`."
+            f"`{_OZELLIKLI_ILAC_LISTELERI_XLSX}` bulunamadı. Yerelde önce **Masaüstü / Desktop**, "
+            f"yoksa **`data/`** içinde aranır. Tam yol: `MEDIC_OZELLIKLI_ILAC_XLSX`. "
+            "Üretim: `scripts/export_ilacrehberi_recete_listeleri_xlsx.py` "
+            "(`-o data/ilacrehberi_ilac_listeleri.xlsx`)."
         )
         st.caption(
             f"Referans: [Özellikli ilaç listeleri — Google Sheets]({_OZELLIKLI_REF_GOOGLE_SHEETS})"
