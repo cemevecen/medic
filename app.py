@@ -1671,7 +1671,9 @@ with tab_fda:
         '<p class="pg-section">FDA Arşivi — Gerçek İlaç Bilgisi</p>',
         unsafe_allow_html=True,
     )
-    st.caption("Wikidata ve OpenFDA veritabanlarından gerçek ilaç bilgilerini çeker. Tüm veriler Türkçeye çevrilir.")
+    st.caption(
+        "Bilgi edinmek istediğiniz ilacı Amerikan Gıda ve İlaç Dairesi arşivinde sorgulayarak bilgi edinin."
+    )
 
     col1, col2 = st.columns([3, 2], gap="small", vertical_alignment="bottom")
 
