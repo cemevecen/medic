@@ -1690,6 +1690,55 @@ with tab_about:
             st.error(f"❌ API hatası: {error_msg}")
 
     # ─────────────────────────────────────────────
+    # RAPİDAPI - NOBETÇİ ECZANE (ALTERNATIF KAYNAKLAR)
+    # ─────────────────────────────────────────────
+    with st.expander("🔄 RapidAPI - Nöbetçi Eczane (İsteğe bağlı)", expanded=False):
+        st.caption(
+            "RapidAPI üzerindeki alternatif nöbetçi eczane API'leri kullanabilirsiniz.\n\n"
+            "Yapıştırın: **Endpoint URL** ve **API Key**"
+        )
+
+        # First RapidAPI endpoint
+        st.markdown("**API 1: Nöbetçi Eczaneler - Türkiye**")
+        rapidapi_endpoint_1 = st.text_input(
+            "Endpoint URL (örn: https://nobetci-eczaneler-turkiye1.p.rapidapi.com/pharmacies)",
+            key="rapidapi_endpoint_1",
+            placeholder="https://..."
+        )
+        rapidapi_key_1 = st.text_input(
+            "API Key",
+            type="password",
+            key="rapidapi_key_1",
+            placeholder="RapidAPI anahtarı…"
+        )
+
+        if rapidapi_endpoint_1 and rapidapi_key_1:
+            st.session_state["rapidapi_endpoint_1"] = rapidapi_endpoint_1
+            st.session_state["rapidapi_key_1"] = rapidapi_key_1
+            st.info("✓ API 1 ayarları kaydedildi")
+
+        st.markdown("---")
+
+        # Second RapidAPI endpoint
+        st.markdown("**API 2: Nöbetçi Eczane Listesi**")
+        rapidapi_endpoint_2 = st.text_input(
+            "Endpoint URL (örn: https://nobetci-eczane-listesi-api-her-saat-otomatik-guncellenir.p.rapidapi.com/pharmacies/{city}/{district})",
+            key="rapidapi_endpoint_2",
+            placeholder="https://..."
+        )
+        rapidapi_key_2 = st.text_input(
+            "API Key",
+            type="password",
+            key="rapidapi_key_2",
+            placeholder="RapidAPI anahtarı…"
+        )
+
+        if rapidapi_endpoint_2 and rapidapi_key_2:
+            st.session_state["rapidapi_endpoint_2"] = rapidapi_endpoint_2
+            st.session_state["rapidapi_key_2"] = rapidapi_key_2
+            st.info("✓ API 2 ayarları kaydedildi")
+
+    # ─────────────────────────────────────────────
     # ITS (İLAÇ TAKIP SİSTEMİ) API
     # ─────────────────────────────────────────────
     with st.expander("💊 ITS API - İlaç Takip Sistemi", expanded=False):
