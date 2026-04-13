@@ -214,7 +214,41 @@ _OZELLIKLI_SHEET_LABELS_TR = {
     "Recetesiz": "Reçetesiz satılan ilaçlar",
     "Geri_Cekilen": "Geri çekilen ilaçlar",
 }
-_OZELLIKLI_DF_VIEWPORT_HEIGHT_PX = 560
+
+
+def _df_row_matches_substring(df, q: str):
+    """Tüm sütunlarda büyük/küçük harf duyarsız alt dizgi araması (İlaç Fiyatları sekmesiyle aynı mantık)."""
+    import pandas as pd
+
+    needle = (q or "").strip()
+    if not needle:
+        return pd.Series(True, index=df.index)
+    m = pd.Series(False, index=df.index)
+    for c in df.columns:
+        m = m | df[c].astype(str).str.contains(needle, case=False, na=False, regex=False)
+    return m
+
+
+def _ozellikli_column_config_for_df(df):
+    """Sayısal sütunlarda Fiyatlar sekmesine yakın grid biçimi; barkod metin sütunu."""
+    import pandas as pd
+
+    cfg: dict = {}
+    for c in df.columns:
+        name = str(c)
+        s = df[c]
+        u = name.upper().replace("İ", "I")
+        if "BARKOD" in u.replace(" ", ""):
+            cfg[name] = st.column_config.TextColumn(name)
+            continue
+        if pd.api.types.is_bool_dtype(s):
+            continue
+        if pd.api.types.is_numeric_dtype(s):
+            if pd.api.types.is_integer_dtype(s):
+                cfg[name] = st.column_config.NumberColumn(name, format="%d")
+            else:
+                cfg[name] = st.column_config.NumberColumn(name, format="%.2f")
+    return cfg
 
 
 def _resolve_ozellikli_ilac_xlsx_path() -> Path | None:
@@ -298,25 +332,39 @@ def _pg_fragment_ozellikli_ilaclar():
             if df is None or df.empty:
                 st.caption("Bu sayfada satır yok.")
                 continue
-            view = _dataframe_noneish_to_dash(df)
-            ntot = len(view)
+            base = _dataframe_noneish_to_dash(df)
+            _oz_q = st.text_input(
+                "Listede ara (tüm sütunlarda; boş = tümü)",
+                placeholder="örn: ABILIFY, PFİZER, 86995…",
+                key=f"ozellikli_liste_filter_{sheet}",
+            )
+            show = base
+            if (_oz_q or "").strip():
+                show = base[_df_row_matches_substring(base, _oz_q)].reset_index(drop=True)
+            ntot = len(show)
+            if ntot == 0:
+                st.info("Aramanızla eşleşen satır yok.")
+                continue
             if ntot > 25_000:
                 st.warning(
-                    f"**{ntot}** satır yüklendi; tarayıcı yavaşlayabilir. Gerekirse Excel’de filtreleyip "
-                    "daha küçük bir kopya kullanın."
+                    f"**{ntot}** satır yüklendi; tarayıcı yavaşlayabilir. "
+                    "Daha hızlı çalışmak için arama kutusu ile listeyi daraltın."
                 )
-            st.dataframe(
-                view,
+            _oz_col_cfg = _ozellikli_column_config_for_df(show)
+            _oz_df_kw: dict = dict(
                 use_container_width=True,
+                height=_FIYAT_SEKMESI_DF_VIEWPORT_HEIGHT_PX,
                 hide_index=True,
-                height=_OZELLIKLI_DF_VIEWPORT_HEIGHT_PX,
             )
+            if _oz_col_cfg:
+                _oz_df_kw["column_config"] = _oz_col_cfg
+            st.dataframe(show, **_oz_df_kw)
             if ntot > 12:
                 st.caption(
-                    f"**{ntot}** satır — tümünü görmek için tablo alanında dikey kaydırın."
+                    f"Toplam **{ntot}** satır — tümünü görmek için **tablo kutusunun içinde** dikey kaydırın."
                 )
             else:
-                st.caption(f"**{ntot}** satır.")
+                st.caption(f"Toplam **{ntot}** satır.")
 
 
 @st.cache_data(show_spinner=False)
