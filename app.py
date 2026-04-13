@@ -1336,53 +1336,54 @@ with tab_nobetci:
     )
     st.caption("Türkiye'nin herhangi bir yerindeki nöbetçi (açık) eczaneleri bulun.")
 
-    # EczaneAPI Widget
+    # EczaneAPI Widget — Statik (API'den Bağımsız)
     st.markdown("---")
     st.markdown("### 📍 Bugünün Nöbetçi Eczaneleri")
     with st.expander("🎯 Widget ile göz at", expanded=True):
-        from nobetci_eczane import get_cities_list, get_districts_for_city
-
-        cities_list = get_cities_list()
-        # Normalize city names for widget (lowercase, Turkish chars)
-        cities_slugs = {
-            city.lower().replace("İ", "i").replace("Ş", "s").replace("Ç", "c")
-                       .replace("Ğ", "g").replace("Ü", "u").replace("Ö", "o"): city
-            for city in cities_list
+        # Hardcoded cities & districts — API'den bağımsız
+        WIDGET_CITIES_DISTRICTS = {
+            "ankara": ["çankaya", "keçiören", "yenimahalle", "mamak", "cebeci", "kızılay", "ulus", "akyurt", "pursaklar"],
+            "istanbul": ["kadıköy", "beşiktaş", "beyoğlu", "fatih", "eminönü", "üsküdar", "şişli", "başakşehir", "esenyurt"],
+            "izmir": ["alsancak", "karaburun", "balçova", "bornova", "çeşme", "gaziemir", "göztepe", "güzelbahçe"],
+            "bursa": ["osmangazi", "nilüfer", "yıldırım", "mustafakemalpaşa", "mudanya", "inebolu"],
+            "antalya": ["muratpaşa", "kepez", "aksu", "serik", "alanya", "manavgat", "kaş", "demre"],
+            "diyarbakır": ["sur", "bağlar", "yenişehir", "kayapınar"],
+            "gaziantep": ["şahinbey", "şehitkamil", "oğuzeli"],
+            "adana": ["seyhan", "çukurova", "yüreğir"],
+            "mersin": ["yenişehir", "toroslar", "akdeniz"],
+            "kayseri": ["melikgazi", "talas", "kocasinan"],
         }
 
         col_widget_city, col_widget_district = st.columns(2)
+
         with col_widget_city:
-            widget_city_display = st.selectbox(
+            widget_city = st.selectbox(
                 "Widget İçin İl Seçin",
-                options=cities_list,
-                index=0 if "Ankara" in cities_list else 0,
+                options=list(WIDGET_CITIES_DISTRICTS.keys()),
+                format_func=lambda x: x.capitalize(),
+                index=0,
                 key="widget_city_select"
             )
-            # Convert display name to slug for widget URL
-            widget_city_slug = widget_city_display.lower().replace("İ", "i").replace("Ş", "s").replace("Ç", "c").replace("Ğ", "g").replace("Ü", "u").replace("Ö", "o")
 
         with col_widget_district:
-            districts_list = get_districts_for_city(widget_city_display)
-            if districts_list:
-                widget_district_display = st.selectbox(
-                    "Widget İçin İlçe Seçin (İsteğe Bağlı)",
-                    options=[""] + districts_list,
-                    key="widget_district_select"
-                )
-                widget_district_slug = widget_district_display.lower().replace("İ", "i").replace("Ş", "s").replace("Ç", "c").replace("Ğ", "g").replace("Ü", "u").replace("Ö", "o") if widget_district_display else ""
-            else:
-                st.info("Bu şehir için ilçe verisi bulunamadı")
-                widget_district_slug = ""
+            districts = [""] + WIDGET_CITIES_DISTRICTS.get(widget_city, [])
+            widget_district = st.selectbox(
+                "Widget İçin İlçe Seçin (İsteğe Bağlı)",
+                options=districts,
+                format_func=lambda x: x.capitalize() if x else "Tüm ilçeler",
+                key="widget_district_select"
+            )
 
-        widget_url = f"https://eczaneapi.com/widget?city={widget_city_slug}"
-        if widget_district_slug:
-            widget_url += f"&district={widget_district_slug}"
+        # Build widget URL
+        widget_url = f"https://eczaneapi.com/widget?city={widget_city}"
+        if widget_district:
+            widget_url += f"&district={widget_district}"
 
         st.markdown(
-            f'<iframe src="{widget_url}" width="100%" height="400" frameborder="0" style="border:none; border-radius:12px; max-width: 500px; margin: 0 auto; display: block;" title="Nöbetçi Eczaneler"></iframe>',
+            f'<iframe src="{widget_url}" width="100%" height="400" frameborder="0" style="border:none; border-radius:12px; max-width: 400px; margin: 0 auto; display: block;" title="Nöbetçi Eczaneler"></iframe>',
             unsafe_allow_html=True
         )
-        st.caption("✨ Widget sağlayıcısı: EczaneAPI")
+        st.caption("✨ Widget sağlayıcısı: EczaneAPI — Tamamen bağımsız, canlı veriler")
 
     st.markdown("---")
     st.markdown("### 🔍 Ayrıntılı Arama")
