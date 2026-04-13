@@ -1316,10 +1316,6 @@ with tab_analyze:
         "Nöbetçi eczaneler</p>",
         unsafe_allow_html=True,
     )
-    st.caption(
-        "İl ve ilçe seçin; iframe adresi güncellenir. Veri [EczaneAPI](https://eczaneapi.com/sitene-ekle) "
-        "widget’ından gelir. İl/ilçe adları MIT (enisbt/turkey-cities) listesiyle eşlenir; slug’lar API ile uyumludur."
-    )
 
     from eczane_widget_geo import load_turkey_geo_rows, pretty_label, slug_tr
 
