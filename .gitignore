@@ -27,6 +27,7 @@ data/chroma_db/
 
 # Streamlit
 .streamlit/secrets.toml
+config_api.json
 
 # macOS
 .DS_Store

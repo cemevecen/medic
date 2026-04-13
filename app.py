@@ -41,10 +41,12 @@ def save_api_config():
         "collectapi_api_key": st.session_state.get("collectapi_api_key", "")
     }
     try:
+        CONFIG_API_PATH.parent.mkdir(parents=True, exist_ok=True)
         with open(CONFIG_API_PATH, "w") as f:
             json.dump(config, f, indent=2)
-    except Exception:
-        pass
+        print(f"✓ API config kaydedildi: {CONFIG_API_PATH}")
+    except Exception as e:
+        print(f"❌ API config kaydetme hatası: {e}")
 
 # Uygulamayı başlatırken yapılandırmayı yükle
 load_api_config()
