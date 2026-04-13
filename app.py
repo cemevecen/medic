@@ -287,11 +287,6 @@ def _pg_fragment_ilac_fihrist():
         )
         return
 
-    st.caption(
-        "Kaynak: yerel XLSX (fihrist düzeni). Bağlantılar **Google aramasına** gider; "
-        "üçüncü taraf ilaç sitelerine yönlendirme yoktur."
-    )
-
     st.session_state.setdefault("pg_fihrist_pills", "A")
     _fp = str(st.session_state.get("pg_fihrist_pills") or "A").strip()
     if _fp not in _FIHRIST_NAV_KEYS:
@@ -310,11 +305,6 @@ def _pg_fragment_ilac_fihrist():
 
     st.markdown(
         f'<h2 class="pg-fihrist-title">İLAÇ A-Z FİHRİST<span class="pg-fihrist-letter">{html.escape(chip)}</span></h2>',
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        '<div class="pg-fihrist-hint">Aşağıdaki listede seçili <strong>ilk harfe</strong> göre ilaçları '
-        "bulabilirsiniz. İlaç adı, KT ve KUB tıklamaları ilaç adına göre **Google** arama sayfasını açar.</div>",
         unsafe_allow_html=True,
     )
 
@@ -1415,7 +1405,7 @@ hr.pg-hr-slim {
   letter-spacing: 0.12em; opacity: 0.75; user-select: none;
 }
 
-/* İlaç Fihrist — ilacrehberi.com benzeri blok */
+/* İlaç Fihrist */
 .pg-fihrist-title {
   font-size: clamp(1.05rem, 2.5vw, 1.35rem);
   font-weight: 800;
@@ -1426,21 +1416,6 @@ hr.pg-hr-slim {
 .pg-fihrist-title span.pg-fihrist-letter {
   color: #1565c0;
   margin-left: 0.25rem;
-}
-.pg-fihrist-hint {
-  background: #f1f5f9;
-  border: 1px solid var(--pg-line);
-  border-radius: 10px;
-  padding: 0.65rem 0.85rem;
-  font-size: clamp(0.82rem, 1.6vw, 0.92rem);
-  color: var(--pg-muted);
-  line-height: 1.5;
-  margin: 0.5rem 0 0.75rem 0;
-}
-[data-theme="dark"] .pg-fihrist-hint,
-[data-color-scheme="dark"] .pg-fihrist-hint {
-  background: #1e293b;
-  border-color: #334155;
 }
 .pg-fihrist-table-wrap {
   margin-top: 0.75rem;
@@ -2455,7 +2430,7 @@ elif _pg_nav == "İlaç Fiyatları":
     _pg_fragment_ilac_fiyatlari()
 
 # ═════════════════════════════════════════════
-# SEKME 3b — İLAÇ FİHRİST (yerel XLSX, ilacrehberi benzeri)
+# SEKME 3b — İLAÇ FİHRİST (yerel XLSX)
 # ═════════════════════════════════════════════
 elif _pg_nav == "İlaç Fihrist":
     _pg_fragment_ilac_fihrist()
