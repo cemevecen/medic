@@ -250,9 +250,20 @@ st.markdown("""
 }
 
 /* EczaneAPI widget iframe — alt “EczaneAPI…” satırı iframe içinde; üstünde opak beyaz maske */
+/* Nöbetçi widget: sol sütunda il+ilçe satırı ile aynı genişlik */
+.pg-eczane-widget-block {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
 .pg-eczane-widget-block iframe {
   position: relative;
   z-index: 0;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  display: block;
+  vertical-align: top;
 }
 .pg-eczane-footer-mask {
   position: absolute;
@@ -1070,11 +1081,11 @@ with tab_analyze:
         _iframe_vis = max(210, _iframe_h - _ft)
 
         st.markdown(
-            '<div class="pg-eczane-widget-block" style="max-width:400px;width:100%;margin-top:0.5rem;'
-            'position:relative;border-radius:12px;overflow:hidden;">'
+            '<div class="pg-eczane-widget-block" style="margin-top:0.5rem;position:relative;'
+            'border-radius:12px;overflow:hidden;">'
             f'<iframe src="{html.escape(_widget_src)}" width="100%" height="{_iframe_vis}" '
-            'frameborder="0" style="border:none; border-radius:12px; max-width: 400px; '
-            'margin: 0 auto; display: block;" title="Nöbetçi Eczaneler"></iframe>'
+            'frameborder="0" style="border:none;border-radius:12px;" '
+            'title="Nöbetçi Eczaneler"></iframe>'
             '<div class="pg-eczane-footer-mask" aria-hidden="true"></div>'
             "</div>",
             unsafe_allow_html=True,
