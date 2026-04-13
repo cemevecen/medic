@@ -708,21 +708,75 @@ def generate_pdf_report(
 # YARDIMCI: CORPUS YÖNETİMİ
 # ---------------------------------------------------------------------------
 
-def save_uploaded_pdf(uploaded_file, corpus_dir: str = "data/corpus") -> str:
-    """Kullanıcının yüklediği PDF'yi corpus dizinine kaydeder."""
-    target = Path(corpus_dir) / uploaded_file.name
-    target.parent.mkdir(parents=True, exist_ok=True)
+def get_corpus_dir() -> Path:
+    """
+    Prospektüs PDF'lerinin kalıcı dizini.
+    MEDIC_CORPUS_DIR tanımlıysa onu kullanır (ör. Streamlit Cloud / Docker volume);
+    değilse repo kökündeki data/corpus (cwd'den bağımsız).
+    """
+    raw = (os.environ.get("MEDIC_CORPUS_DIR") or "").strip()
+    if raw:
+        return Path(raw).expanduser().resolve()
+    return Path(__file__).resolve().parent / "data" / "corpus"
+
+
+def _safe_corpus_filename(name: str) -> str:
+    """Yalnızca dosya adı; dizin bileşenleri atılır."""
+    base = Path(str(name or "").strip()).name
+    if not base:
+        base = "yuklenen.pdf"
+    if not base.lower().endswith(".pdf"):
+        base = f"{Path(base).stem or 'yuklenen'}.pdf"
+    return base
+
+
+def _unique_corpus_pdf_path(root: Path, original_name: str) -> Path:
+    """Aynı adda dosya varsa üzerine yazmadan yeni ad üretir (örn. ad (2).pdf)."""
+    root.mkdir(parents=True, exist_ok=True)
+    safe = _safe_corpus_filename(original_name)
+    target = root / safe
+    if not target.exists():
+        return target
+    stem, suf = target.stem, target.suffix
+    n = 2
+    while True:
+        cand = root / f"{stem} ({n}){suf}"
+        if not cand.exists():
+            return cand
+        n += 1
+
+
+def save_uploaded_pdf(uploaded_file, corpus_dir: Optional[Path] = None) -> str:
+    """Kullanıcının yüklediği PDF'yi corpus dizinine kaydeder; mevcut dosyanın üzerine yazmaz."""
+    root = get_corpus_dir() if corpus_dir is None else Path(corpus_dir).resolve()
+    target = _unique_corpus_pdf_path(root, getattr(uploaded_file, "name", "") or "yuklenen.pdf")
     with open(target, "wb") as f:
         f.write(uploaded_file.getbuffer())
     return str(target)
 
 
-def list_corpus_pdfs(corpus_dir: str = "data/corpus") -> list:
-    """Corpus dizinindeki PDF dosyalarını listeler."""
-    p = Path(corpus_dir)
+def list_corpus_pdfs(corpus_dir: Optional[Path] = None) -> list:
+    """Corpus dizinindeki PDF dosya adlarını listeler."""
+    p = get_corpus_dir() if corpus_dir is None else Path(corpus_dir).resolve()
     if not p.exists():
         return []
     return sorted([f.name for f in p.glob("*.pdf")])
+
+
+def delete_corpus_pdf(filename: str, corpus_dir: Optional[Path] = None) -> bool:
+    """
+    Corpus kökündeki tek bir PDF'i siler.
+    Yalnızca doğrudan alt dosyalar; path traversal kabul edilmez.
+    """
+    root = (get_corpus_dir() if corpus_dir is None else Path(corpus_dir)).resolve()
+    safe = _safe_corpus_filename(filename)
+    target = (root / safe).resolve()
+    if target.parent != root:
+        return False
+    if target.is_file() and target.suffix.lower() == ".pdf":
+        target.unlink()
+        return True
+    return False
 
 
 # ---------------------------------------------------------------------------

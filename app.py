@@ -83,8 +83,8 @@ def _cached_ilac_fiyat_sekmesi_gosterim_df():
     return _dataframe_noneish_to_dash(cut)
 
 
-# Tabloda çok satır = tarayıcı yavaşlar; tam liste yerine üst sınır + arama ile daraltma.
-_FIYAT_SEKMESI_TABLO_UST_SATIR = 600
+# st.dataframe sabit yükseklik + iç kaydırma; satırlar tek tek DOM’a basılmaz (grid sanallaştırması).
+_FIYAT_SEKMESI_DF_VIEWPORT_HEIGHT_PX = 640
 
 
 @st.fragment
@@ -130,44 +130,32 @@ def _pg_fragment_ilac_fiyatlari():
         st.info("Aramanızla eşleşen satır yok.")
         return
 
-    if _n_total > _FIYAT_SEKMESI_TABLO_UST_SATIR:
-        _rf_view = _rf_show.head(_FIYAT_SEKMESI_TABLO_UST_SATIR)
-        st.caption(
-            f"Hız için yalnızca ilk **{len(_rf_view)}** satır gösteriliyor (toplam eşleşme: **{_n_total}**). "
-            "Tümünü görmek için aramayı daraltın."
+    _rf_view = _rf_show
+    if _n_total > 25_000:
+        st.warning(
+            f"**{_n_total}** satır yüklendi; tarayıcı yavaşlayabilir. "
+            "Daha hızlı çalışmak için arama kutusu ile listeyi daraltın."
         )
-    else:
-        _rf_view = _rf_show
 
     _col_cfg_all = {
         "Liste fiyatı (₺)": st.column_config.NumberColumn("Liste fiyatı (₺)", format="%.2f"),
         "Barkod": st.column_config.TextColumn("Barkod"),
     }
     _col_cfg = {k: v for k, v in _col_cfg_all.items() if k in _rf_view.columns}
-    _gorunur_satir = 150
-    _satir_px = 34
-    _baslik_pad = 52
-    _df_h = min(
-        len(_rf_view) * _satir_px + _baslik_pad,
-        _gorunur_satir * _satir_px + _baslik_pad,
+    _df_kw: dict = dict(
+        use_container_width=True,
+        height=_FIYAT_SEKMESI_DF_VIEWPORT_HEIGHT_PX,
+        hide_index=True,
     )
-    _df_h = int(max(_df_h, 120))
-    _df_kw: dict = dict(use_container_width=True, height=_df_h, hide_index=True)
     if _col_cfg:
         _df_kw["column_config"] = _col_cfg
     st.dataframe(_rf_view, **_df_kw)
-    _n_gor = len(_rf_view)
-    if _n_gor > _gorunur_satir:
-        st.markdown(
-            f'<div class="pg-df-scroll-hint" title="Tabloda dikey kaydırma">'
-            f'<span class="pg-df-scroll-hint-chevron"></span>'
-            f'<span>Tabloda <strong>{_n_gor}</strong> satır; liste aşağıda devam eder'
-            f'<span class="pg-df-scroll-hint-dots"> ···</span></span>'
-            f'<span class="pg-df-scroll-hint-chevron"></span></div>',
-            unsafe_allow_html=True,
+    if _n_total > 12:
+        st.caption(
+            f"Toplam **{_n_total}** satır — tümünü görmek için **tablo kutusunun içinde** dikey kaydırın."
         )
-    elif _n_total <= _FIYAT_SEKMESI_TABLO_UST_SATIR:
-        st.caption(f"Toplam {_n_total} satır.")
+    else:
+        st.caption(f"Toplam **{_n_total}** satır.")
 
 
 # Fihrist chip’leri: yalnızca tek harf (ilaç adının ilk karakterine göre gruplama; AL vb. yok)
@@ -199,6 +187,10 @@ _FIHRIST_NAV_KEYS = (
     "Z",
 )
 _FIHRIST_TABLE_MAX = 180
+# ilacrehberi.com fihrist düzenine paralel referans tablo (yerel XLSX ile birlikte kullanılabilir)
+_FIHRIST_REF_GOOGLE_SHEETS = (
+    "https://docs.google.com/spreadsheets/d/13Hd8k4zVylcRSGB9FJpTpFqBUJ7FGnytKxvAV-TIWaY/edit?gid=0#gid=0"
+)
 
 
 @st.cache_data(show_spinner=False)
@@ -283,6 +275,10 @@ def _pg_fragment_ilac_fihrist():
             "`ilacrehberi_fihrist.xlsx` bulunamadı veya boş. "
             "Dosyayı `data/` veya Masaüstüne koyun; `scripts/export_ilacrehberi_fihrist_xlsx.py` ile üretebilirsiniz."
         )
+        st.caption(
+            f"Referans: [İlaç A-Z fihrist — Google Sheets]({_FIHRIST_REF_GOOGLE_SHEETS}) · "
+            "[ilacrehberi.com — fihrist](https://www.ilacrehberi.com/ilac-fihrist/)"
+        )
         return
 
     st.session_state.setdefault("pg_fihrist_pills", "A")
@@ -349,6 +345,11 @@ def _pg_fragment_ilac_fihrist():
         )
     if pick:
         st.caption(f"Seçili satır: **{pick}**")
+
+    st.markdown(
+        f"**Kaynaklar:** [İlaç A-Z fihrist — Google Sheets]({_FIHRIST_REF_GOOGLE_SHEETS}) · "
+        "[ilacrehberi.com — fihrist](https://www.ilacrehberi.com/ilac-fihrist/)"
+    )
 
 
 def _eczaneapi_key_optional() -> str:
@@ -430,6 +431,7 @@ from utils import (
     generate_pdf_report,
     save_uploaded_pdf,
     list_corpus_pdfs,
+    delete_corpus_pdf,
     ALARM_EMOJI,
     ALARM_MESSAGE,
 )
@@ -1386,22 +1388,6 @@ hr.pg-hr-slim {
 .pg-empty .pg-empty-icon { font-size: clamp(2rem, 6vw, 2.75rem); line-height:1; margin-bottom:1rem; }
 .pg-empty p { margin:0; font-size: clamp(0.9rem, 2vw, 1rem); line-height:1.6; color:var(--pg-muted) !important; }
 
-/* İlaç fiyat tablosu — kaydırılabilir liste ipucu (emoji yok) */
-.pg-df-scroll-hint {
-  display: flex; align-items: center; justify-content: center; gap: 0.55rem;
-  margin-top: 0.15rem; margin-bottom: 0.35rem;
-  font-size: clamp(0.78rem, 1.8vw, 0.88rem); color: var(--pg-muted); line-height: 1.4; text-align: center;
-}
-.pg-df-scroll-hint-chevron {
-  flex-shrink: 0;
-  width: 0; height: 0;
-  border-left: 7px solid transparent; border-right: 7px solid transparent; border-top: 9px solid var(--pg-muted);
-  opacity: 0.88;
-}
-.pg-df-scroll-hint-dots {
-  letter-spacing: 0.12em; opacity: 0.75; user-select: none;
-}
-
 /* Fihrist */
 .pg-fihrist-title {
   font-size: clamp(1.05rem, 2.5vw, 1.35rem);
@@ -1605,7 +1591,6 @@ code, .stMarkdown code {
 gemini_key = os.getenv("GEMINI_API_KEY", "")
 groq_key   = os.getenv("GROQ_API_KEY", "")
 openai_env = bool(os.getenv("OPENAI_API_KEY", "").strip())
-pdf_list   = list_corpus_pdfs()
 
 
 def _session_openai_compat_kwargs():
@@ -2439,6 +2424,10 @@ elif _pg_nav == "Prospektüs Yönetimi":
     c1, c2 = st.columns([1, 1])
     with c1:
         st.markdown("#### Prospektüs Ekle")
+        st.caption(
+            "PDF’ler kalıcı corpus dizinine yazılır (varsayılan `data/corpus`; ortamda `MEDIC_CORPUS_DIR` ile başka yol verilebilir). "
+            "Yalnızca sağdaki **Sil** ile kaldırılır. İndeks yenileme yalnızca vektör veritabanını günceller, PDF dosyalarını silmez."
+        )
         ups = st.file_uploader("PDF yükle (çoklu seçim)", type=["pdf"],
                                accept_multiple_files=True, key="corpus_uploader")
         if st.button(
@@ -2456,9 +2445,34 @@ elif _pg_nav == "Prospektüs Yönetimi":
 
     with c2:
         st.markdown("#### Mevcut Dosyalar")
+        _corpus_notice = st.session_state.pop("_corpus_post_delete_notice", None)
+        if _corpus_notice:
+            st.warning(_corpus_notice)
         pdfs = list_corpus_pdfs()
         if pdfs:
-            for p in pdfs: st.markdown(f" `{p}`")
+            for i, p in enumerate(pdfs):
+                r1, r2 = st.columns([4, 1], vertical_alignment="center")
+                with r1:
+                    st.markdown(f"`{p}`")
+                with r2:
+                    if st.button(
+                        "Sil",
+                        key=f"corpus_pdf_del_{i}",
+                        help="Bu PDF’yi diskten kaldırır (geri alınamaz).",
+                    ):
+                        if delete_corpus_pdf(p):
+                            if "orchestrator" in st.session_state:
+                                with st.spinner("İndeks güncelleniyor…"):
+                                    st.session_state.orchestrator.rag_agent.rebuild_index()
+                            else:
+                                st.session_state["_corpus_post_delete_notice"] = (
+                                    "Dosya silindi. Chroma indeksini güncellemek için "
+                                    "İlaç Analizi sekmesinde bir analiz başlatıp burada "
+                                    "«İndeksi Yeniden Oluştur» düğmesine basın."
+                                )
+                            st.rerun()
+                        else:
+                            st.error("Dosya silinemedi.")
             if st.button(
                 " İndeksi Yeniden Oluştur",
                 type="primary",
@@ -2483,6 +2497,7 @@ elif _pg_nav == "Prospektüs Yönetimi":
 # SEKME 5 — HAKKINDA
 # ═════════════════════════════════════════════
 elif _pg_nav == "Hakkında":
+    pdf_list = list_corpus_pdfs()
     try:
         from agents import PHARMA_GUARD_VERSION as _pgv_about
     except Exception:
@@ -2627,6 +2642,7 @@ elif _pg_nav == "Hakkında":
     st.markdown(
         "**Canlı:** [medicalsearch.streamlit.app](https://medicalsearch.streamlit.app/) &nbsp;|&nbsp; "
         "**GitHub:** [cemevecen/medic](https://github.com/cemevecen/medic) &nbsp;|&nbsp; "
+        f"**İlaç fihrist (referans):** [Google Sheets]({_FIHRIST_REF_GOOGLE_SHEETS}) &nbsp;|&nbsp; "
         "**Lisans:** MIT &nbsp;|&nbsp; **Uygulama sürümü:** v"
         + str(_pgv_about)
     )

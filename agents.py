@@ -24,6 +24,8 @@ from groq import Groq
 from dotenv import load_dotenv
 from PIL import Image
 
+from utils import get_corpus_dir
+
 load_dotenv()
 
 _log_vision = logging.getLogger("pharma_guard.vision")
@@ -1064,7 +1066,6 @@ class RAGSpecialistAgent:
     semantik arama yapan ajan.
     """
 
-    CORPUS_DIR = Path("data/corpus")
     CHROMA_DIR = Path("data/chroma_db")
 
     def __init__(self):
@@ -1092,7 +1093,7 @@ class RAGSpecialistAgent:
                 model_kwargs={"device": "cpu"},
             )
 
-            pdf_files = list(self.CORPUS_DIR.glob("*.pdf"))
+            pdf_files = list(get_corpus_dir().glob("*.pdf"))
 
             if self.CHROMA_DIR.exists() and any(self.CHROMA_DIR.iterdir()):
                 self.vectorstore = Chroma(
@@ -1181,7 +1182,7 @@ class RAGSpecialistAgent:
             return [{"metin": f"Arama hatası: {str(e)}", "kaynak": "—", "sayfa": "—"}]
 
     def rebuild_index(self):
-        """Kullanıcı yeni PDF eklediğinde indeksi yeniden oluşturur."""
+        """Chroma vektör indeksini PDF'lerden yeniden oluşturur; corpus PDF dosyalarına dokunmaz."""
         import shutil
         if self.CHROMA_DIR.exists():
             shutil.rmtree(self.CHROMA_DIR)
