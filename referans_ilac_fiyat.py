@@ -458,3 +458,32 @@ def lookup_fiyat_liste_for_vision(
 
     satirlar = [_serialize_fiyat_tablo_row(sub.iloc[i]) for i in range(len(sub))]
     return {"eslesti": True, "satirlar": satirlar, "aciklama": ""}
+
+
+def search_unique_ilac_adi_candidates(query: str, limit: int = 40) -> List[str]:
+    """
+    İlaç Fiyatları birleşik tablosundaki benzersiz 'İlaç adı' değerlerinde alt dizgi araması.
+    En az 2 karakter; önce başı eşleşenler, sonra içerenler, alfabetik.
+    """
+    q = (query or "").strip()
+    if len(q) < 2:
+        return []
+    df = load_birlesik_ilac_fiyat_df()
+    if df is None or df.empty or "İlaç adı" not in df.columns:
+        return []
+    col = df["İlaç adı"].astype(str).str.strip()
+    col = col[col.str.len() > 0]
+    try:
+        mask = col.str.contains(re.escape(q), case=False, na=False, regex=True)
+    except re.error:
+        return []
+    hit = col[mask].drop_duplicates().tolist()
+    if not hit:
+        return []
+    qcf = q.casefold()
+    starts = [x for x in hit if str(x).strip().casefold().startswith(qcf)]
+    seen = set(starts)
+    rest = [x for x in hit if x not in seen]
+    starts_sorted = sorted(starts, key=lambda x: str(x).casefold())
+    rest_sorted = sorted(rest, key=lambda x: str(x).casefold())
+    return (starts_sorted + rest_sorted)[: int(limit)]

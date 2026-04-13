@@ -4,6 +4,7 @@ Canlı: https://medicalsearch.streamlit.app/ · Kaynak: https://github.com/cemev
 """
 
 import os
+import re
 import json
 import html
 from pathlib import Path
@@ -61,6 +62,339 @@ def _dataframe_noneish_to_dash(df):
         else:
             out.loc[mask, c] = "-"
     return out
+
+
+@st.cache_data(show_spinner=False)
+def _cached_ilac_fiyat_sekmesi_gosterim_df():
+    """İlaç Fiyatları sekmesi: gizlenen sütunlar + tire dönüşümü tek seferde (tekrarlayan iş yükünü keser)."""
+    from referans_ilac_fiyat import load_birlesik_ilac_fiyat_df
+
+    raw = load_birlesik_ilac_fiyat_df()
+    if raw is None:
+        return None
+    cut = raw.drop(
+        columns=[
+            "GKF (€)",
+            "Reçete.org fiyat (sayı)",
+            "Reçete.org fiyat sütunu",
+            "Reçete.org notları",
+        ],
+        errors="ignore",
+    )
+    return _dataframe_noneish_to_dash(cut)
+
+
+# Tabloda çok satır = tarayıcı yavaşlar; tam liste yerine üst sınır + arama ile daraltma.
+_FIYAT_SEKMESI_TABLO_UST_SATIR = 600
+
+
+@st.fragment
+def _pg_fragment_ilac_fiyatlari():
+    st.markdown(
+        '<p class="pg-section">İlaç Bilgileri & Fiyatları</p>',
+        unsafe_allow_html=True,
+    )
+
+    _rf_df = _cached_ilac_fiyat_sekmesi_gosterim_df()
+    if _rf_df is None:
+        st.warning(
+            "En az bir kaynak gerekir: `data/referans_bazli_ilac_fiyat_listesi.xlsx` ve/veya "
+            "`data/ilac_fiyat_web_listesi.xlsx`."
+        )
+        return
+    if _rf_df.empty:
+        st.warning("Birleşik fiyat tablosu şu an boş.")
+        return
+
+    _rf_q = st.text_input(
+        "Listede ara (ilaç, firma veya barkod; boş = tümü)",
+        placeholder="örn: ABILIFY, PFİZER, 86995…",
+        key="referans_fiyat_filter",
+    )
+    _rf_show = _rf_df
+    if (_rf_q or "").strip():
+        q = _rf_q.strip()
+        _m = _rf_show["İlaç adı"].astype(str).str.contains(
+            q, case=False, na=False, regex=False
+        )
+        _m = _m | _rf_show["Firma"].astype(str).str.contains(
+            q, case=False, na=False, regex=False
+        )
+        if "Barkod" in _rf_show.columns:
+            _m = _m | _rf_show["Barkod"].astype(str).str.contains(
+                q, case=False, na=False, regex=False
+            )
+        _rf_show = _rf_show[_m]
+
+    _n_total = len(_rf_show)
+    if _n_total == 0:
+        st.info("Aramanızla eşleşen satır yok.")
+        return
+
+    if _n_total > _FIYAT_SEKMESI_TABLO_UST_SATIR:
+        _rf_view = _rf_show.head(_FIYAT_SEKMESI_TABLO_UST_SATIR)
+        st.caption(
+            f"Hız için yalnızca ilk **{len(_rf_view)}** satır gösteriliyor (toplam eşleşme: **{_n_total}**). "
+            "Tümünü görmek için aramayı daraltın."
+        )
+    else:
+        _rf_view = _rf_show
+
+    _col_cfg_all = {
+        "Liste fiyatı (₺)": st.column_config.NumberColumn("Liste fiyatı (₺)", format="%.2f"),
+        "Barkod": st.column_config.TextColumn("Barkod"),
+    }
+    _col_cfg = {k: v for k, v in _col_cfg_all.items() if k in _rf_view.columns}
+    _gorunur_satir = 150
+    _satir_px = 34
+    _baslik_pad = 52
+    _df_h = min(
+        len(_rf_view) * _satir_px + _baslik_pad,
+        _gorunur_satir * _satir_px + _baslik_pad,
+    )
+    _df_h = int(max(_df_h, 120))
+    _df_kw: dict = dict(use_container_width=True, height=_df_h, hide_index=True)
+    if _col_cfg:
+        _df_kw["column_config"] = _col_cfg
+    st.dataframe(_rf_view, **_df_kw)
+    _n_gor = len(_rf_view)
+    if _n_gor > _gorunur_satir:
+        st.markdown(
+            f'<div class="pg-df-scroll-hint" title="Tabloda dikey kaydırma">'
+            f'<span class="pg-df-scroll-hint-chevron"></span>'
+            f'<span>Tabloda <strong>{_n_gor}</strong> satır; liste aşağıda devam eder'
+            f'<span class="pg-df-scroll-hint-dots"> ···</span></span>'
+            f'<span class="pg-df-scroll-hint-chevron"></span></div>',
+            unsafe_allow_html=True,
+        )
+    elif _n_total <= _FIYAT_SEKMESI_TABLO_UST_SATIR:
+        st.caption(f"Toplam {_n_total} satır.")
+
+
+# ilacrehberi.com A–Z fihrist anahtar sırası (tekilleştirilmiş XLSX ile uyumlu)
+_FIHRIST_NAV_KEYS = (
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G",
+    "H",
+    "I",
+    "J",
+    "K",
+    "L",
+    "M",
+    "N",
+    "O",
+    "P",
+    "R",
+    "S",
+    "T",
+    "U",
+    "V",
+    "W",
+    "X",
+    "Y",
+    "Z",
+    "Ş",
+    "AL",
+    "AN",
+    "BE",
+    "CA",
+    "CE",
+    "CO",
+    "DE",
+    "DI",
+    "FL",
+    "GE",
+    "IN",
+    "KA",
+    "LA",
+    "LI",
+    "ME",
+    "MI",
+    "NA",
+    "NI",
+    "NO",
+    "PA",
+    "PE",
+    "SE",
+    "SI",
+    "TR",
+    "VI",
+)
+_FIHRIST_TR_HIGHLIGHT = frozenset({"Ş"})
+_FIHRIST_TABLE_MAX = 180
+
+
+@st.cache_data(show_spinner=False)
+def _cached_ilacrehberi_fihrist_df():
+    """Masaüstü veya data/ altındaki ilacrehberi_fihrist.xlsx."""
+    import pandas as pd
+
+    roots = (
+        Path(__file__).resolve().parent / "data",
+        Path.home() / "Desktop",
+    )
+    for root in roots:
+        p = root / "ilacrehberi_fihrist.xlsx"
+        if not p.exists():
+            continue
+        try:
+            df = pd.read_excel(p)
+        except Exception:
+            continue
+        if df is None or df.empty:
+            continue
+        cols = {str(c).strip().lower(): c for c in df.columns}
+        def _pick(*names):
+            for n in names:
+                if n in cols:
+                    return cols[n]
+            return None
+
+        c_grp = _pick("fihrist_grubu", "grup")
+        c_ad = _pick("ilac_adi", "i̇laç adı", "ilac adi", "ad")
+        c_url = _pick("detay_url", "url", "link")
+        if not c_ad:
+            continue
+        out = pd.DataFrame(
+            {
+                "fihrist_grubu": df[c_grp].astype(str) if c_grp else "",
+                "ilac_adi": df[c_ad].astype(str).str.strip(),
+                "detay_url": df[c_url].astype(str).str.strip() if c_url else "",
+            }
+        )
+        out = out[out["ilac_adi"].str.len() > 0].reset_index(drop=True)
+        if c_url:
+            out.loc[~out["detay_url"].str.startswith("http", na=False), "detay_url"] = ""
+        else:
+            out["detay_url"] = ""
+        return out
+    return None
+
+
+def _fihrist_kt_kub_urls(detay_url: str) -> tuple[str, str]:
+    u = (detay_url or "").strip()
+    if not u.startswith("http"):
+        return "", ""
+    u = u.rstrip("/")
+    if "/v/" not in u:
+        return "", ""
+    return f"{u}/kt/", f"{u}/kub/"
+
+
+def _fihrist_prefix_mask(series, chip: str):
+    ch = (chip or "A").strip()
+    if not ch:
+        return pd.Series([True] * len(series), index=series.index)
+    pat = "^" + re.escape(ch)
+    return series.astype(str).str.strip().str.match(pat, case=False, na=False)
+
+
+@st.fragment
+def _pg_fragment_ilac_fihrist():
+    st.markdown(
+        '<p class="pg-section">İlaç Fihrist</p>',
+        unsafe_allow_html=True,
+    )
+    df = _cached_ilacrehberi_fihrist_df()
+    if df is None or df.empty:
+        st.warning(
+            "`ilacrehberi_fihrist.xlsx` bulunamadı veya boş. "
+            "Dosyayı `data/` veya Masaüstüne koyun; `scripts/export_ilacrehberi_fihrist_xlsx.py` ile üretebilirsiniz."
+        )
+        return
+
+    st.caption(
+        "Kaynak: yerel XLSX (ilacrehberi.com fihrist düzenine benzer). "
+        "KT/KUB bağlantıları yalnızca `detay_url` sütunu dolu olduğunda çalışır."
+    )
+
+    st.session_state.setdefault("pg_fihrist_pills", "A")
+    st.pills(
+        "Fihrist harfi / grup",
+        options=list(_FIHRIST_NAV_KEYS),
+        selection_mode="single",
+        key="pg_fihrist_pills",
+        label_visibility="collapsed",
+        format_func=lambda k: (f"{k} ·" if k in _FIHRIST_TR_HIGHLIGHT else k),
+    )
+    chip = str(st.session_state.get("pg_fihrist_pills") or "A").strip() or "A"
+
+    st.markdown(
+        f'<h2 class="pg-fihrist-title">İLAÇ A-Z FİHRİST<span class="pg-fihrist-letter">{html.escape(chip)}</span></h2>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="pg-fihrist-hint">Aşağıdaki listede seçili harf veya önek ile başlayan ilaçları '
+        "bulabilirsiniz. İlaç adına tıklayarak ilacrehberi.com’daki ilgili sayfaya gidebilirsiniz "
+        "(detay bağlantısı yoksa yalnızca metin gösterilir).</div>",
+        unsafe_allow_html=True,
+    )
+
+    mask = _fihrist_prefix_mask(df["ilac_adi"], chip)
+    sub = df.loc[mask].copy()
+    sub = sub.sort_values("ilac_adi", key=lambda s: s.astype(str).str.casefold()).reset_index(drop=True)
+    names = sub["ilac_adi"].tolist()
+    pick = None
+    if names:
+        pick = st.selectbox(
+            "Listeden seçin",
+            options=names,
+            index=0,
+            key=f"pg_fihrist_sel_{chip}",
+        )
+    else:
+        st.info("Bu grup için kayıt yok; başka bir harf deneyin.")
+
+    st.markdown(
+        f'<p class="pg-fihrist-subhead">İLAÇ LİSTESİ [ {html.escape(chip)} ] — '
+        f"ilk {min(_FIHRIST_TABLE_MAX, len(sub))} kayıt</p>",
+        unsafe_allow_html=True,
+    )
+
+    show = sub.head(_FIHRIST_TABLE_MAX)
+    rows_html: list[str] = []
+    for _, row in show.iterrows():
+        ad = str(row["ilac_adi"])
+        url = str(row.get("detay_url") or "").strip()
+        kt_u, kub_u = _fihrist_kt_kub_urls(url)
+        if kt_u and kub_u:
+            kt_cell = (
+                f'<a class="pg-fh-doc" href="{html.escape(kt_u)}" target="_blank" rel="noopener" title="KT">KT</a>'
+                f'<a class="pg-fh-doc" href="{html.escape(kub_u)}" target="_blank" rel="noopener" title="KUB">KUB</a>'
+            )
+        else:
+            kt_cell = '<span style="color:var(--pg-muted);font-size:0.8rem">—</span>'
+        if url.startswith("http"):
+            name_cell = (
+                f'<a class="pg-fh-name" href="{html.escape(url)}" target="_blank" rel="noopener">'
+                f"{html.escape(ad)}</a>"
+            )
+        else:
+            name_cell = f'<span style="color:var(--pg-ink)">{html.escape(ad)}</span>'
+        rows_html.append(
+            f"<tr><td>{kt_cell}</td><td>{name_cell}</td>"
+            f'<td class="pg-fh-barkod">—</td></tr>'
+        )
+
+    table = (
+        '<div class="pg-fihrist-table-wrap"><table><thead><tr>'
+        "<th>KT/KUB</th><th>İlaç Adı</th><th>Barkodu</th></tr></thead><tbody>"
+        + "".join(rows_html)
+        + "</tbody></table></div>"
+    )
+    st.markdown(table, unsafe_allow_html=True)
+    if len(sub) > _FIHRIST_TABLE_MAX:
+        st.caption(
+            f"Toplam **{len(sub)}** satır; performans için yalnızca ilk {_FIHRIST_TABLE_MAX} gösteriliyor. "
+            "Daraltmak için harf veya listeden arama kullanın."
+        )
+    if pick:
+        st.caption(f"Seçili satır: **{pick}**")
 
 
 def _eczaneapi_key_optional() -> str:
@@ -1114,6 +1448,93 @@ hr.pg-hr-slim {
   letter-spacing: 0.12em; opacity: 0.75; user-select: none;
 }
 
+/* İlaç Fihrist — ilacrehberi.com benzeri blok */
+.pg-fihrist-title {
+  font-size: clamp(1.05rem, 2.5vw, 1.35rem);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--pg-ink);
+  margin: 0 0 0.35rem 0;
+}
+.pg-fihrist-title span.pg-fihrist-letter {
+  color: #1565c0;
+  margin-left: 0.25rem;
+}
+.pg-fihrist-hint {
+  background: #f1f5f9;
+  border: 1px solid var(--pg-line);
+  border-radius: 10px;
+  padding: 0.65rem 0.85rem;
+  font-size: clamp(0.82rem, 1.6vw, 0.92rem);
+  color: var(--pg-muted);
+  line-height: 1.5;
+  margin: 0.5rem 0 0.75rem 0;
+}
+[data-theme="dark"] .pg-fihrist-hint,
+[data-color-scheme="dark"] .pg-fihrist-hint {
+  background: #1e293b;
+  border-color: #334155;
+}
+.pg-fihrist-table-wrap {
+  margin-top: 0.75rem;
+  overflow-x: auto;
+  border: 1px solid var(--pg-line);
+  border-radius: 12px;
+  background: var(--pg-surface);
+}
+.pg-fihrist-table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: clamp(0.82rem, 1.5vw, 0.92rem);
+}
+.pg-fihrist-table-wrap th {
+  text-align: left;
+  padding: 0.55rem 0.65rem;
+  border-bottom: 2px solid #1565c0;
+  color: #1565c0;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.pg-fihrist-table-wrap td {
+  padding: 0.45rem 0.65rem;
+  border-bottom: 1px solid var(--pg-line);
+  vertical-align: middle;
+}
+.pg-fihrist-table-wrap td.pg-fh-barkod {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--pg-muted);
+}
+.pg-fh-doc {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.1rem;
+  height: 1.65rem;
+  padding: 0 0.35rem;
+  margin-right: 0.25rem;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-decoration: none !important;
+  background: linear-gradient(180deg, #1976d2, #0d47a1);
+  color: #fff !important;
+  border: 1px solid #0d47a1;
+}
+.pg-fh-doc:hover { filter: brightness(1.08); }
+.pg-fihrist-table-wrap a.pg-fh-name {
+  color: #1565c0;
+  font-weight: 600;
+  text-decoration: none;
+}
+.pg-fihrist-table-wrap a.pg-fh-name:hover { text-decoration: underline; }
+.pg-fihrist-subhead {
+  margin: 1rem 0 0.4rem 0;
+  font-size: clamp(0.95rem, 2vw, 1.05rem);
+  font-weight: 700;
+  color: #1565c0;
+}
+
 /* Responsive empty state */
 @media (max-width: 640px) {
   .pg-empty {
@@ -1296,6 +1717,7 @@ _PG_TAB_LABELS = (
     "İlaç Analizi",
     "FDA Arşivi",
     "İlaç Fiyatları",
+    "İlaç Fihrist",
     "Prospektüs Yönetimi",
     "Hakkında",
 )
@@ -1341,6 +1763,7 @@ if _pg_nav == "İlaç Analizi":
         drug_name_input = None
         pdf_bytes_input = None
         pdf_name_input  = "prospektus.pdf"
+        run_from_form = False
 
         if method == "görsel":
             up = st.file_uploader(
@@ -1371,10 +1794,80 @@ if _pg_nav == "İlaç Analizi":
                 )
 
         else:
-            drug_name_input = st.text_input(
-                "İlaç adını girin",
-                placeholder="örn: Augmentin 1000 mg, Parol 500 mg…",
-            )
+            # Form: metin + gönder düğmeleri tek istekte gider (canlıda ayrı düğmeye basınca boş metin gelmez).
+            with st.form("pg_drug_name_form", clear_on_submit=False, border=False):
+                drug_name_input = st.text_input(
+                    "İlaç adını girin",
+                    placeholder="örn: Augmentin 1000 mg, Parol 500 mg…",
+                    key="pg_drug_name_input",
+                )
+                st.caption(
+                    "İlaç Fiyatları önerileri: en az iki harf yazın; **Önerileri göster** veya "
+                    "**Analizi Başlat** ile gönderin (metin kutusu ile düğme ayrı istekte güvenilir çalışmaz)."
+                )
+                _ac_col, _run_col = st.columns(2, gap="small")
+                with _ac_col:
+                    ac_sub = st.form_submit_button(
+                        "Önerileri göster",
+                        type="secondary",
+                        use_container_width=True,
+                    )
+                with _run_col:
+                    run_sub = st.form_submit_button(
+                        " Analizi Başlat",
+                        type="primary",
+                        use_container_width=True,
+                        disabled=not (gemini_key and groq_key),
+                    )
+            run_from_form = bool(run_sub) and bool((drug_name_input or "").strip())
+            _q_ac = (
+                st.session_state.get("pg_drug_name_input") or drug_name_input or ""
+            ).strip()
+            if len(_q_ac) >= 2:
+                try:
+                    from referans_ilac_fiyat import (
+                        load_birlesik_ilac_fiyat_df,
+                        search_unique_ilac_adi_candidates,
+                    )
+
+                    _ac_df = load_birlesik_ilac_fiyat_df()
+                except Exception:
+                    _ac_df = None
+                    _ac_cands = []
+                    st.caption("Fiyat listesi okunamadı; öneri gösterilemiyor.")
+                else:
+                    if _ac_df is None or _ac_df.empty:
+                        st.caption("İlaç Fiyatları tablosu yüklenemedi veya boş; öneri üretilemiyor.")
+                        _ac_cands = []
+                    else:
+                        _ac_search_err = False
+                        try:
+                            _ac_cands = search_unique_ilac_adi_candidates(_q_ac, limit=40)
+                        except Exception:
+                            _ac_cands = []
+                            _ac_search_err = True
+                            st.caption("Öneriler hesaplanırken hata oluştu.")
+                        if not _ac_cands and not _ac_search_err:
+                            st.caption("Bu metinle eşleşen ilaç adı listede bulunamadı.")
+                if _ac_cands:
+                    st.caption(
+                        "Listeden bir satır seçin; metin kutusuna yazılır."
+                    )
+                    st.session_state.setdefault("pg_fiyat_ac_nonce", 0)
+                    _ac_ph = "— listeden seçin —"
+                    _ac_pick = st.selectbox(
+                        "fiyat_autocomplete",
+                        [_ac_ph] + _ac_cands,
+                        index=0,
+                        key=f"pg_fiyat_ac_{st.session_state.pg_fiyat_ac_nonce}",
+                        label_visibility="collapsed",
+                    )
+                    if _ac_pick and _ac_pick != _ac_ph:
+                        st.session_state.pg_drug_name_input = _ac_pick
+                        st.session_state.pg_fiyat_ac_nonce = int(
+                            st.session_state.pg_fiyat_ac_nonce
+                        ) + 1
+                        st.rerun()
 
         with st.container(key="pg_tight_input_run"):
             st.markdown(
@@ -1386,18 +1879,22 @@ if _pg_nav == "İlaç Analizi":
             if not groq_key:
                 st.warning(" GROQ_API_KEY eksik — Streamlit Secrets'a ekleyin.")
 
-            has_input = (
-                image_obj is not None
-                or (drug_name_input and drug_name_input.strip())
-                or pdf_bytes_input is not None
-            )
-            can_run = bool(has_input and gemini_key and groq_key)
-            run_btn = st.button(
-                " Analizi Başlat",
-                type="primary",
-                disabled=not can_run,
-                use_container_width=True,
-            )
+            if method == "ilaç adı":
+                has_input = bool(drug_name_input and drug_name_input.strip())
+                run_btn = run_from_form
+            else:
+                has_input = (
+                    image_obj is not None
+                    or (drug_name_input and drug_name_input.strip())
+                    or pdf_bytes_input is not None
+                )
+                can_run = bool(has_input and gemini_key and groq_key)
+                run_btn = st.button(
+                    " Analizi Başlat",
+                    type="primary",
+                    disabled=not can_run,
+                    use_container_width=True,
+                )
 
             st.markdown(
                 '<hr class="pg-hr-slim" aria-hidden="true"/>',
@@ -1993,71 +2490,13 @@ elif _pg_nav == "FDA Arşivi":
 # SEKME 3 — İLAÇ FİYATLARI (birleşik liste)
 # ═════════════════════════════════════════════
 elif _pg_nav == "İlaç Fiyatları":
-    st.markdown(
-        '<p class="pg-section">İlaç Bilgileri & Fiyatları</p>',
-        unsafe_allow_html=True,
-    )
+    _pg_fragment_ilac_fiyatlari()
 
-    from referans_ilac_fiyat import load_birlesik_ilac_fiyat_df
-
-    _rf_df = load_birlesik_ilac_fiyat_df()
-    if _rf_df is None:
-        st.warning(
-            "En az bir kaynak gerekir: `data/referans_bazli_ilac_fiyat_listesi.xlsx` ve/veya "
-            "`data/ilac_fiyat_web_listesi.xlsx`."
-        )
-    else:
-        _rf_q = st.text_input(
-            "Listede ara (ilaç, firma veya barkod; boş = tümü)",
-            placeholder="örn: ABILIFY, PFİZER, 86995…",
-            key="referans_fiyat_filter",
-        )
-        _rf_show = _rf_df
-        if (_rf_q or "").strip():
-            q = _rf_q.strip().casefold()
-            _m = (
-                _rf_show["İlaç adı"].astype(str).str.casefold().str.contains(q, na=False)
-                | _rf_show["Firma"].astype(str).str.casefold().str.contains(q, na=False)
-            )
-            if "Barkod" in _rf_show.columns:
-                _m = _m | _rf_show["Barkod"].astype(str).str.casefold().str.contains(q, na=False)
-            _rf_show = _rf_show[_m]
-        _rf_show = _rf_show.drop(
-            columns=[
-                "GKF (€)",
-                "Reçete.org fiyat (sayı)",
-                "Reçete.org fiyat sütunu",
-                "Reçete.org notları",
-            ],
-            errors="ignore",
-        )
-        _rf_show = _dataframe_noneish_to_dash(_rf_show)
-        _col_cfg_all = {
-            "Liste fiyatı (₺)": st.column_config.NumberColumn("Liste fiyatı (₺)", format="%.2f"),
-            "Barkod": st.column_config.TextColumn("Barkod"),
-        }
-        _col_cfg = {k: v for k, v in _col_cfg_all.items() if k in _rf_show.columns}
-        _gorunur_satir = 150
-        _satir_px = 34
-        _baslik_pad = 52
-        _df_h = min(len(_rf_show) * _satir_px + _baslik_pad, _gorunur_satir * _satir_px + _baslik_pad)
-        _df_h = int(max(_df_h, 120))
-        _df_kw: dict = dict(use_container_width=True, height=_df_h, hide_index=True)
-        if _col_cfg:
-            _df_kw["column_config"] = _col_cfg
-        st.dataframe(_rf_show, **_df_kw)
-        _n_satir = len(_rf_show)
-        if _n_satir > _gorunur_satir:
-            st.markdown(
-                f'<div class="pg-df-scroll-hint" title="Tabloda dikey kaydırma">'
-                f'<span class="pg-df-scroll-hint-chevron"></span>'
-                f'<span>Toplam <strong>{_n_satir}</strong> satır; liste aşağıda devam eder'
-                f'<span class="pg-df-scroll-hint-dots"> ···</span></span>'
-                f'<span class="pg-df-scroll-hint-chevron"></span></div>',
-                unsafe_allow_html=True,
-            )
-        else:
-            st.caption(f"Toplam {_n_satir} satır.")
+# ═════════════════════════════════════════════
+# SEKME 3b — İLAÇ FİHRİST (yerel XLSX, ilacrehberi benzeri)
+# ═════════════════════════════════════════════
+elif _pg_nav == "İlaç Fihrist":
+    _pg_fragment_ilac_fihrist()
 
 # ═════════════════════════════════════════════
 # SEKME 4 — PROSPEKTÜS YÖNETİMİ (CORPUS)
