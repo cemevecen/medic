@@ -51,6 +51,52 @@ def save_api_config():
 # Uygulamayı başlatırken yapılandırmayı yükle
 load_api_config()
 
+# ═════════════════════════════════════════════
+# EczaneAPI Widget — Tüm Şehir/İlçeler Cache
+# ═════════════════════════════════════════════
+@st.cache_data
+def load_eczaneapi_cities_districts():
+    """EczaneAPI'den tüm şehir ve ilçeleri load et (cache'lendi)"""
+    import requests
+
+    try:
+        # Tüm şehirleri al
+        response = requests.get("https://eczaneapi.com/api/v1/cities", timeout=10)
+        if response.status_code != 200:
+            return {}
+
+        cities_data = response.json().get("data", [])
+        cities_districts = {}
+
+        for city in cities_data:
+            city_slug = city.get("slug", "").lower()
+            city_name = city.get("name", "")
+
+            if not city_slug:
+                continue
+
+            try:
+                # Her şehir için ilçeleri al
+                dist_response = requests.get(
+                    f"https://eczaneapi.com/api/v1/cities/{city_slug}/districts",
+                    timeout=10
+                )
+
+                if dist_response.status_code == 200:
+                    districts_data = dist_response.json().get("data", {}).get("districts", [])
+                    districts_list = [d.get("slug", "").lower() for d in districts_data if d.get("slug")]
+                    cities_districts[city_slug] = sorted(districts_list) if districts_list else []
+            except:
+                cities_districts[city_slug] = []
+
+        return cities_districts
+    except Exception as e:
+        print(f"❌ EczaneAPI cities/districts load hatası: {e}")
+        return {}
+
+# Widget başlatılırken cache load et
+ECZANEAPI_CITIES_DISTRICTS = load_eczaneapi_cities_districts()
+
 from typing import Optional
 
 from utils import (
@@ -1336,45 +1382,35 @@ with tab_nobetci:
     )
     st.caption("Türkiye'nin herhangi bir yerindeki nöbetçi (açık) eczaneleri bulun.")
 
-    # EczaneAPI Widget — Statik (API'den Bağımsız)
+    # EczaneAPI Widget — Canlı Veriler (Cache'lendi)
     st.markdown("---")
     st.markdown("### 📍 Bugünün Nöbetçi Eczaneleri")
     with st.expander("🎯 Widget ile göz at", expanded=True):
-        # Hardcoded cities & districts — API'den bağımsız
-        WIDGET_CITIES_DISTRICTS = {
-            "ankara": ["çankaya", "keçiören", "yenimahalle", "mamak", "cebeci", "kızılay", "ulus", "akyurt", "pursaklar"],
-            "istanbul": ["kadıköy", "beşiktaş", "beyoğlu", "fatih", "eminönü", "üsküdar", "şişli", "başakşehir", "esenyurt"],
-            "izmir": ["alsancak", "karaburun", "balçova", "bornova", "çeşme", "gaziemir", "göztepe", "güzelbahçe"],
-            "bursa": ["osmangazi", "nilüfer", "yıldırım", "mustafakemalpaşa", "mudanya", "inebolu"],
-            "antalya": ["muratpaşa", "kepez", "aksu", "serik", "alanya", "manavgat", "kaş", "demre"],
-            "diyarbakır": ["sur", "bağlar", "yenişehir", "kayapınar"],
-            "gaziantep": ["şahinbey", "şehitkamil", "oğuzeli"],
-            "adana": ["seyhan", "çukurova", "yüreğir"],
-            "mersin": ["yenişehir", "toroslar", "akdeniz"],
-            "kayseri": ["melikgazi", "talas", "kocasinan"],
-        }
-
         col_widget_city, col_widget_district = st.columns(2)
 
         with col_widget_city:
+            # Tüm cache'lenmiş şehirler
+            cities_list = sorted(ECZANEAPI_CITIES_DISTRICTS.keys()) if ECZANEAPI_CITIES_DISTRICTS else ["ankara"]
             widget_city = st.selectbox(
                 "Widget İçin İl Seçin",
-                options=list(WIDGET_CITIES_DISTRICTS.keys()),
+                options=cities_list,
                 format_func=lambda x: x.capitalize(),
-                index=0,
+                index=0 if "ankara" in cities_list else 0,
                 key="widget_city_select"
             )
 
         with col_widget_district:
-            districts = [""] + WIDGET_CITIES_DISTRICTS.get(widget_city, [])
+            # Seçili şehrin ilçeleri
+            districts = ECZANEAPI_CITIES_DISTRICTS.get(widget_city, [])
+            districts_with_empty = [""] + districts
             widget_district = st.selectbox(
                 "Widget İçin İlçe Seçin (İsteğe Bağlı)",
-                options=districts,
+                options=districts_with_empty,
                 format_func=lambda x: x.capitalize() if x else "Tüm ilçeler",
                 key="widget_district_select"
             )
 
-        # Build widget URL
+        # Widget URL oluştur
         widget_url = f"https://eczaneapi.com/widget?city={widget_city}"
         if widget_district:
             widget_url += f"&district={widget_district}"
@@ -1383,7 +1419,7 @@ with tab_nobetci:
             f'<iframe src="{widget_url}" width="100%" height="400" frameborder="0" style="border:none; border-radius:12px; max-width: 400px; margin: 0 auto; display: block;" title="Nöbetçi Eczaneler"></iframe>',
             unsafe_allow_html=True
         )
-        st.caption("✨ Widget sağlayıcısı: EczaneAPI — Tamamen bağımsız, canlı veriler")
+        st.caption("✨ Widget sağlayıcısı: EczaneAPI — Tüm şehir/ilçeler, canlı veriler")
 
     st.markdown("---")
     st.markdown("### 🔍 Ayrıntılı Arama")
