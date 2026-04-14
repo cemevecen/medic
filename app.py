@@ -57,36 +57,11 @@ def _pg_ilac_autocomplete_suggestion_html(query: str, candidate: str) -> str:
     return esc(c)
 
 
-_RECENT_DRUG_SEED_FALLBACK = tuple(f"Örnek {i}" for i in range(1, 11))
-
-
-def _pg_sample_10_unique_ilac_from_arsiv() -> list[str]:
-    """Birleşik fiyat tablosundan 10 tekil ilaç adı (oturumda ilk doldurma için)."""
-    import random
-
-    try:
-        from referans_ilac_fiyat import load_birlesik_ilac_fiyat_df
-
-        df = load_birlesik_ilac_fiyat_df()
-    except Exception:
-        df = None
-    if df is None or df.empty or "İlaç adı" not in df.columns:
-        return list(_RECENT_DRUG_SEED_FALLBACK)
-    col = df["İlaç adı"].astype(str).str.strip()
-    col = col[col.str.len() > 1]
-    uniq = col.drop_duplicates().tolist()
-    if len(uniq) < 10:
-        if not uniq:
-            return list(_RECENT_DRUG_SEED_FALLBACK)
-        return (uniq * ((10 // len(uniq)) + 1))[:10]
-    return random.sample(uniq, 10)
-
-
 def _pg_ensure_son_aranan_buffers() -> None:
-    if "pg_recent_seeds" not in st.session_state:
-        st.session_state.pg_recent_seeds = _pg_sample_10_unique_ilac_from_arsiv()
     if "pg_recent_user_chrono" not in st.session_state:
         st.session_state.pg_recent_user_chrono = []
+    # Eski oturumlarda kalan örnek doldurma listesi (artık kullanılmıyor)
+    st.session_state.pop("pg_recent_seeds", None)
 
 
 def _pg_push_son_aranan_ilac(raw: object) -> None:
@@ -104,27 +79,27 @@ def _pg_push_son_aranan_ilac(raw: object) -> None:
 
 
 def _pg_render_son_aranan_ilaclar_panel() -> None:
-    """Analiz sonuçları sütunu: 10 satırlık son aranan / örnek liste kartı."""
+    """Analiz sonuçları sütunu: yalnızca gerçek aramalar (en yeni üstte, en fazla 10)."""
     _pg_ensure_son_aranan_buffers()
-    seeds: list[str] = list(st.session_state.pg_recent_seeds or [])
     user: list[str] = list(st.session_state.pg_recent_user_chrono or [])
-    if len(seeds) < 10:
-        seeds = (seeds + list(_RECENT_DRUG_SEED_FALLBACK))[:10]
+    if not user:
+        st.markdown(
+            '<div class="pg-recent-wrap">'
+            '<div class="pg-recent-head">'
+            '<p class="pg-recent-title">Son aranan ilaçlar</p>'
+            "</div>"
+            '<p class="pg-recent-empty">Henüz kayıtlı arama yok; analiz tamamlanınca burada listelenir.</p>'
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        return
     rows_html: list[str] = []
-    for i in range(10):
-        if i < len(user):
-            txt = user[i]
-            row_cls = "pg-recent-row pg-recent-row--real"
-            pill = ""
-        else:
-            txt = seeds[i] if i < len(seeds) else "—"
-            row_cls = "pg-recent-row pg-recent-row--seed"
-            pill = '<span class="pg-recent-pill">Örnek</span>'
+    for i, txt in enumerate(user):
         rows_html.append(
-            f'<div class="{row_cls}" role="listitem">'
+            '<div class="pg-recent-row" role="listitem">'
             f'<span class="pg-recent-badge">{i + 1}</span>'
             f'<span class="pg-recent-name">{html.escape(txt)}</span>'
-            f"{pill}</div>"
+            "</div>"
         )
     st.markdown(
         '<div class="pg-recent-wrap">'
@@ -2002,22 +1977,20 @@ hr.pg-hr-slim {
 .pg-empty .pg-empty-icon { font-size: clamp(2rem, 6vw, 2.75rem); line-height:1; margin-bottom:1rem; }
 .pg-empty p { margin:0; font-size: clamp(0.9rem, 2vw, 1rem); line-height:1.6; color:var(--pg-muted) !important; }
 
-/* Son aranan ilaçlar — boş durum kutusundan ayrı; kart liste */
+/* Son aranan ilaçlar — yalnızca gerçek aramalar; nötr kart */
 .pg-recent-wrap {
   margin-top: clamp(0.85rem, 2.5vw, 1.25rem);
   margin-bottom: 1rem;
   padding: 0.85rem 0.9rem 0.9rem;
-  border: 1px solid rgba(15, 118, 110, 0.14);
+  border: 1px solid rgba(148, 163, 184, 0.28);
   border-radius: 16px;
   background: linear-gradient(165deg, #ffffff 0%, #f8fafc 48%, #f1f5f9 100%);
-  box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.04),
-    0 10px 28px -12px rgba(15, 118, 110, 0.12);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
 }
 .pg-recent-head {
   margin-bottom: 0.45rem;
   padding-bottom: 0.35rem;
-  border-bottom: 1px solid rgba(15, 118, 110, 0.12);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
 }
 .pg-recent-title {
   margin: 0;
@@ -2025,6 +1998,12 @@ hr.pg-hr-slim {
   font-weight: 700;
   color: var(--pg-ink);
   letter-spacing: -0.01em;
+}
+.pg-recent-empty {
+  margin: 0.35rem 0 0;
+  font-size: clamp(0.8rem, 1.5vw, 0.9rem);
+  line-height: 1.45;
+  color: var(--pg-muted);
 }
 .pg-recent-list {
   display: flex;
@@ -2041,21 +2020,10 @@ hr.pg-hr-slim {
   border: 1px solid rgba(148, 163, 184, 0.22);
   font-size: clamp(0.78rem, 1.45vw, 0.88rem);
   line-height: 1.35;
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-.pg-recent-row--real {
-  font-weight: 600;
-  color: var(--pg-ink);
-  border-color: rgba(15, 118, 110, 0.2);
-  background: rgba(15, 118, 110, 0.06);
-  box-shadow: inset 3px 0 0 0 var(--pg-accent);
-}
-.pg-recent-row--seed {
   font-weight: 500;
-  color: #64748b;
-  background: rgba(248, 250, 252, 0.95);
-  border-style: dashed;
-  border-color: rgba(148, 163, 184, 0.35);
+  color: var(--pg-ink);
+  background: rgba(248, 250, 252, 0.9);
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 .pg-recent-badge {
   flex: 0 0 auto;
@@ -2071,66 +2039,36 @@ hr.pg-hr-slim {
   color: #64748b;
   background: rgba(148, 163, 184, 0.16);
 }
-.pg-recent-row--real .pg-recent-badge {
-  color: #0f766e;
-  background: rgba(15, 118, 110, 0.14);
-}
 .pg-recent-name {
   flex: 1 1 auto;
   min-width: 0;
   word-break: break-word;
   overflow-wrap: anywhere;
 }
-.pg-recent-pill {
-  flex: 0 0 auto;
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  padding: 0.2rem 0.45rem;
-  border-radius: 999px;
-  color: #64748b;
-  background: rgba(148, 163, 184, 0.2);
-}
 [data-theme="dark"] .pg-recent-wrap,
 [data-color-scheme="dark"] .pg-recent-wrap {
   background: linear-gradient(165deg, #1e293b 0%, #172033 55%, #0f172a 100%);
-  border-color: rgba(45, 212, 191, 0.2);
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.25),
-    0 10px 28px -12px rgba(20, 184, 166, 0.15);
+  border-color: rgba(148, 163, 184, 0.25);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 [data-theme="dark"] .pg-recent-head,
 [data-color-scheme="dark"] .pg-recent-head {
-  border-bottom-color: rgba(45, 212, 191, 0.15);
+  border-bottom-color: rgba(148, 163, 184, 0.2);
 }
-[data-theme="dark"] .pg-recent-row--real,
-[data-color-scheme="dark"] .pg-recent-row--real {
-  background: rgba(45, 212, 191, 0.08);
-  border-color: rgba(45, 212, 191, 0.22);
-  color: #f1f5f9;
-  box-shadow: inset 3px 0 0 0 #2dd4bf;
-}
-[data-theme="dark"] .pg-recent-row--seed,
-[data-color-scheme="dark"] .pg-recent-row--seed {
+[data-theme="dark"] .pg-recent-empty,
+[data-color-scheme="dark"] .pg-recent-empty {
   color: #94a3b8;
-  background: rgba(15, 23, 42, 0.65);
+}
+[data-theme="dark"] .pg-recent-row,
+[data-color-scheme="dark"] .pg-recent-row {
+  color: #e2e8f0;
+  background: rgba(15, 23, 42, 0.55);
   border-color: rgba(148, 163, 184, 0.28);
 }
 [data-theme="dark"] .pg-recent-badge,
 [data-color-scheme="dark"] .pg-recent-badge {
   color: #94a3b8;
   background: rgba(51, 65, 85, 0.85);
-}
-[data-theme="dark"] .pg-recent-row--real .pg-recent-badge,
-[data-color-scheme="dark"] .pg-recent-row--real .pg-recent-badge {
-  color: #5eead4;
-  background: rgba(45, 212, 191, 0.15);
-}
-[data-theme="dark"] .pg-recent-pill,
-[data-color-scheme="dark"] .pg-recent-pill {
-  color: #94a3b8;
-  background: rgba(51, 65, 85, 0.9);
 }
 
 /* Fihrist */
