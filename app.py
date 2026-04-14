@@ -675,10 +675,6 @@ def _pg_fragment_ilac_firmalari():
         '<p class="pg-section">Firmalar</p>',
         unsafe_allow_html=True,
     )
-    st.caption(
-        "Kaynak: **İlaç Fiyatları** birleşik tablosu ve **Özellikli ilaçlar** yerel listeleri "
-        "(aynı veri dosyaları). Firma sütunu boş satırlar dahil edilmez."
-    )
 
     by_firma = _cached_firma_ilac_arsiv()
     if not by_firma:
@@ -690,9 +686,10 @@ def _pg_fragment_ilac_firmalari():
 
     all_firms = sorted(by_firma.keys(), key=lambda x: x.casefold())
     st.text_input(
-        "Firma ara (isteğe bağlı; yazdıkça chip listesi daralır)",
+        "firma_ara",
         placeholder="örn: Abdi, Pfizer, Santa…",
         key="pg_firma_q",
+        label_visibility="collapsed",
     )
     needle = (st.session_state.get("pg_firma_q") or "").strip()
 
