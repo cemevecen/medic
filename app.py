@@ -7,6 +7,7 @@ import os
 import json
 import html
 from pathlib import Path
+from typing import Any, Callable
 from urllib.parse import quote_plus, urlencode
 
 import streamlit as st
@@ -198,6 +199,70 @@ def _cached_ilac_fiyat_sekmesi_gosterim_df():
 _FIYAT_SEKMESI_DF_VIEWPORT_HEIGHT_PX = 640
 
 
+def _pg_warmup_progress(tab_key: str, steps: list[tuple[str, Callable[[], Any]]]) -> Any:
+    """
+    Fiyatlar / Firmalar / Özellikli / Fihrist ilk açılışında cache ısıtırken progress bar.
+    Tüm Streamlit ve veri hataları yutulur; istisna sıçratmaz.
+    """
+    flag = f"pg_tab_warm_{tab_key}"
+    if not steps:
+        return None
+    if st.session_state.get(flag):
+        try:
+            return steps[-1][1]()
+        except Exception:
+            return None
+    prog = None
+    try:
+        try:
+            prog = st.progress(0, text="Hazırlanıyor…")
+        except TypeError:
+            prog = st.progress(0)
+    except Exception:
+        prog = None
+    n = len(steps)
+    out: Any = None
+    try:
+        for i, (label, fn) in enumerate(steps):
+            try:
+                if prog is not None:
+                    try:
+                        prog.progress(min(i / max(n, 1), 0.92), text=label)
+                    except TypeError:
+                        prog.progress(min(i / max(n, 1), 0.92))
+            except Exception:
+                pass
+            try:
+                out = fn()
+            except Exception:
+                out = None
+        try:
+            if prog is not None:
+                try:
+                    prog.progress(1.0, text="Tamam")
+                except TypeError:
+                    prog.progress(1.0)
+        except Exception:
+            pass
+    finally:
+        try:
+            import time
+
+            time.sleep(0.05)
+        except Exception:
+            pass
+        try:
+            if prog is not None:
+                prog.empty()
+        except Exception:
+            pass
+        try:
+            st.session_state[flag] = True
+        except Exception:
+            pass
+    return out
+
+
 @st.fragment
 def _pg_fragment_ilac_fiyatlari():
     st.markdown(
@@ -205,7 +270,18 @@ def _pg_fragment_ilac_fiyatlari():
         unsafe_allow_html=True,
     )
 
-    _rf_df = _cached_ilac_fiyat_sekmesi_gosterim_df()
+    _rf_df = _pg_warmup_progress(
+        "fiyatlar",
+        [
+            (
+                "Birleşik kaynaklar yükleniyor…",
+                lambda: __import__(
+                    "referans_ilac_fiyat", fromlist=["load_birlesik_ilac_fiyat_df"]
+                ).load_birlesik_ilac_fiyat_df(),
+            ),
+            ("Tablo hazırlanıyor…", lambda: _cached_ilac_fiyat_sekmesi_gosterim_df()),
+        ],
+    )
     if _rf_df is None:
         st.warning(
             "En az bir kaynak gerekir: `data/referans_bazli_ilac_fiyat_listesi.xlsx` ve/veya "
@@ -429,7 +505,10 @@ def _pg_fragment_ozellikli_ilaclar():
         '<p class="pg-section">Özellikli ilaçlar</p>',
         unsafe_allow_html=True,
     )
-    cached = _cached_ozellikli_ilac_listeleri()
+    cached = _pg_warmup_progress(
+        "ozellikli_ilaclar",
+        [("Excel sayfaları okunuyor…", lambda: _cached_ozellikli_ilac_listeleri())],
+    )
     if not cached:
         st.markdown(
             f"`{_OZELLIKLI_ILAC_LISTELERI_XLSX}` bulunamadı. Yerelde önce **Masaüstü / Desktop**, "
@@ -766,7 +845,19 @@ def _pg_fragment_ilac_firmalari():
         unsafe_allow_html=True,
     )
 
-    by_firma = _cached_firma_ilac_arsiv()
+    by_firma = _pg_warmup_progress(
+        "firmalar",
+        [
+            (
+                "Fiyat listesi yükleniyor…",
+                lambda: __import__(
+                    "referans_ilac_fiyat", fromlist=["load_birlesik_ilac_fiyat_df"]
+                ).load_birlesik_ilac_fiyat_df(),
+            ),
+            ("Özellikli reçete listeleri…", lambda: _cached_ozellikli_ilac_listeleri()),
+            ("Firma arşivi oluşturuluyor…", lambda: _cached_firma_ilac_arsiv()),
+        ],
+    )
     if not by_firma:
         st.warning(
             "Firma listesi oluşturulamadı. En az biri gerekir: birleşik fiyat kaynakları "
@@ -855,7 +946,10 @@ def _pg_fragment_ilac_fihrist():
         '<p class="pg-section">Fihrist</p>',
         unsafe_allow_html=True,
     )
-    df = _cached_ilacrehberi_fihrist_df()
+    df = _pg_warmup_progress(
+        "fihrist",
+        [("Fihrist dosyası okunuyor…", lambda: _cached_ilacrehberi_fihrist_df())],
+    )
     if df is None or df.empty:
         st.warning(
             "`ilacrehberi_fihrist.xlsx` bulunamadı veya boş. "
