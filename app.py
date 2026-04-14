@@ -2269,6 +2269,17 @@ if _pg_nav == "İlaç Analizi":
                 )
 
         else:
+            # Öneri → düğme: aynı run'da text_input key'ine yazmak StreamlitAPIException verir;
+            # seçimi pending'de tutup metin kutusundan *önce* uygula.
+            _pending_pick = st.session_state.pop("pg_drug_name_pending", None)
+            if _pending_pick is not None:
+                _ps = str(_pending_pick).strip()
+                if _ps:
+                    st.session_state.pg_drug_name_input = _ps
+                    st.session_state.pg_ac_pick_nonce = (
+                        int(st.session_state.get("pg_ac_pick_nonce", 0)) + 1
+                    )
+
             # Metin kutusu form dışında: her tuşta yeniden çalışır; öneriler anında güncellenir.
             drug_name_input = st.text_input(
                 "İlaç adını girin",
@@ -2309,10 +2320,7 @@ if _pg_nav == "İlaç Analizi":
                                         help="Metin kutusuna bu ilaç adını yaz",
                                         use_container_width=True,
                                     ):
-                                        st.session_state.pg_drug_name_input = _cand
-                                        st.session_state.pg_ac_pick_nonce = (
-                                            _pick_nonce + 1
-                                        )
+                                        st.session_state.pg_drug_name_pending = _cand
                                         st.rerun()
 
         with st.container(key="pg_tight_input_run"):
