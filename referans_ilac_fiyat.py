@@ -23,6 +23,29 @@ _REFERANS_SKIPROWS = 4
 FIYAT_ISIM_BENZERLIK_ESIK = 0.72
 
 
+def _first_brand_anchor(raw: object) -> str:
+    """Analiz metnindeki ilk anlamlı ticari kelime (küçük harf); doz öncesi marka için."""
+    s = str(raw or "").strip()
+    if not s:
+        return ""
+    m = re.match(r"^[^\w]*([A-Za-zÇĞİÖŞÜçğıöşü]{2,})", s)
+    return m.group(1).casefold() if m else ""
+
+
+def _loose_title_has_word_anchor(loose_title: str, anchor_cf: str) -> bool:
+    """Gevşek başlıkta `anchor` tam kelime olarak geçiyor mu (DESAL ≠ DIDERAL)."""
+    if not anchor_cf or not loose_title:
+        return False
+    return (
+        re.search(
+            r"(?<![a-zçğıöşü0-9])" + re.escape(anchor_cf) + r"(?![a-zçğıöşü0-9])",
+            loose_title,
+            flags=re.I,
+        )
+        is not None
+    )
+
+
 def _fiyat_baslik_benzerligi(liste_basligi: object, aday: object) -> float:
     """Liste satırı başlığı ile analiz adayı arasında 0..1 benzerlik (gevşek anahtar + difflib)."""
     t_liste = _norm_key_loose(liste_basligi)
@@ -416,7 +439,7 @@ def lookup_fiyat_liste_for_vision(
     vision_data: Dict[str, Any],
     ticari_ad: str = "",
     drug_name_text: str = "",
-    max_rows: int = 8,
+    max_rows: int = 1,
 ) -> Dict[str, Any]:
     """
     Analiz çıktısındaki ilaç ile `load_birlesik_ilac_fiyat_df` (Fiyatlar sekmesi) eşlemesi.
@@ -424,7 +447,9 @@ def lookup_fiyat_liste_for_vision(
     Liste **İlaç adı** ile **önce** `ticari_ad` (vision çıktısı / seçilen ürün başlığı) eşleştirilir.
     `ticari_ad` doluysa kutu metni (`drug_name_text`) **yok sayılır** — kısmi arama (ör. «dolor»)
     yanlışlıkla «ANDOLOR» satırını getirmesin diye. `ticari_ad` boşsa yalnızca `drug_name_text` kullanılır.
-    Barkod eşleştirmede kullanılmaz. Benzerlik ≥ FIYAT_ISIM_BENZERLIK_ESIK; en yüksek skor önce.
+    Barkod eşleştirmede kullanılmaz. Yalnızca **en yüksek** benzerlik skorundaki satırlar değerlendirilir;
+    mümkünse ticari marka kökü (ilk anlamlı kelime) liste başlığında kelime olarak aranır; çıktıda
+    en fazla `max_rows` satır (varsayılan 1 — analizde tek ürün).
     """
     # vision_data: barkod eşleştirmede kullanılmıyor (çağrı imzası uyumluluk için duruyor).
     _ = vision_data
@@ -450,13 +475,34 @@ def lookup_fiyat_liste_for_vision(
         return max(_fiyat_baslik_benzerligi(title, n) for n in names)
 
     best_scores = titles.map(_best_score)
-    mask = best_scores >= FIYAT_ISIM_BENZERLIK_ESIK
-    if not mask.any():
+    max_score = float(best_scores.max())
+    if max_score < FIYAT_ISIM_BENZERLIK_ESIK:
         return {"eslesti": False, "satirlar": [], "aciklama": ""}
 
+    # Tüm eşik üstü satırlar değil: yalnızca en yüksek skor (doz/paket benzeri yanlış pozitifleri keser)
+    tol = 1e-9
+    mask = best_scores >= (max_score - tol)
     sub = df.loc[mask].copy()
     sub["_score"] = best_scores[mask]
-    sub = sub.sort_values("_score", ascending=False).head(int(max_rows))
+
+    primary = (names[0] or "").strip()
+    anchor = _first_brand_anchor(primary)
+    if primary and len(anchor) >= 4:
+        loose_titles = sub["İlaç adı"].map(_norm_key_loose)
+        anchored = loose_titles.map(lambda lt: _loose_title_has_word_anchor(lt, anchor))
+        if anchored.any():
+            sub = sub.loc[anchored]
+
+    p_loose = _norm_key_loose(primary)
+    if p_loose:
+        exact_loose = sub["İlaç adı"].map(lambda tit: _norm_key_loose(tit) == p_loose)
+        if exact_loose.any():
+            sub = sub.loc[exact_loose]
+
+    sub = sub.sort_values("_score", ascending=False)
+    sub = sub.drop_duplicates(subset=["İlaç adı"], keep="first")
+    cap = max(1, int(max_rows))
+    sub = sub.head(cap)
     sub = sub.drop(columns=["_score"], errors="ignore")
 
     satirlar = [_serialize_fiyat_tablo_row(sub.iloc[i]) for i in range(len(sub))]

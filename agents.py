@@ -1684,8 +1684,8 @@ def _fiyat_liste_markdown_append(fl: Optional[Dict[str, Any]]) -> str:
         "## Liste fiyatı (yerel birleşik tablo)",
         "",
         "Fiyatlar sekmesindeki **İlaç adı** ile analizdeki ticari ad / metin girişi arasında "
-        "yaklaşık **%70–75** benzerlik eşiği uygulanır; barkod eşleştirmede kullanılmaz. "
-        "Ürün eşleştikten sonra **liste fiyatı**, **GKF** ve tablodaki **barkod** ek bilgi olarak verilir:",
+        "benzerlik eşiği uygulanır; **en iyi tek eşleşme** gösterilir (aynı isimli yinelenen satırlar birleştirilir). "
+        "Barkod eşleştirmede kullanılmaz. Eşleşince **liste fiyatı**, **GKF** ve tablodaki **barkod** ek bilgi olarak verilir:",
         "",
     ]
     for i, row in enumerate(fl["satirlar"], 1):
@@ -1835,7 +1835,7 @@ class PharmaGuardOrchestrator:
                 vision_data,
                 ticari_ad=ticari_ad,
                 drug_name_text=(drug_name_text or "").strip(),
-                max_rows=8,
+                max_rows=1,
             )
         except Exception as _e:
             print(f"[Orchestrator] Fiyat listesi eşlemesi atlandı: {_e!s}")
