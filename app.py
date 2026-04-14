@@ -36,6 +36,27 @@ def load_api_config():
 load_api_config()
 
 
+def _pg_ilac_autocomplete_suggestion_html(query: str, candidate: str) -> str:
+    """Yazılan kısım düz, tamamlayan kısım kalın; metin kaçışlı (XSS önlemi)."""
+    q = (query or "").strip()
+    c = candidate or ""
+    esc = html.escape
+    if not c:
+        return ""
+    if not q:
+        return esc(c)
+    if c.casefold().startswith(q.casefold()):
+        pre, suf = c[: len(q)], c[len(q) :]
+        return esc(pre) + (f"<strong>{esc(suf)}</strong>" if suf else "")
+    q_cf = q.casefold()
+    c_cf = c.casefold()
+    idx = c_cf.find(q_cf)
+    if idx >= 0:
+        pre, mid, post = c[:idx], c[idx : idx + len(q)], c[idx + len(q) :]
+        return esc(pre) + f"<strong>{esc(mid)}</strong>" + esc(post)
+    return esc(c)
+
+
 def _dataframe_noneish_to_dash(df):
     """Eksik değerler ile metin olarak 'None' / 'nan' vb. görünen tüm hücreleri '-' yapar (Streamlit tablo)."""
     import pandas as pd
@@ -1513,6 +1534,16 @@ hr.pg-hr-slim {
   display:inline-flex; align-items:center; justify-content:center; font-size: clamp(0.9rem, 2vw, 1rem);
 }
 
+/* İlaç adı canlı öneriler (fiyat arşivi) */
+.pg-ac-line {
+  font-size: 0.94rem;
+  line-height: 1.45;
+  padding: 0.28rem 0.15rem 0.28rem 0;
+  margin: 0;
+  color: var(--pg-ink);
+}
+.pg-ac-line strong { font-weight: 700; }
+
 /* ── Metrik kartları (eşit kutu, teal tema, referans ‘elevated card’ hissi) ─ */
 .metric-card {
   box-sizing: border-box;
@@ -2028,7 +2059,6 @@ if _pg_nav == "İlaç Analizi":
         drug_name_input = None
         pdf_bytes_input = None
         pdf_name_input  = "prospektus.pdf"
-        run_from_form = False
 
         if method == "görsel":
             up = st.file_uploader(
@@ -2059,76 +2089,51 @@ if _pg_nav == "İlaç Analizi":
                 )
 
         else:
-            # Form: metin + gönder düğmeleri tek istekte gider (canlıda ayrı düğmeye basınca boş metin gelmez).
-            with st.form("pg_drug_name_form", clear_on_submit=False, border=False):
-                drug_name_input = st.text_input(
-                    "İlaç adını girin",
-                    placeholder="örn: Augmentin 1000 mg, Parol 500 mg…",
-                    key="pg_drug_name_input",
-                )
-                _ac_col, _run_col = st.columns(2, gap="small")
-                with _ac_col:
-                    ac_sub = st.form_submit_button(
-                        "Önerileri göster",
-                        type="secondary",
-                        use_container_width=True,
-                    )
-                with _run_col:
-                    run_sub = st.form_submit_button(
-                        " Analizi Başlat",
-                        type="primary",
-                        use_container_width=True,
-                        disabled=not (gemini_key and groq_key),
-                    )
-            run_from_form = bool(run_sub) and bool((drug_name_input or "").strip())
-            _q_ac = (
-                st.session_state.get("pg_drug_name_input") or drug_name_input or ""
-            ).strip()
+            # Metin kutusu form dışında: her tuşta yeniden çalışır; öneriler anında güncellenir.
+            drug_name_input = st.text_input(
+                "İlaç adını girin",
+                placeholder="örn: Augmentin 1000 mg, Parol 500 mg…",
+                key="pg_drug_name_input",
+            )
+            _q_ac = (drug_name_input or "").strip()
             if len(_q_ac) >= 2:
                 try:
-                    from referans_ilac_fiyat import (
-                        load_birlesik_ilac_fiyat_df,
-                        search_unique_ilac_adi_candidates,
-                    )
+                    from referans_ilac_fiyat import search_unique_ilac_adi_candidates
 
-                    _ac_df = load_birlesik_ilac_fiyat_df()
+                    _ac_cands = search_unique_ilac_adi_candidates(_q_ac, limit=12)
                 except Exception:
-                    _ac_df = None
                     _ac_cands = []
-                    st.caption("Fiyat listesi okunamadı; öneri gösterilemiyor.")
+                    st.caption("Öneriler hesaplanırken hata oluştu.")
                 else:
-                    if _ac_df is None or _ac_df.empty:
-                        st.caption("İlaç Fiyatları tablosu yüklenemedi veya boş; öneri üretilemiyor.")
-                        _ac_cands = []
+                    if not _ac_cands:
+                        st.caption("Bu metinle eşleşen ilaç adı listede bulunamadı.")
                     else:
-                        _ac_search_err = False
-                        try:
-                            _ac_cands = search_unique_ilac_adi_candidates(_q_ac, limit=40)
-                        except Exception:
-                            _ac_cands = []
-                            _ac_search_err = True
-                            st.caption("Öneriler hesaplanırken hata oluştu.")
-                        if not _ac_cands and not _ac_search_err:
-                            st.caption("Bu metinle eşleşen ilaç adı listede bulunamadı.")
-                if _ac_cands:
-                    st.caption(
-                        "Listeden bir satır seçin; metin kutusuna yazılır."
-                    )
-                    st.session_state.setdefault("pg_fiyat_ac_nonce", 0)
-                    _ac_ph = "— listeden seçin —"
-                    _ac_pick = st.selectbox(
-                        "fiyat_autocomplete",
-                        [_ac_ph] + _ac_cands,
-                        index=0,
-                        key=f"pg_fiyat_ac_{st.session_state.pg_fiyat_ac_nonce}",
-                        label_visibility="collapsed",
-                    )
-                    if _ac_pick and _ac_pick != _ac_ph:
-                        st.session_state.pg_drug_name_input = _ac_pick
-                        st.session_state.pg_fiyat_ac_nonce = int(
-                            st.session_state.pg_fiyat_ac_nonce
-                        ) + 1
-                        st.rerun()
+                        st.caption(
+                            "Birleşik fiyat arşivinden eşleşen adlar — tamamlayan kısım kalın. "
+                            "Seçmek için → düğmesine tıklayın."
+                        )
+                        st.session_state.setdefault("pg_ac_pick_nonce", 0)
+                        _pick_nonce = int(st.session_state.pg_ac_pick_nonce)
+                        with st.container(border=True):
+                            for _i, _cand in enumerate(_ac_cands):
+                                _ac_l, _ac_r = st.columns([5.2, 0.85], gap="small")
+                                with _ac_l:
+                                    st.markdown(
+                                        f'<div class="pg-ac-line">{_pg_ilac_autocomplete_suggestion_html(_q_ac, _cand)}</div>',
+                                        unsafe_allow_html=True,
+                                    )
+                                with _ac_r:
+                                    if st.button(
+                                        "→",
+                                        key=f"pg_ac_pick_{_pick_nonce}_{_i}",
+                                        help="Metin kutusuna bu ilaç adını yaz",
+                                        use_container_width=True,
+                                    ):
+                                        st.session_state.pg_drug_name_input = _cand
+                                        st.session_state.pg_ac_pick_nonce = (
+                                            _pick_nonce + 1
+                                        )
+                                        st.rerun()
 
         with st.container(key="pg_tight_input_run"):
             st.markdown(
@@ -2142,7 +2147,13 @@ if _pg_nav == "İlaç Analizi":
 
             if method == "ilaç adı":
                 has_input = bool(drug_name_input and drug_name_input.strip())
-                run_btn = run_from_form
+                can_run = bool(has_input and gemini_key and groq_key)
+                run_btn = st.button(
+                    " Analizi Başlat",
+                    type="primary",
+                    disabled=not can_run,
+                    use_container_width=True,
+                )
             else:
                 has_input = (
                     image_obj is not None
