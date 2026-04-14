@@ -104,7 +104,7 @@ def _pg_push_son_aranan_ilac(raw: object) -> None:
 
 
 def _pg_render_son_aranan_ilaclar_panel() -> None:
-    """Analiz sonuçları sütunu: 10 satır; üstte gerçek aramalar, altta arşivden örnek adlar."""
+    """Analiz sonuçları sütunu: 10 satırlık son aranan / örnek liste kartı."""
     _pg_ensure_son_aranan_buffers()
     seeds: list[str] = list(st.session_state.pg_recent_seeds or [])
     user: list[str] = list(st.session_state.pg_recent_user_chrono or [])
@@ -130,7 +130,6 @@ def _pg_render_son_aranan_ilaclar_panel() -> None:
         '<div class="pg-recent-wrap">'
         '<div class="pg-recent-head">'
         '<p class="pg-recent-title">Son aranan ilaçlar</p>'
-        '<p class="pg-recent-sub">En üstte son analiz; aşağıda arşivden örnek adlar</p>'
         "</div>"
         '<div class="pg-recent-list" role="list" aria-label="Son aranan ilaçlar">'
         + "".join(rows_html)
@@ -2016,23 +2015,16 @@ hr.pg-hr-slim {
     0 10px 28px -12px rgba(15, 118, 110, 0.12);
 }
 .pg-recent-head {
-  margin-bottom: 0.55rem;
-  padding-bottom: 0.45rem;
+  margin-bottom: 0.45rem;
+  padding-bottom: 0.35rem;
   border-bottom: 1px solid rgba(15, 118, 110, 0.12);
 }
 .pg-recent-title {
-  margin: 0 0 0.15rem 0;
+  margin: 0;
   font-size: clamp(0.92rem, 1.9vw, 1.02rem);
   font-weight: 700;
   color: var(--pg-ink);
   letter-spacing: -0.01em;
-}
-.pg-recent-sub {
-  margin: 0;
-  font-size: clamp(0.72rem, 1.5vw, 0.8rem);
-  font-weight: 500;
-  color: var(--pg-muted);
-  line-height: 1.35;
 }
 .pg-recent-list {
   display: flex;
