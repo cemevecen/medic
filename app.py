@@ -2069,9 +2069,10 @@ if _pg_nav == "İlaç Analizi":
             if not _show_suggest_btn:
                 st.session_state["pg_show_suggestions"] = False
 
-            _ac_col, _run_col = st.columns(2, gap="small")
-            with _ac_col:
-                if _show_suggest_btn:
+            run_sub = False
+            if _show_suggest_btn:
+                _ac_col, _run_col = st.columns(2, gap="small")
+                with _ac_col:
                     if st.button(
                         "Önerileri göster",
                         type="secondary",
@@ -2079,17 +2080,25 @@ if _pg_nav == "İlaç Analizi":
                         key="pg_show_suggest_btn",
                     ):
                         st.session_state["pg_show_suggestions"] = True
-                else:
-                    # Metin 3 harften kısa iken buton görünmesin; satır hizası bozulmasın.
-                    st.markdown('<div style="height:2.45rem"></div>', unsafe_allow_html=True)
-            with _run_col:
-                run_sub = st.button(
-                    " Analizi Başlat",
-                    type="primary",
-                    use_container_width=True,
-                    disabled=not (gemini_key and groq_key),
-                    key="pg_run_from_text",
-                )
+                with _run_col:
+                    run_sub = st.button(
+                        " Analizi Başlat",
+                        type="primary",
+                        use_container_width=True,
+                        disabled=not (gemini_key and groq_key),
+                        key="pg_run_from_text",
+                    )
+            else:
+                # Öneri butonu yokken Analizi Başlat ortada ve belirgin olsun.
+                _sp_l, _run_mid, _sp_r = st.columns([1, 2, 1], gap="small")
+                with _run_mid:
+                    run_sub = st.button(
+                        " Analizi Başlat",
+                        type="primary",
+                        use_container_width=True,
+                        disabled=not (gemini_key and groq_key),
+                        key="pg_run_from_text",
+                    )
             run_from_form = bool(run_sub) and bool((drug_name_input or "").strip())
             _q_ac = (
                 st.session_state.get("pg_drug_name_input") or drug_name_input or ""
