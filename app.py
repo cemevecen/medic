@@ -821,18 +821,14 @@ def _pg_fragment_ilac_fihrist():
     show = sub.head(_FIHRIST_TABLE_MAX)
     # Markdown [metin](url) — unsafe HTML <a href> bazen CDN/sanitizer ile beklenmedik davranabiliyor.
     md_rows = [
-        "| KT / KUB | İlaç adı |",
-        "| :--------- | :-------- |",
+        "| İlaç adı |",
+        "| :-------- |",
     ]
     for _, row in show.iterrows():
         ad = str(row["ilac_adi"])
         u_ad = _google_search_url(ad)
-        u_kt = _google_search_url(f"{ad} kullanma talimatı")
-        u_kub = _google_search_url(f"{ad} kısa ürün bilgisi")
         lab = _fihrist_md_link_label(ad)
-        md_rows.append(
-            f"| [KT]({u_kt}) · [KUB]({u_kub}) | [{lab}]({u_ad}) |"
-        )
+        md_rows.append(f"| [{lab}]({u_ad}) |")
     st.markdown("\n".join(md_rows))
     if len(sub) > _FIHRIST_TABLE_MAX:
         st.caption(
