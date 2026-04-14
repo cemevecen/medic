@@ -2980,6 +2980,77 @@ if _pg_nav == "Analiz":
                         res.get("report", "Rapor oluşturulamadı.")
                     )
                 )
+                st.divider()
+                st.markdown(
+                    '<p class="pg-section" style="margin-bottom:0.65rem">Özet göstergeler</p>',
+                    unsafe_allow_html=True,
+                )
+                m1, m2, m3 = st.columns(3)
+                conf = float(res.get("avg_confidence") or 0)
+                cc = "#059669" if conf >= 8 else "#d97706" if conf >= 5 else "#dc2626"
+                conf_band = "Yüksek" if conf >= 8 else "Orta" if conf >= 5 else "Düşük"
+                with m1:
+                    st.markdown(
+                        f'<div class="metric-card">'
+                        f'<h3 class="metric-card__value" style="color:{cc}">{conf:.1f}'
+                        f'<span class="metric-card__suffix">/10</span></h3>'
+                        f'<p class="metric-card__label">Güven Puanı</p>'
+                        f'<p class="metric-card__detail">{html.escape(conf_band)} güven bandı.</p>'
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
+                with m2:
+                    rag = res.get("rag_results") or []
+                    rc = len(rag)
+                    if rag:
+                        k0 = str(rag[0].get("kaynak") or "—").strip() or "—"
+                        k0_short = html.escape(k0[:36]) + ("…" if len(k0) > 36 else "")
+                        detail_inner = k0_short
+                    else:
+                        detail_inner = (
+                            "<strong>Kayıtlı prospektüs araması</strong><br>"
+                            "Henüz eşleşen parça yok — corpus veya sorgu genişletilebilir."
+                        )
+                    st.markdown(
+                        f'<div class="metric-card">'
+                        f'<h3 class="metric-card__value">{rc}</h3>'
+                        f'<p class="metric-card__label">RAG kayıt sayısı</p>'
+                        f'<p class="metric-card__detail">{detail_inner}</p>'
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
+                with m3:
+                    fc_label = "Genel Bilgi" if corpus_bos else "Fact-Check"
+                    if corpus_bos:
+                        main_txt = "Genel mod"
+                        fc_col = "#64748b"
+                        fc_detail = html.escape(
+                            "Yerel prospektüs bulunamadı; görsel/metin ile üretilen özet kaynaklarla "
+                            "sınırlı doğrulama."
+                        )
+                    elif not fc_ok:
+                        n_issues = len(fc.get("sorunlar") or [])
+                        main_txt = "Uyumsuzluk" if n_issues else "Dikkat"
+                        fc_col = "#dc2626"
+                        fc_detail = (
+                            html.escape(f"{n_issues} tutarsızlık tespit edildi.")
+                            if n_issues
+                            else html.escape(str(fc.get("mesaj") or "Fact-check uyarısı.")[:120])
+                        )
+                    else:
+                        main_txt = "Uyumlu"
+                        fc_col = "#059669"
+                        fc_detail = html.escape(
+                            str(fc.get("mesaj") or "Görsel / RAG özetleri birbiriyle çelişmiyor.")[:140]
+                        )
+                    st.markdown(
+                        f'<div class="metric-card">'
+                        f'<h3 class="metric-card__value" style="color:{fc_col}">{html.escape(main_txt)}</h3>'
+                        f'<p class="metric-card__label">{html.escape(fc_label)}</p>'
+                        f'<p class="metric-card__detail">{fc_detail}</p>'
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
                 if "report_pdf" in st.session_state:
                     dn = (res["vision"].get("ticari_ad") or drug_name_input or "ilac")
                     st.download_button("PDF Raporu İndir",
@@ -3136,81 +3207,6 @@ if _pg_nav == "Analiz":
                             f"- **Form:** {row.get('form', '—')}\n"
                             f"- **Benzerlik:** {row.get('benzerlik_aciklamasi', '—')}"
                         )
-
-            st.divider()
-            st.markdown(
-                '<p class="pg-section" style="margin-bottom:0.65rem">Özet göstergeler</p>',
-                unsafe_allow_html=True,
-            )
-            m1, m2, m3 = st.columns(3)
-            conf = float(res.get("avg_confidence") or 0)
-            cc = "#059669" if conf >= 8 else "#d97706" if conf >= 5 else "#dc2626"
-            conf_band = "Yüksek" if conf >= 8 else "Orta" if conf >= 5 else "Düşük"
-            with m1:
-                st.markdown(
-                    f'<div class="metric-card">'
-                    f'<h3 class="metric-card__value" style="color:{cc}">{conf:.1f}'
-                    f'<span class="metric-card__suffix">/10</span></h3>'
-                    f'<p class="metric-card__label">Güven Puanı</p>'
-                    f'<p class="metric-card__detail">{html.escape(conf_band)} güven bandı.</p>'
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
-            with m2:
-                rag = res.get("rag_results") or []
-                rc = len(rag)
-                if rag:
-                    k0 = str(rag[0].get("kaynak") or "—").strip() or "—"
-                    k0_short = html.escape(k0[:36]) + ("…" if len(k0) > 36 else "")
-                    detail_inner = k0_short
-                else:
-                    detail_inner = (
-                        "<strong>Kayıtlı prospektüs araması</strong><br>"
-                        "Henüz eşleşen parça yok — corpus veya sorgu genişletilebilir."
-                    )
-                st.markdown(
-                    f'<div class="metric-card">'
-                    f'<h3 class="metric-card__value">{rc}</h3>'
-                    f'<p class="metric-card__label">RAG kayıt sayısı</p>'
-                    f'<p class="metric-card__detail">{detail_inner}</p>'
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
-            with m3:
-                fc = res.get("fact_check") or {}
-                fc_ok = not fc.get("uyusmazlik", False)
-                corpus_bos = fc.get("corpus_bos", False)
-                fc_label = "Genel Bilgi" if corpus_bos else "Fact-Check"
-                if corpus_bos:
-                    main_txt = "Genel mod"
-                    fc_col = "#64748b"
-                    fc_detail = html.escape(
-                        "Yerel prospektüs bulunamadı; görsel/metin ile üretilen özet kaynaklarla "
-                        "sınırlı doğrulama."
-                    )
-                elif not fc_ok:
-                    n_issues = len(fc.get("sorunlar") or [])
-                    main_txt = "Uyumsuzluk" if n_issues else "Dikkat"
-                    fc_col = "#dc2626"
-                    fc_detail = (
-                        html.escape(f"{n_issues} tutarsızlık tespit edildi.")
-                        if n_issues
-                        else html.escape(str(fc.get("mesaj") or "Fact-check uyarısı.")[:120])
-                    )
-                else:
-                    main_txt = "Uyumlu"
-                    fc_col = "#059669"
-                    fc_detail = html.escape(
-                        str(fc.get("mesaj") or "Görsel / RAG özetleri birbiriyle çelişmiyor.")[:140]
-                    )
-                st.markdown(
-                    f'<div class="metric-card">'
-                    f'<h3 class="metric-card__value" style="color:{fc_col}">{html.escape(main_txt)}</h3>'
-                    f'<p class="metric-card__label">{html.escape(fc_label)}</p>'
-                    f'<p class="metric-card__detail">{fc_detail}</p>'
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
         else:
             st.markdown("""
             <div class="pg-empty">
