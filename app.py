@@ -6,6 +6,7 @@ Canlı: https://medicalsearch.streamlit.app/ · Kaynak: https://github.com/cemev
 import os
 import json
 import html
+import time
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import quote_plus, urlencode
@@ -197,6 +198,8 @@ def _cached_ilac_fiyat_sekmesi_gosterim_df():
 
 # st.dataframe sabit yükseklik + iç kaydırma; satırlar tek tek DOM’a basılmaz (grid sanallaştırması).
 _FIYAT_SEKMESI_DF_VIEWPORT_HEIGHT_PX = 640
+# İlk sekme açılışında progress bar en az bu kadar saniye görünsün (çok hızlı cache için)
+_PG_WARMUP_MIN_VISIBLE_SEC = 1.3
 
 
 def _pg_warmup_progress(tab_key: str, steps: list[tuple[str, Callable[[], Any]]]) -> Any:
@@ -212,6 +215,7 @@ def _pg_warmup_progress(tab_key: str, steps: list[tuple[str, Callable[[], Any]]]
             return steps[-1][1]()
         except Exception:
             return None
+    t0 = time.perf_counter()
     prog = None
     try:
         try:
@@ -246,9 +250,10 @@ def _pg_warmup_progress(tab_key: str, steps: list[tuple[str, Callable[[], Any]]]
             pass
     finally:
         try:
-            import time
-
-            time.sleep(0.05)
+            elapsed = time.perf_counter() - t0
+            rem = _PG_WARMUP_MIN_VISIBLE_SEC - elapsed
+            if rem > 0:
+                time.sleep(rem)
         except Exception:
             pass
         try:
