@@ -218,6 +218,9 @@ _FIHRIST_NAV_KEYS = (
     "Z",
 )
 _FIHRIST_TABLE_MAX = 180
+# İlaç firmaları: fihrist A–Z + rakamla başlayan firmalar
+_FIRMA_ILAC_NAV_KEYS = _FIHRIST_NAV_KEYS + ("0-9",)
+_FIRMA_ILAC_PILLS_MAX = 72
 # ilacrehberi.com fihrist düzenine paralel referans tablo (yerel XLSX ile birlikte kullanılabilir)
 _FIHRIST_REF_GOOGLE_SHEETS = (
     "https://docs.google.com/spreadsheets/d/13Hd8k4zVylcRSGB9FJpTpFqBUJ7FGnytKxvAV-TIWaY/edit?gid=0#gid=0"
@@ -581,6 +584,182 @@ def _fihrist_first_letter_mask(series, chip: str):
     ok = s.str.len() > 0
     first = s.str.slice(0, 1)
     return ok & (first.str.casefold() == ch.casefold())
+
+
+def _firma_matches_nav_letter(firma: str, chip: str) -> bool:
+    """Firma adının ilk karakteri fihrist harfi veya rakam grubu (0-9) ile eşleşir mi?"""
+    import pandas as pd
+
+    c = (chip or "A").strip()
+    s = (firma or "").strip()
+    if not s:
+        return False
+    if c == "0-9":
+        return s[0].isdigit()
+    if len(c) != 1:
+        return False
+    return bool(_fihrist_first_letter_mask(pd.Series([s]), c).iloc[0])
+
+
+@st.cache_data(show_spinner=False)
+def _cached_firma_ilac_arsiv(_cache_bust: int = 1) -> dict[str, list[dict[str, str]]]:
+    """
+    Birleşik fiyat tablosu + özellikli liste XLSX: firma → [{İlaç adı, Kaynak}, …].
+    Kaynaklar birleşik fiyat ve liste sayfası adlarıdır.
+    """
+    _ = _cache_bust
+    from collections import defaultdict
+
+    from recete_haber import _pick_firma_column, _pick_name_column
+
+    acc: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
+
+    try:
+        from referans_ilac_fiyat import load_birlesik_ilac_fiyat_df
+
+        pdf = load_birlesik_ilac_fiyat_df()
+    except Exception:
+        pdf = None
+    if pdf is not None and not pdf.empty and "İlaç adı" in pdf.columns:
+        fc = "Firma" if "Firma" in pdf.columns else None
+        if fc:
+            for _, r in pdf.iterrows():
+                ad = str(r["İlaç adı"]).strip()
+                fm = str(r[fc]).strip()
+                if not ad or ad in ("-", "—") or ad.casefold() in ("nan", "none"):
+                    continue
+                if not fm or fm in ("-", "—") or fm.casefold() in ("nan", "none"):
+                    continue
+                acc[fm][ad].add("İlaç Fiyatları")
+
+    oz = _cached_ozellikli_ilac_listeleri()
+    if oz:
+        data, _ = oz
+        for sheet, df in data.items():
+            if df is None or df.empty:
+                continue
+            try:
+                name_col = _pick_name_column(df)
+                firma_col = _pick_firma_column(df, name_col)
+            except Exception:
+                continue
+            if not firma_col:
+                continue
+            sk = _OZELLIKLI_SHEET_LABELS_TR.get(sheet, sheet.replace("_", " "))
+            for _, r in df.iterrows():
+                ad = str(r.get(name_col, "")).strip()
+                fm = str(r.get(firma_col, "")).strip()
+                if not ad or ad in ("-", "—") or ad.casefold() in ("nan", "none"):
+                    continue
+                if not fm or fm in ("-", "—") or fm.casefold() in ("nan", "none"):
+                    continue
+                acc[fm][ad].add(sk)
+
+    out: dict[str, list[dict[str, str]]] = {}
+    for fm, drugs in acc.items():
+        rows: list[dict[str, str]] = []
+        for ad in sorted(drugs.keys(), key=lambda x: x.casefold()):
+            rows.append(
+                {
+                    "İlaç adı": ad,
+                    "Kaynak": "; ".join(sorted(drugs[ad])),
+                }
+            )
+        out[fm] = rows
+    return out
+
+
+@st.fragment
+def _pg_fragment_ilac_firmalari():
+    st.markdown(
+        '<p class="pg-section">İlaç firmaları</p>',
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "Kaynak: **İlaç Fiyatları** birleşik tablosu ve **Özellikli ilaçlar** yerel listeleri "
+        "(aynı veri dosyaları). Firma sütunu boş satırlar dahil edilmez."
+    )
+
+    by_firma = _cached_firma_ilac_arsiv()
+    if not by_firma:
+        st.warning(
+            "Firma listesi oluşturulamadı. En az biri gerekir: birleşik fiyat kaynakları "
+            f"(`referans_ilac_fiyat`) ve/veya `{_OZELLIKLI_ILAC_LISTELERI_XLSX}`."
+        )
+        return
+
+    all_firms = sorted(by_firma.keys(), key=lambda x: x.casefold())
+    st.text_input(
+        "Firma ara (isteğe bağlı; yazdıkça chip listesi daralır)",
+        placeholder="örn: Abdi, Pfizer, Santa…",
+        key="pg_firma_q",
+    )
+    needle = (st.session_state.get("pg_firma_q") or "").strip()
+
+    st.session_state.setdefault("pg_firma_letter", "A")
+    _fl = str(st.session_state.get("pg_firma_letter") or "A").strip()
+    if _fl not in _FIRMA_ILAC_NAV_KEYS:
+        st.session_state.pg_firma_letter = "A"
+    st.pills(
+        "İlk harf",
+        options=list(_FIRMA_ILAC_NAV_KEYS),
+        selection_mode="single",
+        key="pg_firma_letter",
+        label_visibility="collapsed",
+    )
+    letter = str(st.session_state.get("pg_firma_letter") or "A").strip()
+    if letter not in _FIRMA_ILAC_NAV_KEYS:
+        letter = "A"
+
+    if needle:
+        cand = [f for f in all_firms if needle.casefold() in f.casefold()]
+    else:
+        cand = [f for f in all_firms if _firma_matches_nav_letter(f, letter)]
+
+    if not cand:
+        st.info("Bu filtreyle eşleşen firma yok; arama kutusu veya harf seçimini değiştirin.")
+        return
+
+    if len(cand) > _FIRMA_ILAC_PILLS_MAX:
+        st.caption(
+            f"**{len(cand)}** eşleşme var; chip listesi ilk **{_FIRMA_ILAC_PILLS_MAX}** firma ile sınırlı. "
+            "Daraltmak için arama kutusunu kullanın."
+        )
+        cand = cand[:_FIRMA_ILAC_PILLS_MAX]
+
+    import hashlib
+
+    _firma_pick_key = (
+        "pg_firma_pick_"
+        + hashlib.sha1(f"{letter}\n{needle}".encode("utf-8")).hexdigest()[:16]
+    )
+    st.pills(
+        "Firma",
+        options=cand,
+        selection_mode="single",
+        key=_firma_pick_key,
+        label_visibility="collapsed",
+    )
+    sel = str(st.session_state.get(_firma_pick_key) or "").strip()
+    if not sel or sel not in by_firma:
+        st.info("Yukarıdan bir **firma** chip’i seçin; ilaçlar tabloda listelenir.")
+        return
+
+    st.markdown(
+        f'<h3 style="font-size:1.05rem;font-weight:700;margin:0.75rem 0 0.4rem">{html.escape(sel)}</h3>',
+        unsafe_allow_html=True,
+    )
+    rows = by_firma[sel]
+    import pandas as pd
+
+    show = pd.DataFrame(rows)
+    st.dataframe(
+        show,
+        use_container_width=True,
+        height=min(520, 120 + min(len(show), 24) * 36),
+        hide_index=True,
+    )
+    st.caption(f"**{len(show)}** ilaç adı (aynı ad farklı kaynaklarda birleştirildi).")
 
 
 @st.fragment
@@ -2012,6 +2191,7 @@ _PG_TAB_LABELS = (
     "İlaç Analizi",
     "FDA Arşivi",
     "İlaç Fiyatları",
+    "İlaç firmaları",
     "Özellikli ilaçlar",
     "Fihrist",
     "Prospektüs Yönetimi",
@@ -2774,13 +2954,19 @@ elif _pg_nav == "İlaç Fiyatları":
     _pg_fragment_ilac_fiyatlari()
 
 # ═════════════════════════════════════════════
-# SEKME 3a — ÖZELLİKLİ İLAÇ LİSTELERİ (yerel XLSX)
+# SEKME 3a — İLAÇ FİRMALARI (birleşik fiyat + özellikli listeler)
+# ═════════════════════════════════════════════
+elif _pg_nav == "İlaç firmaları":
+    _pg_fragment_ilac_firmalari()
+
+# ═════════════════════════════════════════════
+# SEKME 3b — ÖZELLİKLİ İLAÇ LİSTELERİ (yerel XLSX)
 # ═════════════════════════════════════════════
 elif _pg_nav == "Özellikli ilaçlar":
     _pg_fragment_ozellikli_ilaclar()
 
 # ═════════════════════════════════════════════
-# SEKME 3b — İLAÇ FİHRİST (yerel XLSX)
+# SEKME 3c — İLAÇ FİHRİST (yerel XLSX)
 # ═════════════════════════════════════════════
 elif _pg_nav == "Fihrist":
     _pg_fragment_ilac_fihrist()
