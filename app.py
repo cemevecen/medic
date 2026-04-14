@@ -1229,6 +1229,15 @@ st.set_page_config(
 # ─────────────────────────────────────────────
 st.markdown("""
 <script>
+(function () {
+  if (!document.querySelector('meta[name="viewport"][data-pg-viewport="1"]')) {
+    var m = document.createElement('meta');
+    m.name = 'viewport';
+    m.content = 'width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover';
+    m.setAttribute('data-pg-viewport', '1');
+    document.head.appendChild(m);
+  }
+})();
 function detectViewport() {
   const width = window.innerWidth;
   const height = window.innerHeight;
@@ -1499,10 +1508,11 @@ button[data-baseweb="tab"][aria-selected="true"] {
 .stTabs [data-baseweb="tab-border"] { display: none !important; }
 
 /* Responsive tabs */
-@media (max-width: 768px) {
+@media (max-width: 992px) {
   .stTabs [data-baseweb="tab-list"] {
     gap: 0.2rem !important;
     padding: 0.2rem !important;
+    flex-wrap: wrap !important;
   }
 }
 @media (max-width: 640px) {
@@ -1734,15 +1744,19 @@ hr.pg-hr-slim {
   padding: clamp(0.8rem, 3vw, 1rem) !important;
 }
 
-/* Responsive columns — yığılma yalnızca ≤768 (1024’te %100 genişlik + satır = taşma) */
-@media (max-width: 768px) {
+/* Responsive columns — tablet / mobil: yatay bloklar dikey yığılır */
+@media (max-width: 992px) {
   [data-testid="stHorizontalBlock"] {
     flex-direction: column !important;
+    align-items: stretch !important;
+    width: 100% !important;
     gap: 1rem !important;
   }
 
   [data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
     width: 100% !important;
+    min-width: 0 !important;
+    flex: 1 1 auto !important;
   }
 }
 
@@ -1869,15 +1883,32 @@ hr.pg-hr-slim {
   color: #0f766e !important;
   font-weight: 600 !important;
 }
+@media (max-width: 992px) {
+  [data-testid="stMain"] .st-key-pg_masthead,
+  .st-key-pg_masthead {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  [data-testid="stMain"] .st-key-pg_masthead h1,
+  .st-key-pg_masthead h1 {
+    transform: none !important;
+  }
+  [data-testid="stMain"] .st-key-pg_masthead > div,
+  .st-key-pg_masthead > div {
+    width: 100%;
+    max-width: 100%;
+  }
+  [data-testid="stMain"] .st-key-pg_masthead div[role="radiogroup"],
+  .st-key-pg_masthead div[role="radiogroup"] {
+    justify-content: flex-start !important;
+    width: 100% !important;
+  }
+}
 @media (max-width: 640px) {
   [data-testid="stMain"] .st-key-pg_masthead,
   .st-key-pg_masthead {
     padding: 1rem 0.85rem !important;
     margin-bottom: 1.25rem;
-  }
-  [data-testid="stMain"] .st-key-pg_masthead div[role="radiogroup"],
-  .st-key-pg_masthead div[role="radiogroup"] {
-    justify-content: flex-start !important;
   }
 }
 [data-testid="stMain"] .st-key-pg_masthead .stRadio label,
@@ -2319,7 +2350,7 @@ hr.pg-hr-slim {
 .pg-about-card th { color:var(--pg-muted) !important; font-weight:700; font-size: clamp(0.65rem, 1.5vw, 0.75rem); text-transform:uppercase; letter-spacing:.04em; }
 
 /* Responsive tables for mobile */
-@media (max-width: 768px) {
+@media (max-width: 992px) {
   .pg-about-card {
     padding: 1rem;
   }
@@ -2410,6 +2441,23 @@ div[data-testid="stDataFrame"],
 [data-testid="stMain"] div[data-testid="stDataFrame"] {
   min-width: 0 !important;
 }
+@media (max-width: 992px) {
+  [data-testid="stDataFrame"] {
+    max-height: min(70vh, 720px) !important;
+    overflow: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  [data-testid="stDataFrame"] iframe {
+    max-height: min(70vh, 720px) !important;
+  }
+  [data-testid="stMain"] div[role="radiogroup"] {
+    flex-wrap: wrap !important;
+    row-gap: 0.4rem;
+  }
+  .stSelectbox > div > div {
+    min-height: 2.75rem !important;
+  }
+}
 [data-testid="stPills"] {
   flex-wrap: wrap !important;
   gap: 0.35rem !important;
@@ -2462,27 +2510,6 @@ def _session_openai_compat_kwargs():
         out["model"] = mo
     return out
 
-
-def _get_responsive_columns(ratio_desktop: tuple, ratio_tablet: tuple = None, ratio_mobile: tuple = None) -> tuple:
-    """
-    Dynamically returns column ratios based on viewport width.
-
-    Args:
-        ratio_desktop: Column ratio for desktop (e.g., [1, 1.5])
-        ratio_tablet: Column ratio for tablet - defaults to [1, 1]
-        ratio_mobile: Column ratio for mobile - defaults to [1] (full width)
-
-    Returns:
-        Appropriate column ratio based on window width
-    """
-    # Detect viewport using CSS media queries simulation
-    # For now, we'll use a heuristic based on Streamlit's container width
-    try:
-        # Try to get viewport width from JavaScript (if available)
-        # For now, we'll assume desktop layout and let CSS handle responsiveness
-        return ratio_desktop
-    except:
-        return ratio_desktop
 
 # ─────────────────────────────────────────────
 # MASTHEAD — yeşil şerit + sekmeler (Streamlit tabs yerine yatay radio)
