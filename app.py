@@ -2058,32 +2058,43 @@ if _pg_nav == "İlaç Analizi":
                 )
 
         else:
-            # Form: metin + gönder düğmeleri tek istekte gider (canlıda ayrı düğmeye basınca boş metin gelmez).
-            with st.form("pg_drug_name_form", clear_on_submit=False, border=False):
-                drug_name_input = st.text_input(
-                    "İlaç adını girin",
-                    placeholder="örn: Augmentin 1000 mg, Parol 500 mg…",
-                    key="pg_drug_name_input",
-                )
-                _ac_col, _run_col = st.columns(2, gap="small")
-                with _ac_col:
-                    ac_sub = st.form_submit_button(
+            drug_name_input = st.text_input(
+                "İlaç adını girin",
+                placeholder="örn: Augmentin 1000 mg, Parol 500 mg…",
+                key="pg_drug_name_input",
+            )
+            _q_raw = (drug_name_input or "").strip()
+            _show_suggest_btn = len(_q_raw) >= 3
+            st.session_state.setdefault("pg_show_suggestions", False)
+            if not _show_suggest_btn:
+                st.session_state["pg_show_suggestions"] = False
+
+            _ac_col, _run_col = st.columns(2, gap="small")
+            with _ac_col:
+                if _show_suggest_btn:
+                    if st.button(
                         "Önerileri göster",
                         type="secondary",
                         use_container_width=True,
-                    )
-                with _run_col:
-                    run_sub = st.form_submit_button(
-                        " Analizi Başlat",
-                        type="primary",
-                        use_container_width=True,
-                        disabled=not (gemini_key and groq_key),
-                    )
+                        key="pg_show_suggest_btn",
+                    ):
+                        st.session_state["pg_show_suggestions"] = True
+                else:
+                    # Metin 3 harften kısa iken buton görünmesin; satır hizası bozulmasın.
+                    st.markdown('<div style="height:2.45rem"></div>', unsafe_allow_html=True)
+            with _run_col:
+                run_sub = st.button(
+                    " Analizi Başlat",
+                    type="primary",
+                    use_container_width=True,
+                    disabled=not (gemini_key and groq_key),
+                    key="pg_run_from_text",
+                )
             run_from_form = bool(run_sub) and bool((drug_name_input or "").strip())
             _q_ac = (
                 st.session_state.get("pg_drug_name_input") or drug_name_input or ""
             ).strip()
-            if len(_q_ac) >= 2:
+            if len(_q_ac) >= 3 and st.session_state.get("pg_show_suggestions", False):
                 try:
                     from referans_ilac_fiyat import (
                         load_birlesik_ilac_fiyat_df,
