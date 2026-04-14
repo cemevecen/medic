@@ -1394,7 +1394,7 @@ hr.pg-hr-slim {
 .st-key-pg_masthead h1,
 .st-key-pg_masthead [data-testid="stMarkdownContainer"] h1 {
   margin: 0 !important;
-  transform: translateY(-4px);
+  transform: translateY(-8px);
   font-size: clamp(1.35rem, 4vw, 2rem) !important;
   font-weight: 700 !important;
   letter-spacing: -0.03em !important;
