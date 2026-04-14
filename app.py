@@ -2213,6 +2213,10 @@ with st.container(
         key="pg_main_nav",
     )
 
+# Eski sekme etiketi (oturumda kalmış olabilir)
+if str(st.session_state.get("pg_main_nav") or "").strip() == "İlaç firmaları":
+    st.session_state.pg_main_nav = "Firmalar"
+
 _pg_nav = str(st.session_state.get("pg_main_nav") or _PG_TAB_LABELS[0]).strip()
 if _pg_nav not in _PG_TAB_LABELS:
     _pg_nav = _PG_TAB_LABELS[0]
