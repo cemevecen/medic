@@ -1523,7 +1523,31 @@ hr.pg-hr-slim {
 }
 .st-key-pg_tight_input_run [data-testid="stButton"] {
   margin-top: 0.15rem !important;
-  margin-bottom: 0.05rem !important;
+  margin-bottom: 0.35rem !important;
+}
+/* Analizi Başlat ↔ Nöbetçi eczaneler: belirgin bölüm ayracı */
+.pg-input-eczane-break {
+  display: block;
+  margin: 0.35rem 0 0.55rem 0;
+  padding: 0.85rem 0 0.15rem 0;
+  border-top: 2px solid rgba(15, 118, 110, 0.32);
+  background: linear-gradient(
+    180deg,
+    rgba(15, 118, 110, 0.07) 0%,
+    rgba(15, 118, 110, 0.02) 42%,
+    transparent 100%
+  );
+  border-radius: 14px 14px 0 0;
+}
+[data-theme="dark"] .pg-input-eczane-break,
+[data-color-scheme="dark"] .pg-input-eczane-break {
+  border-top-color: rgba(45, 212, 191, 0.38);
+  background: linear-gradient(
+    180deg,
+    rgba(45, 212, 191, 0.1) 0%,
+    rgba(45, 212, 191, 0.03) 45%,
+    transparent 100%
+  );
 }
 /* Giriş widget’ı ile altındaki sıkı blok arası */
 [data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:first-child
@@ -2479,10 +2503,11 @@ if _pg_nav == "İlaç Analizi":
                     use_container_width=True,
                 )
 
-            st.markdown(
-                '<hr class="pg-hr-slim" aria-hidden="true"/>',
-                unsafe_allow_html=True,
-            )
+        st.markdown(
+            '<div class="pg-input-eczane-break" role="separator" '
+            'aria-label="Nöbetçi eczaneler bölümü"></div>',
+            unsafe_allow_html=True,
+        )
 
         _ecz_today = _pg_today_istanbul_dmy()
         st.markdown(
