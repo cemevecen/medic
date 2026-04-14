@@ -390,7 +390,13 @@ KURALLAR:
 3. PDF dosya adı ile çıkarılan bilgi arasındaki farkı "not" olarak belirt — raporu bloklama.
 4. Eksik veya belirsiz alanları "Bilgi mevcut değil" olarak işaretle, uydurma.
 5. Fiyat, ucuzluk veya eczane kampanyası iddiası yapma; fiyat için ayrı entegrasyon gerekir de.
-6. Aşağıdaki Markdown bölüm başlıklarını kullan:
+6. **Bölüm 7 — Benzer İlaçlar / Muadil:** Yalnızca yukarıdaki `BENZER İLAÇ / MUADİL ÖZETİ` JSON içindeki
+   `oneriler` dizisindeki kayıtları kullan. Her kayıt ayrı madde işareti satırı olsun (ticari ad, etken,
+   dozaj, form, kısa benzerlik gerekçesi). JSON'da olmayan ticari ürün yazma; analiz konusu ilacın
+   (VISION `ticari_ad`) aynı marka/ailesini benzer ilaç diye tekrarlama. Girdi ilacının mg/TB vb.
+   paket bilgisini başka markalara kopyalayarak uydurma; parantez içinde virgülle uzun isim listesi
+   veya tek cümlede çoklu ürün sıralaması yapma.
+7. Aşağıdaki Markdown bölüm başlıklarını kullan:
 
 ## 1. İlaç Kimlik Özeti
 ## 2. Kullanım Amacı (Endikasyonlar)
@@ -1674,39 +1680,6 @@ def _strip_confidence_meta_junk(report_text: str) -> str:
     return t
 
 
-def _fiyat_liste_markdown_append(fl: Optional[Dict[str, Any]]) -> str:
-    """Birleşik fiyat listesi eşleşmesini rapora deterministik ekler (LLM dışı; isim benzerliği)."""
-    if not fl or not fl.get("eslesti") or not fl.get("satirlar"):
-        return ""
-    lines = [
-        "",
-        "---",
-        "## Liste fiyatı (yerel birleşik tablo)",
-        "",
-        "Fiyatlar sekmesindeki **İlaç adı** ile analizdeki ticari ad / metin girişi arasında "
-        "benzerlik eşiği uygulanır; **en iyi tek eşleşme** gösterilir (aynı isimli yinelenen satırlar birleştirilir). "
-        "Barkod eşleştirmede kullanılmaz. Eşleşince **liste fiyatı**, **GKF** ve tablodaki **barkod** ek bilgi olarak verilir:",
-        "",
-    ]
-    for i, row in enumerate(fl["satirlar"], 1):
-        ad = row.get("İlaç adı") or "—"
-        firma = row.get("Firma") or "—"
-        lf = row.get("Liste fiyatı (₺)")
-        gkf = row.get("GKF (€)")
-        bc = row.get("Barkod")
-        lt = row.get("Liste tarihi")
-        lf_s = f"{lf:.2f} ₺" if isinstance(lf, (int, float)) else "—"
-        gkf_s = f"{gkf:.4f} €" if isinstance(gkf, (int, float)) else "—"
-        bc_s = str(bc) if bc else "—"
-        lt_s = str(lt) if lt else "—"
-        lines.append(f"- **{i}.** {ad}")
-        lines.append(
-            f"  - Firma: {firma} · Liste fiyatı: {lf_s} · GKF: {gkf_s} · Barkod: {bc_s} · Liste tarihi: {lt_s}"
-        )
-    lines.append("")
-    return "\n".join(lines)
-
-
 # ---------------------------------------------------------------------------
 # ANA ORKESTRATÖR
 # ---------------------------------------------------------------------------
@@ -1913,7 +1886,6 @@ class PharmaGuardOrchestrator:
             )
             report_text = block + report_text
 
-        report_text = report_text + _fiyat_liste_markdown_append(results.get("fiyat_liste"))
         report_text = _strip_confidence_meta_junk(report_text)
         results["report"] = report_text
         results["avg_confidence"] = avg_confidence

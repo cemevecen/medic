@@ -51,6 +51,57 @@ def _enrich_vision_for_similar(vision: Dict[str, Any]) -> Dict[str, Any]:
     return v
 
 
+def _first_brand_token(raw: str) -> str:
+    m = re.match(r"^[^\w]*([A-Za-zÇĞİÖŞÜçğıöşü]{2,})", (raw or "").strip())
+    return m.group(1).casefold() if m else ""
+
+
+def _etken_plausible(vision_etken: str, row_etken: str) -> bool:
+    """Model önerisi; VISION etkeni varken satır etkeninin tutarlı olması."""
+    ve = _norm(vision_etken)
+    re_ = _norm(row_etken)
+    if not ve:
+        return True
+    if not re_:
+        return False
+    if ve == re_ or ve in re_ or re_ in ve:
+        return True
+    vw = set(re.findall(r"[a-zğüşıöçâ]{4,}", ve))
+    rw = set(re.findall(r"[a-zğüşıöçâ]{4,}", re_))
+    return bool(vw and rw and (vw & rw))
+
+
+def _drop_same_product_as_vision(vis: Dict[str, Any], rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Ana ürünün kendisini veya aynı marka ailesini muadil listesinden çıkarır."""
+    vt_raw = str(vis.get("ticari_ad") or "").strip()
+    vt = _norm(vt_raw)
+    fb_vis = _first_brand_token(vt_raw)
+    out: List[Dict[str, Any]] = []
+    for r in rows:
+        t_raw = str(r.get("ticari_ad") or "").strip()
+        tt = _norm(t_raw)
+        if not tt:
+            continue
+        if vt and (tt == vt or tt in vt or vt in tt):
+            continue
+        fb_row = _first_brand_token(t_raw)
+        if fb_vis and fb_row and fb_vis == fb_row and len(fb_vis) >= 5:
+            continue
+        out.append(r)
+    return out
+
+
+def _filter_mismatched_model_etken(vis: Dict[str, Any], rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    ve = str(vis.get("etken_madde") or "").strip()
+    out: List[Dict[str, Any]] = []
+    for r in rows:
+        if str(r.get("kaynak") or "") == "model_onerisi" and ve:
+            if not _etken_plausible(ve, str(r.get("etken_madde") or "")):
+                continue
+        out.append(r)
+    return out
+
+
 def _dozaj_numbers(s: Optional[str]) -> List[str]:
     if not s:
         return []
@@ -136,6 +187,7 @@ def match_catalog(vision: Dict[str, Any], limit: int = 8) -> List[Dict[str, Any]
             "dozaj": row.get("dozaj"),
             "form": row.get("form"),
             "benzerlik_aciklamasi": row.get("benzerlik_aciklamasi") or row.get("eslestirme_notu") or "",
+            "kaynak": "yerel_katalog",
         }
         scored.append((s, out))
     scored.sort(key=lambda x: x[0], reverse=True)
@@ -171,6 +223,9 @@ Kurallar:
 - benzerlik_aciklamasi: kısa tıbbi gerekçe (aynı etken, benzer form, dozaj yakınlığı vb.)
 - Türkiye'de bilinen ticari adları tercih et; emin değilsen alternatifler: [] döndür.
 - Fiyat, ucuzluk, geri ödeme, indirim veya eczane ismi YAZMA.
+- Girdi ilacının ticari adını veya aynı markanın başka gücünü muadil diye yazma; her öğe farklı marka olmalı.
+- ticari_ad alanına, girdi ilacının mg/TB/paket kalıbını başka markalara kopyalayarak uydurma (ör. gerçekte olmayan "MAALOX 100 MG 15 TB" gibi).
+- Her alternatifin etken_madde alanı, girdi etken_maddesi ile aynı ya da çok yakın (aynı terapötik sınıf) olmalı; emin değilsen o satırı ekleme.
 - Uydurma riski çok yüksekse alternatifler: [] döndür; eminsen en fazla 5 geçerli öneri ver.
 
 Çıktı şeması:
@@ -217,6 +272,7 @@ Kurallar:
                         "dozaj": item.get("dozaj"),
                         "form": item.get("form"),
                         "benzerlik_aciklamasi": item.get("benzerlik_aciklamasi") or "",
+                        "kaynak": "model_onerisi",
                     }
                 )
             if out:
@@ -254,7 +310,10 @@ def build_similar_drugs_bundle(
     if len(catalog_hits) < 3 and groq_client is not None:
         model_hits = groq_expand_alternatives(groq_client, vis, groq_model_chain)
 
-    merged = _dedupe_rows(catalog_hits + model_hits)[:8]
+    merged = _dedupe_rows(catalog_hits + model_hits)
+    merged = _drop_same_product_as_vision(vis, merged)
+    merged = _filter_mismatched_model_etken(vis, merged)
+    merged = merged[:8]
 
     bos = ""
     if not merged:

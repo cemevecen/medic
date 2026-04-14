@@ -3066,16 +3066,17 @@ if _pg_nav == "Analiz":
                         "yerel_katalog",
                         "model_onerisi",
                     )
-                    _title = f"**{i}. {row.get('ticari_ad', '—')}**"
-                    if _ksrc and not _hide_src:
-                        _title += f" (`{html.escape(_ksrc)}`)"
-                    st.markdown(_title)
-                    st.markdown(
-                        f"- **Etken madde:** {row.get('etken_madde', '—')}\n"
-                        f"- **Dozaj:** {row.get('dozaj', '—')}\n"
-                        f"- **Form:** {row.get('form', '—')}\n"
-                        f"- **Benzerlik:** {row.get('benzerlik_aciklamasi', '—')}"
-                    )
+                    with st.container(border=True):
+                        _title = f"**{i}. {row.get('ticari_ad', '—')}**"
+                        if _ksrc and not _hide_src:
+                            _title += f" (`{html.escape(_ksrc)}`)"
+                        st.markdown(_title)
+                        st.markdown(
+                            f"- **Etken madde:** {row.get('etken_madde', '—')}\n"
+                            f"- **Dozaj:** {row.get('dozaj', '—')}\n"
+                            f"- **Form:** {row.get('form', '—')}\n"
+                            f"- **Benzerlik:** {row.get('benzerlik_aciklamasi', '—')}"
+                        )
         else:
             st.markdown("""
             <div class="pg-empty">
