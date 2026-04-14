@@ -2194,7 +2194,7 @@ _PG_TAB_LABELS = (
     "Firmalar",
     "Özellikli ilaçlar",
     "Fihrist",
-    "Prospektüs Yönetimi",
+    "Prospektüsler",
     "Hakkında",
 )
 with st.container(
@@ -2213,9 +2213,11 @@ with st.container(
         key="pg_main_nav",
     )
 
-# Eski sekme etiketi (oturumda kalmış olabilir)
+# Eski sekme etiketleri (oturumda kalmış olabilir)
 if str(st.session_state.get("pg_main_nav") or "").strip() == "İlaç firmaları":
     st.session_state.pg_main_nav = "Firmalar"
+if str(st.session_state.get("pg_main_nav") or "").strip() == "Prospektüs Yönetimi":
+    st.session_state.pg_main_nav = "Prospektüsler"
 
 _pg_nav = str(st.session_state.get("pg_main_nav") or _PG_TAB_LABELS[0]).strip()
 if _pg_nav not in _PG_TAB_LABELS:
@@ -2616,7 +2618,7 @@ if _pg_nav == "İlaç Analizi":
 
             if corpus_bos:
                 st.info("Prospektüs veritabanı boş ama Genel İlaç Bilgisi ile doğrulama yapıldı. "
-                        "Daha güvenilir sonuçlar için Prospektüs sekmesinden PDF yükleyin.")
+                        "Daha güvenilir sonuçlar için Prospektüsler sekmesinden PDF yükleyin.")
             elif not fc_ok:
                 st.error(" **VERİ UYUŞMAZLIĞI**\n\n" +
                          "\n".join(f"- {s}" for s in fc.get("sorunlar", [])))
@@ -2984,9 +2986,9 @@ elif _pg_nav == "Fihrist":
     _pg_fragment_ilac_fihrist()
 
 # ═════════════════════════════════════════════
-# SEKME 4 — PROSPEKTÜS YÖNETİMİ (CORPUS)
+# SEKME 4 — PROSPEKTÜSLER (CORPUS)
 # ═════════════════════════════════════════════
-elif _pg_nav == "Prospektüs Yönetimi":
+elif _pg_nav == "Prospektüsler":
     c1, c2 = st.columns([1, 1])
     with c1:
         st.markdown("#### Prospektüs Ekle")
@@ -3209,7 +3211,7 @@ elif _pg_nav == "Hakkında":
             for f in pdf_list:
                 st.caption(f" {f}")
     else:
-        st.caption("Corpus boş — Prospektüs Yönetimi sekmesinden PDF ekleyin.")
+        st.caption("Corpus boş — Prospektüsler sekmesinden PDF ekleyin.")
 
     st.markdown("---")
     st.markdown("**Ajanlar (Orkestrasyon)**")
