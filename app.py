@@ -2471,7 +2471,7 @@ if _pg_nav == "İlaç Analizi":
                 _pg_render_progress_bar(step / 7.0)
                 stat_ph.markdown(
                     f'<div class="pg-step-line">'
-                    f'<span class="pg-step-num">Adım {step}/7</span>{msg}</div>',
+                    f'<span class="pg-step-num">Adım {step}/7</span> {msg}</div>',
                     unsafe_allow_html=True,
                 )
 
