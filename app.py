@@ -3052,6 +3052,10 @@ if _pg_nav == "Analiz":
                         unsafe_allow_html=True,
                     )
                 if "report_pdf" in st.session_state:
+                    st.markdown(
+                        '<div style="height:12px" aria-hidden="true"></div>',
+                        unsafe_allow_html=True,
+                    )
                     dn = (res["vision"].get("ticari_ad") or drug_name_input or "ilac")
                     st.download_button("PDF Raporu İndir",
                                        data=st.session_state.report_pdf,
