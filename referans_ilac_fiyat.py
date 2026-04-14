@@ -421,9 +421,10 @@ def lookup_fiyat_liste_for_vision(
     """
     Analiz çıktısındaki ilaç ile `load_birlesik_ilac_fiyat_df` (İlaç Fiyatları sekmesi) eşlemesi.
 
-    Yalnızca **ticari_ad** (ve metin girişi) ile liste **İlaç adı** karşılaştırılır; barkod eşleştirmede
-    kullanılmaz. Benzerlik oranı en az ~%72 (FIYAT_ISIM_BENZERLIK_ESIK) olan satırlar alınır; en yüksek
-    skor önce. Eşleşen satırda barkod, liste fiyatı ve GKF tablodan ek bilgi olarak gelir.
+    Liste **İlaç adı** ile **önce** `ticari_ad` (vision çıktısı / seçilen ürün başlığı) eşleştirilir.
+    `ticari_ad` doluysa kutu metni (`drug_name_text`) **yok sayılır** — kısmi arama (ör. «dolor»)
+    yanlışlıkla «ANDOLOR» satırını getirmesin diye. `ticari_ad` boşsa yalnızca `drug_name_text` kullanılır.
+    Barkod eşleştirmede kullanılmaz. Benzerlik ≥ FIYAT_ISIM_BENZERLIK_ESIK; en yüksek skor önce.
     """
     # vision_data: barkod eşleştirmede kullanılmıyor (çağrı imzası uyumluluk için duruyor).
     _ = vision_data
@@ -433,10 +434,12 @@ def lookup_fiyat_liste_for_vision(
         return {"eslesti": False, "satirlar": [], "aciklama": "Fiyat tablosu yok veya boş."}
 
     names: List[str] = []
-    for s in (ticari_ad, drug_name_text):
-        s = (s or "").strip()
-        if s and all(x.casefold() != s.casefold() for x in names):
-            names.append(s)
+    t = (ticari_ad or "").strip()
+    d = (drug_name_text or "").strip()
+    if t:
+        names.append(t)
+    elif d:
+        names.append(d)
 
     if not names:
         return {"eslesti": False, "satirlar": [], "aciklama": ""}
