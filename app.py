@@ -2510,10 +2510,6 @@ if _pg_nav == "Analiz":
                     if not _ac_cands:
                         st.caption("Bu metinle eşleşen ilaç adı listede bulunamadı.")
                     else:
-                        st.caption(
-                            "Birleşik fiyat arşivinden eşleşen adlar — tamamlayan kısım kalın. "
-                            "Seçmek için → düğmesine tıklayın."
-                        )
                         st.session_state.setdefault("pg_ac_pick_nonce", 0)
                         _pick_nonce = int(st.session_state.pg_ac_pick_nonce)
                         with st.container(border=True):
