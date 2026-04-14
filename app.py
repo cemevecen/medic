@@ -167,7 +167,7 @@ def _dataframe_noneish_to_dash(df):
 
 @st.cache_data(show_spinner=False)
 def _cached_ilac_fiyat_sekmesi_gosterim_df():
-    """İlaç Fiyatları sekmesi: gizlenen sütunlar + tire dönüşümü tek seferde (tekrarlayan iş yükünü keser)."""
+    """Fiyatlar sekmesi: gizlenen sütunlar + tire dönüşümü tek seferde (tekrarlayan iş yükünü keser)."""
     from referans_ilac_fiyat import load_birlesik_ilac_fiyat_df
 
     raw = load_birlesik_ilac_fiyat_df()
@@ -332,7 +332,7 @@ _OZELLIKLI_SHEET_LABELS_TR = {
 
 
 def _df_row_matches_substring(df, q: str):
-    """Tüm sütunlarda büyük/küçük harf duyarsız alt dizgi araması (İlaç Fiyatları sekmesiyle aynı mantık)."""
+    """Tüm sütunlarda büyük/küçük harf duyarsız alt dizgi araması (Fiyatlar sekmesiyle aynı mantık)."""
     import pandas as pd
 
     needle = (q or "").strip()
@@ -711,7 +711,7 @@ def _cached_firma_ilac_arsiv(_cache_bust: int = 1) -> dict[str, list[dict[str, s
                     continue
                 if not fm or fm in ("-", "—") or fm.casefold() in ("nan", "none"):
                     continue
-                acc[fm][ad].add("İlaç Fiyatları")
+                acc[fm][ad].add("Fiyatlar")
 
     oz = _cached_ozellikli_ilac_listeleri()
     if oz:
@@ -2417,9 +2417,9 @@ def _get_responsive_columns(ratio_desktop: tuple, ratio_tablet: tuple = None, ra
 # MASTHEAD — yeşil şerit + sekmeler (Streamlit tabs yerine yatay radio)
 # ─────────────────────────────────────────────
 _PG_TAB_LABELS = (
-    "İlaç Analizi",
+    "Analiz",
     "FDA Arşivi",
-    "İlaç Fiyatları",
+    "Fiyatlar",
     "Firmalar",
     "Özellikli ilaçlar",
     "Fihrist",
@@ -2447,6 +2447,10 @@ if str(st.session_state.get("pg_main_nav") or "").strip() == "İlaç firmaları"
     st.session_state.pg_main_nav = "Firmalar"
 if str(st.session_state.get("pg_main_nav") or "").strip() == "Prospektüs Yönetimi":
     st.session_state.pg_main_nav = "Prospektüsler"
+if str(st.session_state.get("pg_main_nav") or "").strip() == "İlaç Analizi":
+    st.session_state.pg_main_nav = "Analiz"
+if str(st.session_state.get("pg_main_nav") or "").strip() == "İlaç Fiyatları":
+    st.session_state.pg_main_nav = "Fiyatlar"
 
 _pg_nav = str(st.session_state.get("pg_main_nav") or _PG_TAB_LABELS[0]).strip()
 if _pg_nav not in _PG_TAB_LABELS:
@@ -2456,7 +2460,7 @@ if _pg_nav not in _PG_TAB_LABELS:
 # ═════════════════════════════════════════════
 # SEKME 1 — ANALİZ
 # ═════════════════════════════════════════════
-if _pg_nav == "İlaç Analizi":
+if _pg_nav == "Analiz":
     col_inputs, col_results = st.columns([1, 1.55], gap="large")
 
     with col_inputs:
@@ -3192,9 +3196,9 @@ elif _pg_nav == "FDA Arşivi":
         )
 
 # ═════════════════════════════════════════════
-# SEKME 3 — İLAÇ FİYATLARI (birleşik liste)
+# SEKME 3 — FİYATLAR (birleşik liste)
 # ═════════════════════════════════════════════
-elif _pg_nav == "İlaç Fiyatları":
+elif _pg_nav == "Fiyatlar":
     _pg_fragment_ilac_fiyatlari()
 
 # ═════════════════════════════════════════════
@@ -3274,7 +3278,7 @@ elif _pg_nav == "Prospektüsler":
                             else:
                                 st.session_state["_corpus_post_delete_notice"] = (
                                     "Dosya silindi. Chroma indeksini güncellemek için "
-                                    "İlaç Analizi sekmesinde bir analiz başlatıp burada "
+                                    "Analiz sekmesinde bir analiz başlatıp burada "
                                     "«İndeksi Yeniden Oluştur» düğmesine basın."
                                 )
                             st.rerun()

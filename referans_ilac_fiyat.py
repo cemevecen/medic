@@ -419,7 +419,7 @@ def lookup_fiyat_liste_for_vision(
     max_rows: int = 8,
 ) -> Dict[str, Any]:
     """
-    Analiz çıktısındaki ilaç ile `load_birlesik_ilac_fiyat_df` (İlaç Fiyatları sekmesi) eşlemesi.
+    Analiz çıktısındaki ilaç ile `load_birlesik_ilac_fiyat_df` (Fiyatlar sekmesi) eşlemesi.
 
     Liste **İlaç adı** ile **önce** `ticari_ad` (vision çıktısı / seçilen ürün başlığı) eşleştirilir.
     `ticari_ad` doluysa kutu metni (`drug_name_text`) **yok sayılır** — kısmi arama (ör. «dolor»)
@@ -465,7 +465,7 @@ def lookup_fiyat_liste_for_vision(
 
 def search_unique_ilac_adi_candidates(query: str, limit: int = 40) -> List[str]:
     """
-    İlaç Fiyatları birleşik tablosundaki benzersiz 'İlaç adı' değerlerinde alt dizgi araması.
+    Fiyatlar birleşik tablosundaki benzersiz 'İlaç adı' değerlerinde alt dizgi araması.
     En az 2 karakter; önce başı eşleşenler, sonra içerenler, alfabetik.
     """
     q = (query or "").strip()
