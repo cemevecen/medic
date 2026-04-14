@@ -23,13 +23,16 @@ WikiPharma; ilaç kutusu fotoğrafı, prospektüs PDF’i veya ilaç adı ile **
 
 | Sekme | İçerik |
 |--------|--------|
-| **Analiz** | Görsel / PDF / metin girişi → `PharmaGuardOrchestrator`, Markdown rapor ve indirilebilir PDF; nöbetçi eczane alanı (il/ilçe seçimi sonrası widget). |
+| **Analiz** | Görsel / PDF / metin girişi → `PharmaGuardOrchestrator`, Markdown rapor ve indirilebilir PDF; nöbetçi eczane alanı (il/ilçe seçimi sonrası widget). **Son aranan ilaçlar:** en yeni arama üstte; kalan satırlar birleşik fiyat arşivinden rastgele ilaç adlarıyla doldurulur (etiket/rozet yok). |
 | **FDA Arşivi** | OpenFDA + Wikidata tabanlı gerçek kayıt sorgusu; özetler Groq ile Türkçeleştirilir. Onayı olmayan ürünler arşivde görünmeyebilir. |
-| **Fiyatlar** | Birleştirilmiş referans fiyat listesi (`referans_ilac_fiyat.py`, `data/*.xlsx`). Filtrelenmiş tüm satırlar tabloda gösterilir; uzun listelerde kaydırma tablo kutusunun içindedir. |
-| **Özellikli ilaçlar** | Yerel `ilacrehberi_ilac_listeleri.xlsx` (Masaüstü veya `data/`) sheet’leri; reçete renkleri ve geri çekilenler listeleri. Referans Google Sheets ile aynı kaynak mantığı. |
-| **Fihrist** | Yerel `ilacrehberi_fihrist.xlsx` ile A–Z ilaç listesi; KT/KUB ve ilaç adı bağlantıları Google aramasına gider. Uygulama içi kaynak satırında [referans Google Sheets](https://docs.google.com/spreadsheets/d/13Hd8k4zVylcRSGB9FJpTpFqBUJ7FGnytKxvAV-TIWaY/edit?gid=0#gid=0) ve [ilacrehberi.com fihrist](https://www.ilacrehberi.com/ilac-fihrist/) verilir. |
-| **Prospektüs Yönetimi** | PDF yükleme; dosyalar üzerine yazılmadan kaydedilir, yalnızca kullanıcı **Sil** ile kaldırılır. **İndeksi yenile** yalnızca Chroma vektör veritabanını günceller, PDF’leri silmez. |
+| **Fiyatlar** | Birleştirilmiş referans fiyat listesi (`referans_ilac_fiyat.py`, `data/*.xlsx`). Filtrelenmiş tüm satırlar tabloda gösterilir; uzun listelerde kaydırma tablo kutusunun içindedir. **İlk açılışta** veri önbelleği ısınırken kısa bir **ilerleme çubuğu** gösterilir (en az ~1,3 sn). |
+| **Firmalar** | Birleşik fiyat tablosu + özellikli liste XLSX’ten üretilen **firma → ilaç adı + kaynak** arşivi; harf / arama ile firma seçimi. İlk açılışta çok adımlı ilerleme çubuğu. |
+| **Özellikli ilaçlar** | Yerel `ilacrehberi_ilac_listeleri.xlsx` (Masaüstü, `data/` veya `MEDIC_OZELLIKLI_ILAC_XLSX`) sheet’leri; reçete renkleri ve geri çekilenler listeleri. Referans Google Sheets ile aynı kaynak mantığı. İlk açılışta ilerleme çubuğu. |
+| **Fihrist** | Yerel `ilacrehberi_fihrist.xlsx` ile A–Z ilaç listesi; KT/KUB ve ilaç adı bağlantıları Google aramasına gider. Uygulama içi kaynak satırında [referans Google Sheets](https://docs.google.com/spreadsheets/d/13Hd8k4zVylcRSGB9FJpTpFqBUJ7FGnytKxvAV-TIWaY/edit?gid=0#gid=0) ve [ilacrehberi.com fihrist](https://www.ilacrehberi.com/ilac-fihrist/) verilir. İlk açılışta ilerleme çubuğu. |
+| **Prospektüsler** | PDF yükleme; dosyalar üzerine yazılmadan kaydedilir, yalnızca kullanıcı **Sil** ile kaldırılır. **İndeksi yenile** yalnızca Chroma vektör veritabanını günceller, PDF’leri silmez. |
 | **Hakkında** | Güncel model zincirleri, API durumu, sürüm (`PHARMA_GUARD_VERSION`), RAG dosya sayısı. |
+
+**Notlar:** Eski oturumda `İlaç Analizi` / `İlaç Fiyatları` / `İlaç firmaları` / `Prospektüs Yönetimi` etiketleri otomatik olarak **Analiz**, **Fiyatlar**, **Firmalar**, **Prospektüsler**e taşınır. Analiz raporunda **liste fiyatı** yalnızca üstteki sekme tablosunda ve PDF’deki tabloda yer alır; Markdown gövdesine ayrı bir “Liste fiyatı” bölümü eklenmez. Analiz için fiyat eşlemesi **en iyi tek satır** + marka kökü doğrulaması ile sınırlıdır. **Benzer ilaç / muadil** önerileri `similar_medicines.py` (yerel katalog + isteğe bağlı Groq JSON) ve sentez kurallarıyla tutarlı tutulur.
 
 ---
 
@@ -54,12 +57,12 @@ Uygulama içi **Hakkında** sekmesiyle uyumlu güncel tablo:
 
 | Katman | Bileşen | Rol |
 |--------|---------|-----|
-| Arayüz | Streamlit (`app.py`) | Sekmeler, oturum, ilerleme, rapor indirme |
+| Arayüz | Streamlit (`app.py`) | Sekmeler, oturum, ilk yüklemede ilerleme çubuğu (Fiyatlar / Firmalar / Özellikli / Fihrist), rapor indirme |
 | Orkestrasyon | `PharmaGuardOrchestrator` (`agents.py`) | Ajan sırası, paralel güvenlik / firma, sürüm ile önbellek tutarlılığı |
 | Görüntü | Groq vision, Gemini vision, PIL, pyzbar, Tesseract | OCR, barkod, QR |
 | Metin / JSON | Groq Chat; isteğe bağlı OpenAI-uyumlu API | PDF alan çıkarımı, güvenlik, firma |
 | RAG | ChromaDB, LangChain Community, `sentence-transformers` tabanlı embedding | Yerel indeks |
-| Dış veri | `real_drug_data.py` (OpenFDA, Wikidata), `its_api.py`, `referans_ilac_fiyat.py` | Arşiv ve liste verileri |
+| Dış veri | `real_drug_data.py` (OpenFDA, Wikidata), `its_api.py`, `referans_ilac_fiyat.py`, `similar_medicines.py` | Arşiv, liste ve muadil öneri katmanı |
 | Rapor | ReportLab (`utils.py`) | PDF çıktı |
 
 ---
@@ -95,6 +98,7 @@ streamlit run app.py
 | `HF_API_KEY` | Hayır | Hugging Face token (gerekirse embedding indirimi için) |
 | `ECZANEAPI_API_KEY` | Hayır | Nöbetçi eczane iframe sayımı (`eczaneapi.com`) |
 | `MEDIC_CORPUS_DIR` | Hayır | Prospektüs PDF’lerinin yazılacağı kalıcı dizin (Streamlit Cloud / Docker’da volume yolu); boşsa `data/corpus` kullanılır |
+| `MEDIC_OZELLIKLI_ILAC_XLSX` | Hayır | `ilacrehberi_ilac_listeleri.xlsx` için tam dosya yolu; boşsa Masaüstü / `data/` sırasıyla aranır |
 
 ITS API anahtarı arayüzde **Hakkında → ITS API** alanından oturuma yazılabilir; üretimde `st.secrets` veya ortam değişkeni tercih edin.
 
@@ -156,6 +160,7 @@ medic/
 ├── real_drug_data.py      # FDA / Wikidata + Türkçe çeviri
 ├── its_api.py             # İlaç Takip Sistemi (ITS) istemcisi
 ├── referans_ilac_fiyat.py # Birleşik fiyat DataFrame
+├── similar_medicines.py   # Muadil / benzer ilaç kataloğu + Groq JSON genişletme
 ├── gemini_models.py       # Gemini model zinciri
 ├── openai_compat.py       # OpenAI-uyumlu istemci
 ├── scripts/
@@ -164,6 +169,7 @@ medic/
 ├── requirements.txt
 ├── .env.example
 ├── data/corpus/           # RAG PDF’leri (MEDIC_CORPUS_DIR ile değiştirilebilir)
+├── data/alternatives_catalog.json  # Benzer ilaç yerel kataloğu (`similar_medicines.py`, isteğe bağlı)
 ├── data/chroma_db/        # Chroma vektör indeksi (.gitignore)
 └── .streamlit/config.toml # Tema
 ```
