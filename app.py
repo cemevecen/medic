@@ -2746,7 +2746,7 @@ if _pg_nav == "İlaç Analizi":
             if _fl.get("eslesti") and (_fl.get("satirlar") or []):
                 import pandas as pd
 
-                st.markdown("#### Liste fiyatı (birleşik liste eşleşmesi)")
+                st.markdown("#### Liste fiyatı")
                 _fdf = pd.DataFrame(_fl["satirlar"])
                 _fdf = _dataframe_noneish_to_dash(_fdf)
                 _fdf, _fdf_gcfg, _fdf_gorder = _prep_df_google_links_for_streamlit(_fdf)
@@ -2764,11 +2764,6 @@ if _pg_nav == "İlaç Analizi":
                 if _fdf_gorder is not None:
                     _fdf_kw["column_order"] = _fdf_gorder
                 st.dataframe(_fdf, **_fdf_kw)
-                st.caption(
-                    "Kaynak: uygulama içi birleşik fiyat listesi (İlaç Fiyatları sekmesi ile aynı veri). "
-                    "Eşleşme yalnızca **ticari ad / metin girişi** ile liste başlığı benzerliği (≈%70–75); "
-                    "barkod eşleştirmede kullanılmaz. Barkod, fiyat ve GKF tablodan ek bilgidir."
-                )
 
             st.markdown("")
 
