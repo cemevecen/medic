@@ -218,7 +218,7 @@ _FIHRIST_NAV_KEYS = (
     "Z",
 )
 _FIHRIST_TABLE_MAX = 180
-# İlaç firmaları: fihrist A–Z + rakamla başlayan firmalar
+# Firmalar sekmesi: fihrist A–Z + rakamla başlayan firmalar
 _FIRMA_ILAC_NAV_KEYS = _FIHRIST_NAV_KEYS + ("0-9",)
 _FIRMA_ILAC_PILLS_MAX = 72
 # ilacrehberi.com fihrist düzenine paralel referans tablo (yerel XLSX ile birlikte kullanılabilir)
@@ -672,7 +672,7 @@ def _cached_firma_ilac_arsiv(_cache_bust: int = 1) -> dict[str, list[dict[str, s
 @st.fragment
 def _pg_fragment_ilac_firmalari():
     st.markdown(
-        '<p class="pg-section">İlaç firmaları</p>',
+        '<p class="pg-section">Firmalar</p>',
         unsafe_allow_html=True,
     )
     st.caption(
@@ -2191,7 +2191,7 @@ _PG_TAB_LABELS = (
     "İlaç Analizi",
     "FDA Arşivi",
     "İlaç Fiyatları",
-    "İlaç firmaları",
+    "Firmalar",
     "Özellikli ilaçlar",
     "Fihrist",
     "Prospektüs Yönetimi",
@@ -2962,9 +2962,9 @@ elif _pg_nav == "İlaç Fiyatları":
     _pg_fragment_ilac_fiyatlari()
 
 # ═════════════════════════════════════════════
-# SEKME 3a — İLAÇ FİRMALARI (birleşik fiyat + özellikli listeler)
+# SEKME 3a — FİRMALAR (birleşik fiyat + özellikli listeler)
 # ═════════════════════════════════════════════
-elif _pg_nav == "İlaç firmaları":
+elif _pg_nav == "Firmalar":
     _pg_fragment_ilac_firmalari()
 
 # ═════════════════════════════════════════════
