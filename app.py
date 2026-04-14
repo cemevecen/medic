@@ -2865,6 +2865,9 @@ if _pg_nav == "Analiz":
                 st.rerun()
             res = st.session_state.analysis_result
             alarm = res.get("alarm", "BİLİNMİYOR")
+            fc = res.get("fact_check") or {}
+            fc_ok = not fc.get("uyusmazlik", False)
+            corpus_bos = fc.get("corpus_bos", False)
             mark = ALARM_EMOJI.get(alarm, "[?]")
             msg = ALARM_MESSAGE.get(alarm, "")
             css = {"KIRMIZI": "alarm-red", "SARI": "alarm-yellow", "YEŞİL": "alarm-green"}.get(
