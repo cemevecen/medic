@@ -3253,16 +3253,6 @@ elif _pg_nav == "FDA Arşivi":
         _render_fda_drug_detail(st.session_state["test_drug_data"], fresh=False)
         st.divider()
         st.info("Yeni kayıt için ilaç adını yazıp **Arşiv'de Ara** düğmesine basın.")
-    else:
-        st.markdown(
-            '<div class="pg-empty" style="margin-top:0.5rem">'
-            '<p style="margin:0;color:#64748b;font-size:0.95rem">'
-            "İlaç adını yazın ve <strong>Arşiv'de Ara</strong> ile OpenFDA / Wikidata üzerinden "
-            "kayıt sorgulayın. Sonuçlar Türkçeye uyarlanır."
-            "</p></div>",
-            unsafe_allow_html=True,
-        )
-
 # ═════════════════════════════════════════════
 # SEKME 3 — FİYATLAR (birleşik liste)
 # ═════════════════════════════════════════════
