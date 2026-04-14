@@ -57,6 +57,88 @@ def _pg_ilac_autocomplete_suggestion_html(query: str, candidate: str) -> str:
     return esc(c)
 
 
+_RECENT_DRUG_SEED_FALLBACK = tuple(f"Örnek {i}" for i in range(1, 11))
+
+
+def _pg_sample_10_unique_ilac_from_arsiv() -> list[str]:
+    """Birleşik fiyat tablosundan 10 tekil ilaç adı (oturumda ilk doldurma için)."""
+    import random
+
+    try:
+        from referans_ilac_fiyat import load_birlesik_ilac_fiyat_df
+
+        df = load_birlesik_ilac_fiyat_df()
+    except Exception:
+        df = None
+    if df is None or df.empty or "İlaç adı" not in df.columns:
+        return list(_RECENT_DRUG_SEED_FALLBACK)
+    col = df["İlaç adı"].astype(str).str.strip()
+    col = col[col.str.len() > 1]
+    uniq = col.drop_duplicates().tolist()
+    if len(uniq) < 10:
+        if not uniq:
+            return list(_RECENT_DRUG_SEED_FALLBACK)
+        return (uniq * ((10 // len(uniq)) + 1))[:10]
+    return random.sample(uniq, 10)
+
+
+def _pg_ensure_son_aranan_buffers() -> None:
+    if "pg_recent_seeds" not in st.session_state:
+        st.session_state.pg_recent_seeds = _pg_sample_10_unique_ilac_from_arsiv()
+    if "pg_recent_user_chrono" not in st.session_state:
+        st.session_state.pg_recent_user_chrono = []
+
+
+def _pg_push_son_aranan_ilac(raw: object) -> None:
+    """Başarılı analiz sonrası: en yeni üstte, en fazla 10; aynı ad tekrar aranırsa en üste taşınır."""
+    name = str(raw or "").strip()
+    if not name or name.casefold() in ("nan", "none", "—", "-", "ilaç"):
+        return
+    _pg_ensure_son_aranan_buffers()
+    u: list[str] = st.session_state.pg_recent_user_chrono
+    if name in u:
+        u.remove(name)
+    u.insert(0, name)
+    while len(u) > 10:
+        u.pop()
+
+
+def _pg_render_son_aranan_ilaclar_panel() -> None:
+    """Analiz sonuçları sütunu: 10 satır; üstte gerçek aramalar, altta arşivden örnek adlar."""
+    _pg_ensure_son_aranan_buffers()
+    seeds: list[str] = list(st.session_state.pg_recent_seeds or [])
+    user: list[str] = list(st.session_state.pg_recent_user_chrono or [])
+    if len(seeds) < 10:
+        seeds = (seeds + list(_RECENT_DRUG_SEED_FALLBACK))[:10]
+    body: list[str] = []
+    for i in range(10):
+        if i < len(user):
+            txt = user[i]
+            cls = "pg-recent-real"
+        else:
+            txt = seeds[i] if i < len(seeds) else "—"
+            cls = "pg-recent-seed"
+        body.append(
+            "<tr>"
+            f'<td class="pg-recent-idx">{i + 1}</td>'
+            f'<td class="{cls}">{html.escape(txt)}</td>'
+            "</tr>"
+        )
+    st.markdown(
+        '<div class="pg-recent-wrap">'
+        '<p class="pg-recent-title">Son aranan ilaçlar</p>'
+        '<table class="pg-recent-table" aria-label="Son aranan ilaçlar">'
+        '<thead><tr><th class="pg-recent-idx" scope="col">#</th>'
+        '<th scope="col">İlaç</th></tr></thead><tbody>'
+        + "".join(body)
+        + "</tbody></table>"
+        '<p class="pg-recent-foot">Üst satırlar başarılı analizlerden (en yeni en üstte); '
+        "kalan satırlar arşivden seçilmiş örnek ticari adlardır.</p>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+
 def _dataframe_noneish_to_dash(df):
     """Eksik değerler ile metin olarak 'None' / 'nan' vb. görünen tüm hücreleri '-' yapar (Streamlit tablo)."""
     import pandas as pd
@@ -1897,6 +1979,48 @@ hr.pg-hr-slim {
 .pg-empty .pg-empty-icon { font-size: clamp(2rem, 6vw, 2.75rem); line-height:1; margin-bottom:1rem; }
 .pg-empty p { margin:0; font-size: clamp(0.9rem, 2vw, 1rem); line-height:1.6; color:var(--pg-muted) !important; }
 
+/* Son aranan ilaçlar (analiz sütunu) */
+.pg-recent-wrap {
+  margin-bottom: 1rem;
+  padding: 0.65rem 0.85rem 0.75rem;
+  border: 1px solid var(--pg-line);
+  border-radius: 14px;
+  background: var(--pg-surface);
+}
+.pg-recent-title {
+  margin: 0 0 0.45rem 0;
+  font-size: clamp(0.88rem, 1.8vw, 0.98rem);
+  font-weight: 700;
+  color: var(--pg-ink);
+}
+.pg-recent-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: clamp(0.78rem, 1.4vw, 0.88rem);
+}
+.pg-recent-table th,
+.pg-recent-table td {
+  padding: 0.28rem 0.4rem 0.28rem 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.35);
+  text-align: left;
+  vertical-align: middle;
+}
+.pg-recent-table tr:last-child td { border-bottom: none; }
+.pg-recent-idx {
+  width: 1.75rem;
+  color: var(--pg-muted);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.pg-recent-real { font-weight: 600; color: var(--pg-ink); }
+.pg-recent-seed { color: var(--pg-muted); font-style: italic; }
+.pg-recent-foot {
+  margin: 0.45rem 0 0 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: var(--pg-muted);
+}
+
 /* Fihrist */
 .pg-fihrist-title {
   font-size: clamp(1.05rem, 2.5vw, 1.35rem);
@@ -2438,6 +2562,7 @@ if _pg_nav == "İlaç Analizi":
             '<p class="pg-section">Analiz sonuçları</p>',
             unsafe_allow_html=True,
         )
+        _pg_render_son_aranan_ilaclar_panel()
 
         if run_btn:
             for k in ("analysis_result", "report_pdf"):
@@ -2496,6 +2621,7 @@ if _pg_nav == "İlaç Analizi":
                 st.session_state.analysis_result = result
 
                 drug_display = result["vision"].get("ticari_ad") or drug_name_input or "İlaç"
+                _pg_push_son_aranan_ilac(drug_display)
                 st.session_state.report_pdf = generate_pdf_report(
                     report_markdown=result["report"],
                     drug_name=drug_display,
