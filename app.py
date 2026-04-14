@@ -2562,7 +2562,9 @@ if _pg_nav == "İlaç Analizi":
             '<p class="pg-section">Analiz sonuçları</p>',
             unsafe_allow_html=True,
         )
-        _pg_render_son_aranan_ilaclar_panel()
+        # Son aranan: yalnızca boş karşılama / analiz öncesi; sonuç varken veya çalıştırma anında gizle
+        if "analysis_result" not in st.session_state and not run_btn:
+            _pg_render_son_aranan_ilaclar_panel()
 
         if run_btn:
             for k in ("analysis_result", "report_pdf"):
