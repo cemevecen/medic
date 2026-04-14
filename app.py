@@ -57,11 +57,48 @@ def _pg_ilac_autocomplete_suggestion_html(query: str, candidate: str) -> str:
     return esc(c)
 
 
+# Birleşik fiyat tablosu yok/boşsa: yalnızca gerçek ticari adlar (örnek/test/demo ibaresi yok)
+_DRUG_SEED_POOL: tuple[str, ...] = (
+    "PAROL 500 MG TABLET",
+    "AUGMENTIN 1 G FILM TABLET",
+    "NEXIUM 40 MG IV ENJEKSIYONLUK TOZ",
+    "MAJEZIK 100 MG FILM TABLET",
+    "MINOSET PLUS GRANUL",
+    "BUSCOPAN 10 MG COATED TABLET",
+    "VENTOLIN 100 MCG INHALER",
+    "LANSOR 30 MG KAPSUL",
+    "DRAMAMINE 50 MG TABLET",
+    "CALPOL SUSPANSIYON 120 MG/5 ML",
+)
+
+
+def _pg_sample_10_unique_ilac_from_arsiv() -> list[str]:
+    """Birleşik fiyat tablosundan 10 ilaç adı (rastgele); tablo yoksa havuzdan rastgele 10 ad."""
+    import random
+
+    try:
+        from referans_ilac_fiyat import load_birlesik_ilac_fiyat_df
+
+        df = load_birlesik_ilac_fiyat_df()
+    except Exception:
+        df = None
+    if df is None or df.empty or "İlaç adı" not in df.columns:
+        return list(random.sample(_DRUG_SEED_POOL, 10))
+    col = df["İlaç adı"].astype(str).str.strip()
+    col = col[col.str.len() > 1]
+    uniq = col.drop_duplicates().tolist()
+    if not uniq:
+        return list(random.sample(_DRUG_SEED_POOL, 10))
+    if len(uniq) < 10:
+        return random.choices(uniq, k=10)
+    return random.sample(uniq, 10)
+
+
 def _pg_ensure_son_aranan_buffers() -> None:
+    if "pg_recent_seeds" not in st.session_state:
+        st.session_state.pg_recent_seeds = _pg_sample_10_unique_ilac_from_arsiv()
     if "pg_recent_user_chrono" not in st.session_state:
         st.session_state.pg_recent_user_chrono = []
-    # Eski oturumlarda kalan örnek doldurma listesi (artık kullanılmıyor)
-    st.session_state.pop("pg_recent_seeds", None)
 
 
 def _pg_push_son_aranan_ilac(raw: object) -> None:
@@ -79,22 +116,19 @@ def _pg_push_son_aranan_ilac(raw: object) -> None:
 
 
 def _pg_render_son_aranan_ilaclar_panel() -> None:
-    """Analiz sonuçları sütunu: yalnızca gerçek aramalar (en yeni üstte, en fazla 10)."""
+    """10 satır: üstten alta gerçek aramalar (en yeni üstte), kalan satırlar rastgele arşiv adları; ibare yok."""
     _pg_ensure_son_aranan_buffers()
+    seeds: list[str] = list(st.session_state.pg_recent_seeds or [])
+    if len(seeds) < 10:
+        seeds = (seeds + list(_DRUG_SEED_POOL))[:10]
     user: list[str] = list(st.session_state.pg_recent_user_chrono or [])
-    if not user:
-        st.markdown(
-            '<div class="pg-recent-wrap">'
-            '<div class="pg-recent-head">'
-            '<p class="pg-recent-title">Son aranan ilaçlar</p>'
-            "</div>"
-            '<p class="pg-recent-empty">Henüz kayıtlı arama yok; analiz tamamlanınca burada listelenir.</p>'
-            "</div>",
-            unsafe_allow_html=True,
-        )
-        return
     rows_html: list[str] = []
-    for i, txt in enumerate(user):
+    for i in range(10):
+        if i < len(user):
+            txt = user[i]
+        else:
+            j = i - len(user)
+            txt = seeds[j] if j < len(seeds) else "—"
         rows_html.append(
             '<div class="pg-recent-row" role="listitem">'
             f'<span class="pg-recent-badge">{i + 1}</span>'
